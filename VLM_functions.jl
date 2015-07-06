@@ -13,14 +13,3 @@ include("Pdrag.jl")
 include("getMIC.jl")
 include("VLM.jl")
 
-
-
-
-
-
-
-
-
-
-
-

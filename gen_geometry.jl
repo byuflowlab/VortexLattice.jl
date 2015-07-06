@@ -31,7 +31,6 @@ function gen_geometry(wing, QC, TE, CP, LE)
       thickness = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
   end
   # --------------------------------------------------------------
-
   # ------------ Trailing Edge Locations --------------------------
   TE.x = QC.x + 3/4*c
   TE.y = QC.y

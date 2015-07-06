@@ -21,15 +21,33 @@ function getDIC(yFF,zFF,rho,yFF2,zFF2)
             ry = yFF2[j] - yc[i]
             rz = zFF2[j] - zc[i]
             r2 = ry^2+rz^2
-            DIC[i,j] = rho/4/pi/r2*(-1)*(rz*ny[i]+ry*nz[i])
+            DIC[i,j] = rho/2/pi/r2*(-1)*(rz*ny[i]+ry*nz[i])
 
              # add other side of panel
             ry = yFF2[j+1] - yc[i]
             rz = zFF2[j+1] - zc[i]
             r2 = ry^2+rz^2
-            DIC[i,j] = DIC[i,j] + rho/4/pi/r2*(1)*(rz*ny[i]+ry*nz[i])
+            DIC[i,j] = DIC[i,j] + rho/2/pi/r2*(1)*(rz*ny[i]+ry*nz[i])
         end
     end
+
+    yFF2 = -yFF2 # add left side
+
+    for i = 1:n
+          for j = 1:n2
+              ry = yFF2[j] - yc[i]
+              rz = zFF2[j] - zc[i]
+              r2 = ry^2+rz^2
+              DIC[i,j] = DIC[i,j] + rho/2/pi/r2*(1)*(rz*ny[i]+ry*nz[i])
+
+               # add other side of panel
+              ry = yFF2[j+1] - yc[i]
+              rz = zFF2[j+1] - zc[i]
+              r2 = ry^2+rz^2
+              DIC[i,j] = DIC[i,j] + rho/2/pi/r2*(-1)*(rz*ny[i]+ry*nz[i])
+          end
+      end
+
     return DIC
 end
 

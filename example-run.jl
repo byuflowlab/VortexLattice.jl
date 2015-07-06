@@ -6,10 +6,9 @@
 # ----------------------------------------------------------------------
 
 
-
 # include statements and packages
 # using Gadfly
-using Debug
+# using Debug
 using Polynomials
 using PyPlot
 include("types_def.jl")
@@ -69,3 +68,4 @@ CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = true
 (CL, CDi, CDp, CDc, CW, Cmac, cl_margin) = VLM(wing, fs, ref, pdrag, mvr, plots, QC, TE, LE, CP)
+

@@ -95,7 +95,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
   # --------- aerodynamic forces ------------------
   L = LIC'*gamma
   Di = gamma'*DIC*gamma
-  Dp = cd0*q*S + D1*gamma + D2*gamma.^2
+  Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
 
   CL = L/q/Sref
   CDi = Di/q/Sref
@@ -136,7 +136,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
       tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
       area[i] = cbar*wing.span[i]
       mac = 2/3*(cr + ct - cr*ct/(cr+ct))
-      CL_local = sum(gamma[start:finish]'.*CP.ds[start:finish])*2/U/area[i]
+      CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/U/area[i]
 
       # compressibility drag
       cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
@@ -165,7 +165,8 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
   clmax_dist = cl + (rho*U*(CLmax*Sref-L/q)/LL)[1]*(bbb)./CP.chord #.'
 
   # clmax as a function of thickness - polynomial fit
-  p_cl = Poly([-2.7634e-5, 0.0022307, -0.06567, 0.8013, -1.748])
+  # p_cl = Poly([-2.7634e-5, 0.0022307, -0.06567, 0.8013, -1.748])
+  p_cl = Poly([-1.748, 0.8013, -0.06567, 0.0022307, -2.7634e-5]) # Backwards compared to MATLAB
   clmax = polyval(p_cl,CP.tc*100)
 
   cl_margin = clmax - clmax_dist
@@ -195,7 +196,12 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
 
   # distance along structural span
   ds_str = CP.ds'./cos(CP.sweep)
-  eta_str = [0 cumsum(ds_str)]
+  eta_str = zeros(length(ds_str)+1)
+  eta_str[1] = 0
+  for i=2:(length(ds_str)+1)
+    eta_str[i] = eta_str[i-1] + ds_str[i-1]
+  end
+  eta_str
   eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
   # --------------------------------------------------------------
 
@@ -203,40 +209,55 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
       # ------------- plots --------------------
       # plot wings
 #       plot_wing(LE,QC,TE,CP)
-
       N = length(QC.x)
-#       axis equal
+      #       axis equal
+      PyPlot.figure()
+#       if TE[3] < 0:
+#         TE.y = -TE.y
+#       end
       for i = 1:N-1
-        PyPlot.plot(-[LE.x[i] LE.x[i+1]], [LE.y[i] LE.y[i+1]])
-        PyPlot.plot([TE.y[i] TE.y[i+1]],-[TE.x[i] TE.x[i+1]])
+        PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
+        PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
       end
-      PyPlot.plot([LE.y[1] TE.y[1]],-[LE.x[1] TE.x[1]])
-      PyPlot.plot([LE.y[end] TE.y[end]],-[LE.x[end] TE.x[end]])
+      PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+#       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
+      for i = 1:N-1
+          PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
+          PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
+      end
+      PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+#       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
+      PyPlot.xlabel("x")
+      PyPlot.ylabel("y")
+      PyPlot.title("Plot of wing")
 
       # plot lift
-#       figure(50) hold on
+      #       figure(50) hold on
       PyPlot.figure()
       l = 2*gamma/U/(ref.c)
       l_mvr = 2*gamma_mvr/U/(ref.c)
       eta = linspace(0,0.5,length(l))
       PyPlot.plot(eta,l,"b")
       PyPlot.plot(eta,l_mvr,"r")
-#       xlabel('\xi / b')
-#       ylabel('$$\frac{c_l c}{c_{ref}}$$','interpreter','latex','rotation',0)
+      PyPlot.xlabel("xi / b")
+      PyPlot.ylabel("c_l c / c_ref")
+    #   PyPlot.title("")
 
       # plot cl
       PyPlot.figure()
       PyPlot.plot(eta,cl,"b")
       PyPlot.plot(eta,clmax_dist,"r")
       PyPlot.plot(eta,clmax,"r--")
-#       xlabel('\xi / b')
-#       ylabel('c_l')
+      PyPlot.xlabel("xi / b")
+      PyPlot.ylabel("c_l")
+      PyPlot.title("Plot of c_l")
 
       # plot bending over thickness
       PyPlot.figure()
       PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord)')
-#       xlabel('\xi_{str}/b_{str}')
-#       ylabel('M_b/t')
+      PyPlot.xlabel("xi_str/b_str")
+      PyPlot.ylabel("M_b/t")
+      PyPlot.title("Plot of bending over thickness")
       PyPlot.show()
       # -------------------------------------------------
   end
