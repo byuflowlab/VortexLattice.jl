@@ -11,24 +11,31 @@ function gen_geometry(wing, QC, TE, CP, LE)
 
   P = int(round(b/sum(b)*N)) # divide up panels
   # -------------  Quarter Chord Locations --------------------------
+  total = 1
+  for i = 1:length(P)
+    total += P[i]
+  end
+  c = zeros(total)
+  t = zeros(total)
+  thickness = zeros(total)
+  QC.x = zeros(total)
+  QC.y = zeros(total)
+  QC.z = zeros(total)
   QC.x[1] = 0
   QC.y[1] = 0
   QC.z[1] = 0
   last = 1
-  c = 0
-  t = 0
-  thickness = 0
+
   for i = 1:length(b)
       first = last
       last = first + P[i]
       eta = linspace(0, b[i], P[i]+1)
-
-      QC.x = QC.x[first] + eta*tan(Lambda[i])
-      QC.y = QC.y[first] + eta*cos(phi[i])
-      QC.z = QC.z[first] + eta*sin(phi[i])
-      c = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
-      t = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
-      thickness = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
+      QC.x[first:last] = QC.x[first] + eta*tan(Lambda[i])
+      QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
+      QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
+      c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
+      t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
+      thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
   end
   # --------------------------------------------------------------
   # ------------ Trailing Edge Locations --------------------------
@@ -52,11 +59,13 @@ function gen_geometry(wing, QC, TE, CP, LE)
   CP.z = 1/2*(QC.z[1:N] + QC.z[2:N+1])
 
   last = 0
+  CP.dihedral = zeros(total-1)
+  CP.sweep = zeros(total-1)
   for i = 1:length(b)
       first = last + 1
       last = first + P[i] - 1
-      CP.dihedral = phi[i]*ones(1,P[i])
-      CP.sweep = Lambda[i]*ones(1,P[i])
+      CP.dihedral[first:last] = phi[i]*ones(1,P[i])
+      CP.sweep[first:last] = Lambda[i]*ones(1,P[i])
   end
   CP.ds = sqrt((QC.y[2:N+1]-QC.y[1:N]).^2 + (QC.z[2:N+1]-QC.z[1:N]).^2)
   return QC, TE, CP, LE

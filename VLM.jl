@@ -88,7 +88,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
   # ------------------------------------------------------------------
 
   # -------- compute circulation -----------------
-  Vn = -U*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral)')
+  Vn = -U*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
   gamma = (AIC\Vn)
   # ----------------------------------------------
 
@@ -104,7 +104,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
 
   # --------- weight (integrated bending moment over thickness --------
   # circulation at maneuver load
-  bbb = AIC\cos([CP.dihedral])'
+  bbb = AIC\cos(CP.dihedral)
   LL = LIC'*bbb
   gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
 
@@ -177,7 +177,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
   MIC = getMIC(CP,rho,U,QC.x[1])
 
   # find aerodynamic center
-  dRHS = -sin(alpha)*sin(CP.twist) + cos(alpha)*cos(CP.twist).*cos(CP.dihedral')
+  dRHS = -sin(alpha)*sin(CP.twist) + cos(alpha)*cos(CP.twist).*cos(CP.dihedral)
   dbc = AIC\dRHS
   dMda = MIC'*dbc
   dLda = LIC'*dbc
@@ -195,13 +195,12 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
   Mb = qmvrN*BMM*gamma
 
   # distance along structural span
-  ds_str = CP.ds'./cos(CP.sweep)
+  ds_str = CP.ds./cos(CP.sweep)
   eta_str = zeros(length(ds_str)+1)
   eta_str[1] = 0
   for i=2:(length(ds_str)+1)
     eta_str[i] = eta_str[i-1] + ds_str[i-1]
   end
-  eta_str
   eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
   # --------------------------------------------------------------
 
@@ -254,7 +253,7 @@ function VLM(wing,fs,ref,pdrag,mvr,plots, QC, TE, LE, CP)
 
       # plot bending over thickness
       PyPlot.figure()
-      PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord)')
+      PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
       PyPlot.xlabel("xi_str/b_str")
       PyPlot.ylabel("M_b/t")
       PyPlot.title("Plot of bending over thickness")

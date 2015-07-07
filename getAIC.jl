@@ -8,7 +8,8 @@ function getAIC(QC,TE,CP)
   AIC = zeros(m,n)
 
   for j=1:n
-      AIC[:,j] = -v[:,j].*sin(CP.dihedral)'+w[:,j].*cos(CP.dihedral)'
+      AIC[:,j] = -v[:,j].*sin(CP.dihedral)+w[:,j].*cos(CP.dihedral)
   end
   return AIC
 end
+

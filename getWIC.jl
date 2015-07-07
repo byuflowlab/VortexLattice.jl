@@ -12,10 +12,10 @@ function getWIC(CP,rho,U)
   ds = CP.ds
 
   # compute R matrix
-  PhiM = (cos(phi)'*cos(phi) + sin(phi)'*sin(phi))
-  Rx = (sin(Lambda)'*x' - (x'.*sin(Lambda))'*ones(1,N)).*PhiM
-  Ry = cos(Lambda)'*(y'.*cos(phi)) - (y'.*cos(Lambda))'*cos(phi)
-  Rz = cos(Lambda)'*(z'.*sin(phi)) - (z'.*cos(Lambda))'*sin(phi)
+  PhiM = ((cos(phi)*cos(phi)') + (sin(phi)*sin(phi)'))
+  Rx = (sin(Lambda)*x' - (x.*sin(Lambda))*ones(1,N)).*PhiM
+  Ry = cos(Lambda)*(y.*cos(phi))' - (y.*cos(Lambda))*cos(phi)'
+  Rz = cos(Lambda)*(z.*sin(phi))' - (z.*cos(Lambda))*sin(phi)'
   R = Rx + Ry + Rz
   R = R - tril(R) # R(i,j) = 0 for j <= i
 
