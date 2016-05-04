@@ -1,4 +1,4 @@
-function atmosphere(altitude)
+function atmosphere(altitude::Float64)
 
     # assumes english units
     # [rho, mu, a, T, P] = atmosphere(altitude)
@@ -38,7 +38,7 @@ function atmosphere(altitude)
 
     # ------ find values at altitude ---------
     hidx = find(altitude .>= h)[end]
-    
+
     T = Tpts[hidx] + aT[hidx]*(altitude-h[hidx])
 
     if aT[hidx] == 0
