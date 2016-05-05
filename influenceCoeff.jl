@@ -109,6 +109,24 @@ end
 
 
 #=
+---------------------
+assumes a parabolic variation in viscous drag with section lift coefficient
+Dp = D0 + D1*gamma + D2*gamma.^2
+
+Author: S. Andrew Ning
+-----------------------
+=#
+
+function getViscousDrag(cd1::Float64, cd2::Float64, CP::CPdata, rho::Float64, Vinf::Float64)
+
+  D1 = cd1*rho*Vinf*CP.ds
+  D2 = cd2*2*rho./CP.chord.*CP.ds
+
+  return D1, D2
+end
+
+
+#=
 ----------------------------------------
  Calculates velocity induced by vortex (with unit vorticity)
  starting at rA ending at rB at control point rC. (see Bertin/Smith)
@@ -293,4 +311,118 @@ function getAIC(QC::position, TE::position, CP::CPdata)
     end
 
     return AIC
+end
+
+
+
+#=
+-------------------------------------------------
+this function computes integrated bending moment over thickness and the
+bending moment distribution
+W = WIC*gamma;
+bending moment distribution = BMM*gamma
+
+Author: S. Andrew Ning
+Updates: 1/23/09 - corrected integration along spar and vectorized for speed
+         1/30/09 - allows for thickness distribution
+---------------------------------------------------
+=#
+
+
+function getWIC(CP::CPdata, rho::Float64, Vinf::Float64)
+
+    x = CP.x - 0.5*CP.chord
+    y = CP.y
+    z = CP.z
+
+    # rename for convenience
+    N = length(y)
+    phi = CP.dihedral
+    Lambda = CP.sweep
+    chord = CP.chord
+    tc = CP.tc
+    ds = CP.ds
+
+    R = zeros(N, N)
+
+    for i = 1:N
+        for j = i+1:N
+            cij = cos(CP.dihedral[j])*cos(CP.dihedral[i]) + sin(CP.dihedral[j])*sin(CP.dihedral[i])
+            R[i, j] = (x[j] - x[i])*cij*sin(CP.sweep[i]) +
+                     (y[j] - y[i])*cos(CP.dihedral[j])*cos(CP.sweep[i]) +
+                     (z[j] - z[i])*sin(CP.dihedral[j])*cos(CP.sweep[i])
+
+            # if j <= i, R(i,j) = 0
+        end
+    end
+
+
+    # integrate along structural span
+    ds_str = CP.ds./cos(CP.sweep)
+
+    BMM = rho*Vinf*R.*repmat(ds, N, 1)  #(ones(N, 1)*ds)
+    WIC = 2*(ds_str./(tc.*chord))*BMM
+
+    return WIC, BMM
+end
+
+# TODO: haven't tested which is faster in Julia
+
+# # compute R matrix
+# PhiM = ((cos(phi)*cos(phi)') + (sin(phi)*sin(phi)'))
+# Rx = (sin(Lambda)*x' - (x.*sin(Lambda))*ones(1,N)).*PhiM
+# Ry = cos(Lambda)*(y.*cos(phi))' - (y.*cos(Lambda))*cos(phi)'
+# Rz = cos(Lambda)*(z.*sin(phi))' - (z.*cos(Lambda))*sin(phi)'
+# R = Rx + Ry + Rz
+# R = R - tril(R) # R(i,j) = 0 for j <= i
+
+
+# % below version is exactly the same (slower since its in loops, but left
+# % here since it's easier to read then vectorized version above)
+#
+# % R = zeros(N);
+#
+# % for i = 1:N
+# %     for j = 1:N
+# %         cij = cos(CP.dihedral(j))*cos(CP.dihedral(i)) + sin(CP.dihedral(j))*sin(CP.dihedral(i));
+# %         R(i,j) = (x(j) - x(i))*cij*sin(CP.sweep(i)) + ...
+# %                  (y(j) - y(i))*cos(CP.dihedral(j))*cos(CP.sweep(i)) + ...
+# %                  (z(j) - z(i))*sin(CP.dihedral(j))*cos(CP.sweep(i));
+# %         if j <= i
+# %             R(i,j) = 0;
+# %         end
+# %     end
+# % end
+
+# % ds_str = CP.ds./cos(CP.sweep);
+#
+# % WIC = zeros(1,N);
+# %
+# % for j = 1:N
+# %     WIC(j) = 2*rho*U/tc*CP.ds(j).*ds_str./CP.chord*R(:,j);
+# % end
+
+#=
+-----------------------------------------------------
+This function computes angle of attack necessary to match a specified
+lift
+
+Author: S. Andrew Ning
+Updates: 1/28/09 - created
+         9/2/09 - changed the way alpha was computed - seems more robust
+                 to larger angles of attack by using arcsin rather than arccos
+---------------------------------------------------
+=#
+
+function getAlpha(Ltarget::Float64, CP::CPdata, LIC::Array{Float64, 1}, AIC::Array{Float64, 2}, Vinf::Float64)
+
+    # solve quadratic equation for alpha
+    qq = LIC/AIC
+    a = -U*qq*sin(CP.twist)'
+    b = -U*qq*(cos(CP.twist).*cos(CP.dihedral))'
+    c = Ltarget
+    # alpha = acos((a*c + b*sqrt(a^2+b^2-c^2))/(a^2+b^2));
+    alpha = asin(c/b - a/b*(a*c + b*sqrt(a^2+b^2-c^2))/(a^2 + b^2))
+
+    return alpha
 end
