@@ -9,6 +9,7 @@
 =#
 
 include("VLM.jl")
+close("all") # KRM include this in case you haven't in your profile
 
 
 # wing geometry  - all degrees in radians

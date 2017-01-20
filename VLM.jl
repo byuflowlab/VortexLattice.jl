@@ -1,4 +1,6 @@
 
+using PyPlot #KRM wasn't included
+
 type CPdata
     chord::Array{Float64, 1}
     twist::Array{Float64, 1}
@@ -65,7 +67,7 @@ function geometry(wing::wingsection)
 
     # --------------------------------------------------------------
 
-    P = int(round(b/sum(b)*N)) # divide up panels
+    P = round(Int,round(b/sum(b)*N)) # divide up panels #KRM int depreciated in julia .5
 
     # -------------  Quarter Chord Locations --------------------------
     M = 1 + sum(P)
@@ -771,62 +773,63 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
     # --------------------------------------------------------------
 
-    # if (plots)
-    #   # ------------- plots --------------------
-    #   # plot wings
-    # #       plot_wing(LE,QC,TE,CP)
-    #   N = length(QC.x)
-    #   #       axis equal
-    #   PyPlot.figure()
-    # #       if TE[3] < 0:
-    # #         TE.y = -TE.y
-    # #       end
-    #   for i = 1:N-1
-    #     PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
-    #     PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
-    #   end
-    #   PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-    # #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
-    #   for i = 1:N-1
-    #       PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
-    #       PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
-    #   end
-    #   PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-    # #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
-    #   PyPlot.xlabel("x")
-    #   PyPlot.ylabel("y")
-    #   PyPlot.title("Plot of wing")
-    #
-    #   # plot lift
-    #   #       figure(50) hold on
-    #   PyPlot.figure()
-    #   l = 2*gamma/U/(ref.c)
-    #   l_mvr = 2*gamma_mvr/U/(ref.c)
-    #   eta = linspace(0,0.5,length(l))
-    #   PyPlot.plot(eta,l,"b")
-    #   PyPlot.plot(eta,l_mvr,"r")
-    #   PyPlot.xlabel("xi / b")
-    #   PyPlot.ylabel("c_l c / c_ref")
-    # #   PyPlot.title("")
-    #
-    #   # plot cl
-    #   PyPlot.figure()
-    #   PyPlot.plot(eta,cl,"b")
-    #   PyPlot.plot(eta,clmax_dist,"r")
-    #   PyPlot.plot(eta,clmax,"r--")
-    #   PyPlot.xlabel("xi / b")
-    #   PyPlot.ylabel("c_l")
-    #   PyPlot.title("Plot of c_l")
-    #
-    #   # plot bending over thickness
-    #   PyPlot.figure()
-    #   PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
-    #   PyPlot.xlabel("xi_str/b_str")
-    #   PyPlot.ylabel("M_b/t")
-    #   PyPlot.title("Plot of bending over thickness")
-    #   PyPlot.show()
-    #   # -------------------------------------------------
-    # end
+    if (plots) #KRM Vinf was called U
+
+      # ------------- plots --------------------
+      # plot wings
+    #       plot_wing(LE,QC,TE,CP)
+      N = length(QC.x)
+      #       axis equal
+      PyPlot.figure()
+    #       if TE[3] < 0:
+    #         TE.y = -TE.y
+    #       end
+      for i = 1:N-1
+        PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
+        PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
+      end
+      PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+    #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
+      for i = 1:N-1
+          PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
+          PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
+      end
+      PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+    #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
+      PyPlot.xlabel("x")
+      PyPlot.ylabel("y")
+      PyPlot.title("Plot of wing")
+
+      # plot lift
+      #       figure(50) hold on
+      PyPlot.figure()
+      l = 2*gamma/Vinf/(ref.c)
+      l_mvr = 2*gamma_mvr/Vinf/(ref.c)
+      eta = linspace(0,0.5,length(l))
+      PyPlot.plot(eta,l,"b")
+      PyPlot.plot(eta,l_mvr,"r")
+      PyPlot.xlabel("xi / b")
+      PyPlot.ylabel("c_l c / c_ref")
+    #   PyPlot.title("")
+
+      # plot cl
+      PyPlot.figure()
+      PyPlot.plot(eta,cl,"b")
+      PyPlot.plot(eta,clmax_dist,"r")
+      PyPlot.plot(eta,clmax,"r--")
+      PyPlot.xlabel("xi / b")
+      PyPlot.ylabel("c_l")
+      PyPlot.title("Plot of c_l")
+
+      # plot bending over thickness
+      PyPlot.figure()
+      PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
+      PyPlot.xlabel("xi_str/b_str")
+      PyPlot.ylabel("M_b/t")
+      PyPlot.title("Plot of bending over thickness")
+      PyPlot.show()
+      # -------------------------------------------------
+    end
 
     return CL, CDi, CDp, CW, Cmac, cl_margin, gamma, CP
 end
