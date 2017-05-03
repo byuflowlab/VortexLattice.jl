@@ -362,7 +362,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                 finish = start + P[i] - 1
                 area_temp = cbar*wing.span[i]
                 for j = start:finish
-                    area[j] = area_temp/finish #since we're doing it element by element, divide area by the number of elements we are traversing.
+                    area[j] = area_temp/(finish-start+1) #since we're doing it element by element, divide area by the number of elements we are traversing.
                     CL_local = 0.1*sum(gamma[j]'.*CP.ds[j])*2.0./Vinf[j]./area[j]
 
                     # compressibility drag
@@ -370,6 +370,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
 
                     # parasite drag
                     cdp[j] = Pdrag(alt,mach[j],xt,mac,wing.sweep[i],tcbar)
+
                 end
                 start = finish + 1
 
@@ -953,7 +954,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     MICac = getMIC(CP, rho, Vinf, xac[1])
     Mac = MICac'*gamma
 
-    Cmac = Mac./q./Sref/cref
+    Cmac = Mac/minimum(q)/Sref/cref
     # ----------------------------------------------------------
 
     # --------------- structures --------------------------
@@ -1023,6 +1024,6 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
       PyPlot.show()
       # -------------------------------------------------
     end
-    println(cl_margin)
+
     return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
 end

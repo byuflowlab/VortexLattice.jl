@@ -60,13 +60,13 @@ mvr = mvr_def(2.5, 2.5, 0)
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = false
-CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP = VLM(wing, fs, ref, pdrag, mvr, plots)
+CL1, CDi1, CDp1, CDc1, CW1, Cmac1, cl_margin1, gamma1, CP1 = VLM(wing, fs, ref, pdrag, mvr, plots)
 # println(CL)
 # println(CDi)
 # println(CDp)
 # println(CDc)
 # println(Cmac)
-d1 = ["TEST WITH ORIGINAL SETUP - non-variable twist distribution, and quad viscous drag etc","CL",CL, "CDi",CDi, "CDp",CDp, "CDc",CDc, "CW",CW, "Cmac",Cmac, "cl_margin",cl_margin, "gamma",gamma]
+d1 = ["TEST WITH ORIGINAL SETUP - non-variable twist distribution, and quad viscous drag etc \n \n CL \n $CL1 \n  CDi \n $CDi1 \n  CDp \n $CDp1 \n  CDc \n $CDc1 \n  CW \n $CW1 \n  Cmac \n $Cmac1 \n  cl_margin \n $cl_margin1 \n  gamma \n $gamma1 \n \n \n \n"]
 
 
 #TEST WITH MODIFIED SETUP - variable twist distribution, and pass viscous drag etc
@@ -123,6 +123,6 @@ mvr = mvr_def(2.5, 2.5, 0)
 plots = false
 CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP = VLM(wing, fs, ref, pdrag, mvr, plots)
 
-d2 = ["TEST WITH MODIFIED SETUP - variable twist distribution, and pass viscous drag etc","CL",CL, "CDi",CDi, "CDp",CDp, "CDc",CDc, "CW",CW, "Cmac",Cmac, "cl_margin",cl_margin, "gamma",gamma]
+d2 = ["TEST WITH MODIFIED SETUP - variable twist distribution, pass viscous drag, compressibility etc \n \n CL \n $CL \n  CDi \n $CDi \n  CDp \n $CDp \n  CDc \n $CDc \n  CW \n $CW \n  Cmac \n $Cmac \n  cl_margin \n $cl_margin \n  gamma \n $gamma"]
 d = [d1,d2]
 writedlm("check_output.csv", d)
