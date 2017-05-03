@@ -1,4 +1,4 @@
-
+module NVLM
 using PyPlot #KRM wasn't included
 
 type CPdata
@@ -30,26 +30,26 @@ type wingsection
 end
 
 type fs_def
-  mach
-  alpha
-  CL
-  method
+    mach
+    alpha
+    CL
+    method
 end
 type ref_def
-  S
-  c
-  CLmax
+    S
+    c
+    CLmax
 end
 type pdrag_def
-  polar
-  alt
-  xt
-  method
+    polar
+    alt
+    xt
+    method
 end
 type mvr_def
-  qN
-  n
-  kbar
+    qN
+    n
+    kbar
 end
 
 ## -------- geometry ---------------
@@ -79,23 +79,23 @@ function geometry(wing::wingsection)
     LE = position(zeros(M), zeros(M), zeros(M))
     TE = position(zeros(M), zeros(M), zeros(M))
     CP = CPdata(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N), zeros(N),
-        zeros(N), zeros(N), zeros(N))
+    zeros(N), zeros(N), zeros(N))
 
     last = 1
 
     for i = 1:length(b)
-      first = last
-      last = first + P[i]
-      eta = linspace(0, b[i], P[i]+1)
+        first = last
+        last = first + P[i]
+        eta = linspace(0, b[i], P[i]+1)
 
-      QC.x[first:last] = QC.x[first] + eta*tan(Lambda[i])
-      QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
-      QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
-      c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
-      if length(twist)==length(b)+1 #TODO: need to make twists not equal number of vortex elements across span
-          t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
-      end
-      thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
+        QC.x[first:last] = QC.x[first] + eta*tan(Lambda[i])
+        QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
+        QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
+        c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
+        if length(twist)==length(b)+1 #TODO: need to make twists not equal number of vortex elements across span
+            t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
+        end
+        thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
     end
     # --------------------------------------------------------------
 
@@ -129,10 +129,10 @@ function geometry(wing::wingsection)
 
     last = 0
     for i = 1:length(b)
-      first = last + 1
-      last = first + P[i] - 1
-      CP.dihedral[first:last] = phi[i]
-      CP.sweep[first:last] = Lambda[i]
+        first = last + 1
+        last = first + P[i] - 1
+        CP.dihedral[first:last] = phi[i]
+        CP.sweep[first:last] = Lambda[i]
     end
     CP.ds = sqrt((QC.y[2:N+1]-QC.y[1:N]).^2 + (QC.z[2:N+1]-QC.z[1:N]).^2)
 
@@ -159,7 +159,7 @@ function atmosphere(altitude::Float64) #KRM moved here
     # ---------------------------------------
 
     if altitude > h[end]
-      println("Altitude exceeds standard atmosphere data")
+        println("Altitude exceeds standard atmosphere data")
     end
 
     # ---- find temperature and pressure at defined points ----
@@ -259,15 +259,15 @@ function getDIC(yFF::Array{Float64, 1}, zFF::Array{Float64, 1}, rho::Float64, yF
     n = length(yFF)-1
     n2 = length(yFF2)-1
 
-     # ------------ define useful variables ------------------
+    # ------------ define useful variables ------------------
     yc = 0.5*(yFF[2:n+1] + yFF[1:n])   # center of panels
     zc = 0.5*(zFF[2:n+1] + zFF[1:n])
     ny = zFF[2:n+1] - zFF[1:n]
     nz = yFF[2:n+1] - yFF[1:n]
-     # ----------------------------------------------------
+    # ----------------------------------------------------
 
     DIC = zeros(n,n2)
-     #------- normal wash calculation ----------------
+    #------- normal wash calculation ----------------
     for i = 1:n
         for j = 1:n2
             ry = yFF2[j] - yc[i]
@@ -275,7 +275,7 @@ function getDIC(yFF::Array{Float64, 1}, zFF::Array{Float64, 1}, rho::Float64, yF
             r2 = ry^2 + rz^2
             DIC[i, j] = -rho/(2*pi*r2)*(rz*ny[i]+ry*nz[i])
 
-             # add other side of panel
+            # add other side of panel
             ry = yFF2[j+1] - yc[i]
             rz = zFF2[j+1] - zc[i]
             r2 = ry^2 + rz^2
@@ -401,7 +401,7 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
     # compute Cf based on transition location
     Rex = Re*xt
     if Rex <= 0
-      Rex = 0.0001
+        Rex = 0.0001
     end
     xeff = 38.7*xt*Rex^(-3.0/8) # effective boundary layer length
     Rext = Re*(1-xt+xeff)
@@ -459,17 +459,17 @@ function Cdrag(CL, Lambda, tc, mach, supercrit) #KRM moved here
     dm = rm-1
 
     if rm < .5
-      cdc = 0.0
+        cdc = 0.0
     elseif (rm >= .5 && rm < .8)
-      cdc = 1.3889e-4+5.5556e-4*dm+5.5556e-4*dm*dm
+        cdc = 1.3889e-4+5.5556e-4*dm+5.5556e-4*dm*dm
     elseif (rm >= .8 && rm < .95)
-      cdc = 7.093e-4+6.733e-3*dm+.01956*dm*dm+.01185*dm*dm*dm
+        cdc = 7.093e-4+6.733e-3*dm+.01956*dm*dm+.01185*dm*dm*dm
     elseif (rm >= .95 && rm < 1.0)
-      cdc = .001000+.02727*dm+.4920*dm*dm+3.573*dm*dm*dm
+        cdc = .001000+.02727*dm+.4920*dm*dm+3.573*dm*dm*dm
     elseif (rm >= 1.0 && rm < 1.075)
-      cdc = .001000+.02727*dm-.1952*dm*dm+19.09*dm*dm*dm
+        cdc = .001000+.02727*dm-.1952*dm*dm+19.09*dm*dm*dm
     else
-      cdc = 0.01 + 0.33477*(dm-0.075) # linear extension
+        cdc = 0.01 + 0.33477*(dm-0.075) # linear extension
     end
 
     cdc = cdc*cosL^3
@@ -480,16 +480,16 @@ end
 
 #=
 ----------------------------------------
- Calculates velocity induced by vortex (with unit vorticity)
- starting at rA ending at rB at control point rC. (see Bertin/Smith)
+Calculates velocity induced by vortex (with unit vorticity)
+starting at rA ending at rB at control point rC. (see Bertin/Smith)
 
- Author: S. Andrew Ning
+Author: S. Andrew Ning
 ------------------------------------------
 =#
 
 function vortex(xA::Array{Float64, 1}, yA::Array{Float64, 1}, zA::Array{Float64, 1},
-        xB::Array{Float64, 1}, yB::Array{Float64, 1}, zB::Array{Float64, 1},
-        xC::Array{Float64, 1}, yC::Array{Float64, 1}, zC::Array{Float64, 1})
+    xB::Array{Float64, 1}, yB::Array{Float64, 1}, zB::Array{Float64, 1},
+    xC::Array{Float64, 1}, yC::Array{Float64, 1}, zC::Array{Float64, 1})
 
     m = length(yC)
     n = length(yA)
@@ -548,21 +548,21 @@ function velocity3d(QC::position, TE::position, CP::CPdata)
 
     # Induced velocities due to bound vortex (BC)
     dv, dw = vortex(QC.x[1:n], QC.y[1:n], QC.z[1:n], QC.x[2:n+1], QC.y[2:n+1], QC.z[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u += du
     v += dv
     w += dw
 
     # Induced velocities due to AB - left vortex bound to wing
     dv, dw = vortex(TE.x[1:n], TE.y[1:n], TE.z[1:n], QC.x[1:n], QC.y[1:n], QC.z[1:n],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u += du
     v += dv
     w += dw
 
     # Induced velocities due to CD - right vortex bound to wing
     dv, dw = vortex(QC.x[2:n+1], QC.y[2:n+1], QC.z[2:n+1], TE.x[2:n+1], TE.y[2:n+1], TE.z[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u += du
     v += dv
     w += dw
@@ -577,14 +577,14 @@ function velocity3d(QC::position, TE::position, CP::CPdata)
     zINF = TE.z
 
     dv, dw = vortex(xINF[1:n], yINF[1:n], zINF[1:n], TE.x[1:n], TE.y[1:n], TE.z[1:n],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u += du
     v += dv
     w += dw
 
     # Induced velocities due to trailing vortex from D
     dv, dw = vortex(TE.x[2:n+1], TE.y[2:n+1], TE.z[2:n+1], xINF[2:n+1], yINF[2:n+1], zINF[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u += du
     v += dv
     w += dw
@@ -599,21 +599,21 @@ function velocity3d(QC::position, TE::position, CP::CPdata)
 
     # Induced velocities due to bound vortex (BC)
     dv, dw = vortex(QC.x[1:n], -QC.y[1:n], QC.z[1:n], QC.x[2:n+1], -QC.y[2:n+1], QC.z[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u -= du
     v -= dv
     w -= dw
 
     # Induced velocities due to AB - left vortex bound to wing
     dv, dw = vortex(TE.x[1:n], -TE.y[1:n], TE.z[1:n], QC.x[1:n], -QC.y[1:n], QC.z[1:n],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u -= du
     v -= dv
     w -= dw
 
     # Induced velocities due to CD - right vortex bound to wing
     dv, dw = vortex(QC.x[2:n+1], -QC.y[2:n+1], QC.z[2:n+1], TE.x[2:n+1], -TE.y[2:n+1], TE.z[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u -= du
     v -= dv
     w -= dw
@@ -621,14 +621,14 @@ function velocity3d(QC::position, TE::position, CP::CPdata)
     # Induced velocities due to trailing vortex from A
 
     dv, dw = vortex(xINF[1:n], -yINF[1:n], zINF[1:n], TE.x[1:n], -TE.y[1:n], TE.z[1:n],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u -= du
     v -= dv
     w -= dw
 
     # Induced velocities due to trailing vortex from D
     dv, dw = vortex(TE.x[2:n+1], -TE.y[2:n+1], TE.z[2:n+1], xINF[2:n+1], -yINF[2:n+1], zINF[2:n+1],
-        CP.x, CP.y, CP.z)
+    CP.x, CP.y, CP.z)
     # u -= du
     v -= dv
     w -= dw
@@ -645,7 +645,7 @@ Vn = AIC*gamma
 
 Author: S. Andrew Ning
 Updates: summer 08 - simplified so that twist/camber are only applied in boundary conditions
-                     consistent with assumptions of VLM.
+consistent with assumptions of VLM.
 --------------------------------------
 =#
 
@@ -676,7 +676,7 @@ bending moment distribution = BMM*gamma
 
 Author: S. Andrew Ning
 Updates: 1/23/09 - corrected integration along spar and vectorized for speed
-         1/30/09 - allows for thickness distribution
+1/30/09 - allows for thickness distribution
 ---------------------------------------------------
 =#
 
@@ -701,8 +701,8 @@ function getWIC(CP::CPdata, rho::Float64, Vinf)
         for j = i+1:N
             cij = cos(CP.dihedral[j])*cos(CP.dihedral[i]) + sin(CP.dihedral[j])*sin(CP.dihedral[i])
             R[i, j] = (x[j] - x[i])*cij*sin(CP.sweep[i]) +
-                     (y[j] - y[i])*cos(CP.dihedral[j])*cos(CP.sweep[i]) +
-                     (z[j] - z[i])*sin(CP.dihedral[j])*cos(CP.sweep[i])
+            (y[j] - y[i])*cos(CP.dihedral[j])*cos(CP.sweep[i]) +
+            (z[j] - z[i])*sin(CP.dihedral[j])*cos(CP.sweep[i])
 
             # if j <= i, R(i,j) = 0
         end
@@ -761,8 +761,8 @@ lift
 
 Author: S. Andrew Ning
 Updates: 1/28/09 - created
-         9/2/09 - changed the way alpha was computed - seems more robust
-                 to larger angles of attack by using arcsin rather than arccos
+9/2/09 - changed the way alpha was computed - seems more robust
+to larger angles of attack by using arcsin rather than arccos
 ---------------------------------------------------
 =#
 
@@ -789,13 +789,13 @@ This version assumes (one) symmetric wing.
 
 Author: S. Andrew Ning
 Updates: repackaged with features from several different versions - 1/30/09
-        2/2/09 - fixed computation of t/c_avg to be properly area weighted
-                (used in compressibility and Re dependent parasite drag)
-               - clmax is now a function of t/c (polynomial fit from 241 data)
-        2/3/09 - added viscous dependent induced drag if PASS method is used to compute
-                 parasite drag
-        2/17/09 - added area dependent weight, correct area in quadratic parasite
-                  drag calculation, parameter to choose pdrag method
+2/2/09 - fixed computation of t/c_avg to be properly area weighted
+(used in compressibility and Re dependent parasite drag)
+- clmax is now a function of t/c (polynomial fit from 241 data)
+2/3/09 - added viscous dependent induced drag if PASS method is used to compute
+parasite drag
+2/17/09 - added area dependent weight, correct area in quadratic parasite
+drag calculation, parameter to choose pdrag method
 ----------------------------------------------------------------------
 =#
 
@@ -833,197 +833,198 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # ------------- geometry ------------------
     QC, TE, CP, LE = geometry(wing)
 
-    # compute wing area
-    S = 2*sum(CP.chord.*CP.ds)
-    # ------------------------------------------
+        # compute wing area
+        S = 2*sum(CP.chord.*CP.ds)
+        # ------------------------------------------
 
-    # ---------- force influence coefficients --------------------
-    # aerodynamic influence coefficients
-    AIC = getAIC(QC, TE, CP)
+        # ---------- force influence coefficients --------------------
+        # aerodynamic influence coefficients
+        AIC = getAIC(QC, TE, CP)
 
-    # lift
-    LIC = getLIC(CP, rho, Vinf)
+        # lift
+        LIC = getLIC(CP, rho, Vinf)
 
-    # induced drag
-    DIC = getDIC(TE.y, TE.z, rho)
+        # induced drag
+        DIC = getDIC(TE.y, TE.z, rho)
 
-    # ----------------------------------------------------------------------
+        # ----------------------------------------------------------------------
 
 
-    # weight
-    WIC, BMM = getWIC(CP, rho, Vinf)
-    # -----------------------------------------------
+        # weight
+        WIC, BMM = getWIC(CP, rho, Vinf)
+        # -----------------------------------------------
 
-    # ---------- compute angle of attack necessary to match CL -----
-    if fs.method == "CL"
-        alpha = getAlpha(CLref.*q.*Sref, CP, LIC, AIC, Vinf)
+        # ---------- compute angle of attack necessary to match CL -----
+        if fs.method == "CL"
+            alpha = getAlpha(CLref.*q.*Sref, CP, LIC, AIC, Vinf)
+        end
+        # ------------------------------------------------------------------
+
+        # -------- compute circulation -----------------
+        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
+        gamma = AIC\Vn
+        # ----------------------------------------------
+
+        # --------- aerodynamic forces ------------------
+        L = dot(LIC, gamma)
+        Di = gamma'*DIC*gamma
+        CDi = Di/minimum(q)/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
+        CL = L/minimum(q)/Sref
+
+
+
+        # viscous drag KRM
+        if pdrag.method=="pass"
+            cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
+
+            # compressibility drag - area weighted average
+            CDc = 2*sum(cdc.*area)/Sref
+
+            # parasite drag - area weighted average
+            CDp = 2*sum(cdp.*area)/Sref
+
+            # add viscous dependent induced drag
+            Lambda_bar = sum(area.*wing.sweep)/sum(area)
+            CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
+
+        else #quadratic method
+            D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
+            Dp = pdrag.polar[1].*q.*S + D1'*gamma + D2'*gamma.^2
+            CDp = Dp./q./Sref
+            CDc = 0.0
+        end
+
+
+
+        # ------------------------------------------------
+
+        # --------- weight (integrated bending moment over thickness --------
+        # circulation at maneuver load
+        bbb = AIC\cos(CP.dihedral)
+        LL = dot(LIC, bbb)
+
+        gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
+
+        # compute weight
+        W = qmvrN*WIC'*gamma_mvr
+
+        # add area dependent weight
+        W = W + kbar*S
+
+        # weight coefficient
+        CW = W/minimum(q)/Sref/cref
+        # -----------------------------------------------------------------
+
+        #KRM moved paracitic and compressibility drag inside get viscous drag function
+
+        # ----------- cl distribution at CLmax ----------------
+        cl = 2.0./Vinf.*gamma./CP.chord
+        # println("rho")
+        # println((rho))
+        # println("Vinf")
+        # println((Vinf))
+        # println("Sref")
+        # println((Sref))
+        # println("L")
+        # println("q")
+        # println(minimum(q))
+
+        clmax_dist = cl + (rho.*Vinf.*(CLmax*Sref-L/minimum(q))./LL).*bbb./CP.chord
+
+
+        # clmax as a function of thickness - polynomial fit
+        tc = CP.tc*100
+        clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
+
+        cl_margin = clmax - clmax_dist
+        # ----------------------------------------
+
+        # --------- pitching moment about a.c. --------------------
+        # pitching moment about quarter chord
+        MIC = getMIC(CP, rho, Vinf, QC.x[1])
+
+        # find aerodynamic center
+        dRHS = -sin(alpha)*sin(CP.twist) + cos(alpha)*cos(CP.twist).*cos(CP.dihedral)
+        dbc = AIC\dRHS
+        dMda = MIC'*dbc
+        dLda = LIC'*dbc
+        xac = -dMda/dLda + QC.x[1]
+
+        # find Moment about a.c.
+        MICac = getMIC(CP, rho, Vinf, xac[1])
+        Mac = MICac'*gamma
+
+        Cmac = Mac/minimum(q)/Sref/cref
+        # ----------------------------------------------------------
+
+        # --------------- structures --------------------------
+        # bending moment distribution
+        Mb = qmvrN*BMM*gamma
+
+        # distance along structural span
+        ds_str = CP.ds./cos(CP.sweep)
+        eta_str = [0; cumsum(ds_str, 2)]
+        eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
+        # --------------------------------------------------------------
+
+        if (plots) #KRM Vinf was called U
+
+            # ------------- plots --------------------
+            # plot wings
+            #       plot_wing(LE,QC,TE,CP)
+            N = length(QC.x)
+            #       axis equal
+            PyPlot.figure()
+            #       if TE[3] < 0:
+            #         TE.y = -TE.y
+            #       end
+            for i = 1:N-1
+                PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
+                PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
+            end
+            PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
+            for i = 1:N-1
+                PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
+                PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
+            end
+            PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
+            PyPlot.xlabel("x")
+            PyPlot.ylabel("y")
+            PyPlot.title("Plot of wing")
+
+            # plot lift
+            #       figure(50) hold on
+            PyPlot.figure()
+            l = 2*gamma./Vinf./(ref.c)
+            l_mvr = 2*gamma_mvr./Vinf./(ref.c)
+            eta = linspace(0,0.5,length(l))
+            PyPlot.plot(eta,l,"b")
+            PyPlot.plot(eta,l_mvr,"r")
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel("c_l c / c_ref")
+            #   PyPlot.title("")
+
+            # plot cl
+            PyPlot.figure()
+            PyPlot.plot(eta,cl,"b")
+            PyPlot.plot(eta,clmax_dist,"r")
+            PyPlot.plot(eta,clmax,"r--")
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel("c_l")
+            PyPlot.title("Plot of c_l")
+
+            # plot bending over thickness
+            PyPlot.figure()
+            PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
+            PyPlot.xlabel("xi_str/b_str")
+            PyPlot.ylabel("M_b/t")
+            PyPlot.title("Plot of bending over thickness")
+            PyPlot.show()
+            # -------------------------------------------------
+        end
+
+        return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
     end
-    # ------------------------------------------------------------------
-
-    # -------- compute circulation -----------------
-    Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
-    gamma = AIC\Vn
-    # ----------------------------------------------
-
-    # --------- aerodynamic forces ------------------
-    L = dot(LIC, gamma)
-    Di = gamma'*DIC*gamma
-    CDi = Di/minimum(q)/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
-    CL = L/minimum(q)/Sref
-
-
-
-    # viscous drag KRM
-    if pdrag.method=="pass"
-        cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
-
-        # compressibility drag - area weighted average
-        CDc = 2*sum(cdc.*area)/Sref
-
-        # parasite drag - area weighted average
-        CDp = 2*sum(cdp.*area)/Sref
-
-        # add viscous dependent induced drag
-        Lambda_bar = sum(area.*wing.sweep)/sum(area)
-        CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
-
-    else #quadratic method
-        D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
-        Dp = pdrag.polar[1].*q.*S + D1'*gamma + D2'*gamma.^2
-        CDp = Dp./q./Sref
-        CDc = 0.0
-    end
-
-
-
-    # ------------------------------------------------
-
-    # --------- weight (integrated bending moment over thickness --------
-    # circulation at maneuver load
-    bbb = AIC\cos(CP.dihedral)
-    LL = dot(LIC, bbb)
-
-    gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
-
-    # compute weight
-    W = qmvrN*WIC'*gamma_mvr
-
-    # add area dependent weight
-    W = W + kbar*S
-
-    # weight coefficient
-    CW = W/minimum(q)/Sref/cref
-    # -----------------------------------------------------------------
-
-    #KRM moved paracitic and compressibility drag inside get viscous drag function
-
-    # ----------- cl distribution at CLmax ----------------
-    cl = 2.0./Vinf.*gamma./CP.chord
-    # println("rho")
-    # println((rho))
-    # println("Vinf")
-    # println((Vinf))
-    # println("Sref")
-    # println((Sref))
-    # println("L")
-    # println("q")
-    # println(minimum(q))
-
-    clmax_dist = cl + (rho.*Vinf.*(CLmax*Sref-L/minimum(q))./LL).*bbb./CP.chord
-
-
-    # clmax as a function of thickness - polynomial fit
-    tc = CP.tc*100
-    clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
-
-    cl_margin = clmax - clmax_dist
-    # ----------------------------------------
-
-    # --------- pitching moment about a.c. --------------------
-    # pitching moment about quarter chord
-    MIC = getMIC(CP, rho, Vinf, QC.x[1])
-
-    # find aerodynamic center
-    dRHS = -sin(alpha)*sin(CP.twist) + cos(alpha)*cos(CP.twist).*cos(CP.dihedral)
-    dbc = AIC\dRHS
-    dMda = MIC'*dbc
-    dLda = LIC'*dbc
-    xac = -dMda/dLda + QC.x[1]
-
-    # find Moment about a.c.
-    MICac = getMIC(CP, rho, Vinf, xac[1])
-    Mac = MICac'*gamma
-
-    Cmac = Mac/minimum(q)/Sref/cref
-    # ----------------------------------------------------------
-
-    # --------------- structures --------------------------
-    # bending moment distribution
-    Mb = qmvrN*BMM*gamma
-
-    # distance along structural span
-    ds_str = CP.ds./cos(CP.sweep)
-    eta_str = [0; cumsum(ds_str, 2)]
-    eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
-    # --------------------------------------------------------------
-
-    if (plots) #KRM Vinf was called U
-
-      # ------------- plots --------------------
-      # plot wings
-    #       plot_wing(LE,QC,TE,CP)
-      N = length(QC.x)
-      #       axis equal
-      PyPlot.figure()
-    #       if TE[3] < 0:
-    #         TE.y = -TE.y
-    #       end
-      for i = 1:N-1
-        PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
-        PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
-      end
-      PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-    #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
-      for i = 1:N-1
-          PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
-          PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
-      end
-      PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-    #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
-      PyPlot.xlabel("x")
-      PyPlot.ylabel("y")
-      PyPlot.title("Plot of wing")
-
-      # plot lift
-      #       figure(50) hold on
-      PyPlot.figure()
-      l = 2*gamma./Vinf./(ref.c)
-      l_mvr = 2*gamma_mvr./Vinf./(ref.c)
-      eta = linspace(0,0.5,length(l))
-      PyPlot.plot(eta,l,"b")
-      PyPlot.plot(eta,l_mvr,"r")
-      PyPlot.xlabel("xi / b")
-      PyPlot.ylabel("c_l c / c_ref")
-    #   PyPlot.title("")
-
-      # plot cl
-      PyPlot.figure()
-      PyPlot.plot(eta,cl,"b")
-      PyPlot.plot(eta,clmax_dist,"r")
-      PyPlot.plot(eta,clmax,"r--")
-      PyPlot.xlabel("xi / b")
-      PyPlot.ylabel("c_l")
-      PyPlot.title("Plot of c_l")
-
-      # plot bending over thickness
-      PyPlot.figure()
-      PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
-      PyPlot.xlabel("xi_str/b_str")
-      PyPlot.ylabel("M_b/t")
-      PyPlot.title("Plot of bending over thickness")
-      PyPlot.show()
-      # -------------------------------------------------
-    end
-
-    return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
-end
+end #module VLM
