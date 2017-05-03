@@ -143,17 +143,19 @@ end
 
 function atmosphere(altitude::Float64) #KRM moved here
 
-    # assumes english units
+    # assumes english units #KRM modified so that inputs are metric and outputs are metric
     # [rho, mu, a, T, P] = atmosphere(altitude)
+
+    altitude = altitude/.3048 #now altitude is in feet
 
     # ----------- constants ---------------
     aT = [-6.5 0 1 2.8 0 -2.8 -2]*0.00054864 # temperature gradient (R/ft)
     h = [0 11 20 32 47 51 71 84.852]*3280.8399 # altitude (ft)
-    g = 32.174 # gravitational acceleration
-    R = 1716.5 # specific gas constant
-    Tsl = 518.67 # sea level temperature
-    Psl = 2116.21662 # sea level pressure
-    musl = 3.73719712e-7 # sea level viscosity
+    g = 32.174 # gravitational acceleration #ft/s
+    R = 1716.5 # specific gas constant #ft-lb/slug-R
+    Tsl = 518.67 # sea level temperature #R
+    Psl = 2116.21662 # sea level pressure #lbf/ft^2
+    musl = 3.73719712e-7 # sea level viscosity #slug/ft/s
     S = 1.8*110.4 # constant in Sutherlands formula
     gamma = 1.4
     # ---------------------------------------
@@ -200,9 +202,18 @@ function atmosphere(altitude::Float64) #KRM moved here
     # --------------- speed of sound -------------------
     a = sqrt(gamma*R*T)
 
+    #convert to metric KRM
+    rho = rho*515.379 #slugs/ft3 to kg/m3
+    mu = mu*47.8803 #slugs/f/s to kg/m/s
+    a = a*.3048 #ft/s to m/s
+    T = (T-491.67)*5/9 #rankine to celcius
+    P = P*4.88243 #lbf/ft^2 to kg/m^2
+
     return rho, mu, a, T, P
 
 end
+
+
 
 ## -------- influence coefficients ---------------
 
