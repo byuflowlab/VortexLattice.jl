@@ -80,6 +80,7 @@ wing = wingsection([29, 65], [43, 26, 11], [0, 0, 0]*pi/180, [0.13, 0.12, 0.11],
 # wing.sweep = [25 30]*pi/180
 # wing.dihedral = [0 0]
 # wing.N = 50
+wing.twist = zeros(wing.N)
 
 # println(wing.span)
 # println(wing.chord)
@@ -93,6 +94,7 @@ fs = fs_def(0.01, 5*pi/180, 0.5, "alpha")
 # fs.alpha = 5*pi/180 # only used for alpha method
 # fs.CL = 0.5 # only used for CL method
 # fs.method = "alpha"
+fs.mach = ones(wing.twist)*.01
 
 # reference and other parameters (used for force/moment coefficients)
 ref = ref_def(Sref, Sref/bref, 1.4)

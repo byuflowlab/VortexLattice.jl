@@ -92,7 +92,9 @@ function geometry(wing::wingsection)
       QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
       QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
       c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
-      t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
+      if length(twist)==length(b)+1 #TODO: need to make twists not equal number of vortex elements across span
+          t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
+      end
       thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
     end
     # --------------------------------------------------------------
@@ -111,7 +113,12 @@ function geometry(wing::wingsection)
 
     # ------------- Control Point Locations --------------------------
     CP.chord = 0.5*(c[1:N] + c[2:N+1])
-    CP.twist = 0.5*(t[1:N] + t[2:N+1])
+
+    if length(twist)==length(b)+1
+        CP.twist = 0.5*(t[1:N] + t[2:N+1])
+    else
+        CP.twist = twist #TODO: need to make twists not equal number of vortex elements across span
+    end
     CP.tc = 0.5*(thickness[1:N] + thickness[2:N+1])./CP.chord
     CP.x = 0.5*(QC.x[1:N] + QC.x[2:N+1]) + 0.5*CP.chord
     CP.y = 0.5*(QC.y[1:N] + QC.y[2:N+1])
@@ -207,8 +214,8 @@ lift influence coefficients
 Author: S. Andrew Ning
 ---------------------
 =#
-function getLIC(CP::CPdata, rho::Float64, Vinf::Float64)
-    LIC = 2*rho*Vinf*cos(CP.dihedral).*CP.ds
+function getLIC(CP::CPdata, rho::Float64, Vinf)
+    LIC = 2*rho.*Vinf.*cos(CP.dihedral).*CP.ds
 end
 
 #=
@@ -219,11 +226,11 @@ Author: S. Andrew Ning
 Updates: 1/30/09 - removed dependence on QC since this is known
 -------------------------------------
 =#
-function getMIC(CP::CPdata, rho::Float64, Vinf::Float64, xcg::Float64)
+function getMIC(CP::CPdata, rho::Float64, Vinf, xcg::Float64)
 
     xQC = CP.x - 0.5*CP.chord # quarter chord locations
 
-    MIC = -(xQC - xcg)*2*rho*Vinf.*cos(CP.dihedral).*CP.ds
+    MIC = -(xQC - xcg)*2*rho.*Vinf.*cos(CP.dihedral).*CP.ds
 
 end
 
@@ -315,10 +322,19 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
 
         # ----- estimate compressibility and parasite drag (strip theory + PASS method) -----
         supercrit = 1
-        P = round(Int,round(wing.span/sum(wing.span)*wing.N)) # number of panels in each section
-        cdc = zeros(1,length(wing.span))
-        cdp = zeros(1,length(wing.span))
-        area = zeros(1,length(wing.span))
+        P = round(Int,round(wing.span/sum(wing.span)*wing.N))
+
+        if length(wing.twist)==length(wing.span)+1
+            cdc = zeros(1,length(wing.span))
+            cdp = zeros(1,length(wing.span))
+            area = zeros(1,length(wing.span))
+        else # if there are variable twists and mach distributions, go through each one
+            cdc = zeros(1,length(wing.twist))
+            cdp = zeros(1,length(wing.twist))
+            area = zeros(1,length(wing.twist))
+        end
+
+
         start = 1
 
         for i = 1:length(wing.span)
@@ -327,19 +343,37 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
             ct = wing.chord[i+1]
             cbar = 1/2*(cr + ct)
             tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
-            area[i] = cbar*wing.span[i]
             mac = 2/3*(cr + ct - cr*ct/(cr+ct))
 
-            finish = start + P[i] - 1
-            CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/Vinf/area[i]
+            if length(wing.twist)==length(wing.span)+1 #TODO: need to make twists not equal number of vortex elements across span
+                area[i] = cbar*wing.span[i]
+                finish = start + P[i] - 1
+                CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/Vinf/area[i]
 
-            # compressibility drag
-            cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
+                # compressibility drag
+                cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
 
-            # parasite drag
-            cdp[i] = Pdrag(alt,mach,xt,mac,wing.sweep[i],tcbar)
+                # parasite drag
+                cdp[i] = Pdrag(alt,mach,xt,mac,wing.sweep[i],tcbar)
 
-            start = finish + 1
+                start = finish + 1
+
+            else # if there are variable twists and mach distributions, go through each one
+                finish = start + P[i] - 1
+                area_temp = cbar*wing.span[i]
+                for j = start:finish
+                    area[j] = area_temp/finish #since we're doing it element by element, divide area by the number of elements we are traversing.
+                    CL_local = 0.1*sum(gamma[j]'.*CP.ds[j])*2.0./Vinf[j]./area[j]
+
+                    # compressibility drag
+                    cdc[j] = Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
+
+                    # parasite drag
+                    cdp[j] = Pdrag(alt,mach[j],xt,mac,wing.sweep[i],tcbar)
+                end
+                start = finish + 1
+
+            end
         end
 
         return cdc,cdp,area
@@ -389,7 +423,7 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
 
     # ------------ form factor ----------------------------
     cossw = cos(sweep)
-    m0 = 0.5
+    m0 = 0.5 #TODO: fix this
     z = (2-m0^2)*cossw/sqrt(1-(m0*cossw)^2)
     k = 1 + tc*z + tc^4*100
     # -----------------------------------------------------
@@ -646,7 +680,7 @@ Updates: 1/23/09 - corrected integration along spar and vectorized for speed
 =#
 
 
-function getWIC(CP::CPdata, rho::Float64, Vinf::Float64)
+function getWIC(CP::CPdata, rho::Float64, Vinf)
 
     x = CP.x - 0.5*CP.chord
     y = CP.y
@@ -677,7 +711,7 @@ function getWIC(CP::CPdata, rho::Float64, Vinf::Float64)
     # integrate along structural span
     ds_str = CP.ds./cos(CP.sweep)
 
-    BMM = rho*Vinf*R.*repmat(ds.', N, 1)  #(ones(N, 1)*ds)
+    BMM = rho*Vinf.*R.*repmat(ds.', N, 1)  #(ones(N, 1)*ds)
     WIC = (2*(ds_str./(tc.*chord)).'*BMM).'
 
     return WIC, BMM
@@ -777,8 +811,8 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     mach = fs.mach
     rho, mu, a, T = atmosphere(pdrag.alt)
-    Vinf = mach*a
-    q = 0.5*rho*Vinf^2
+    Vinf = mach.*a
+    q = 0.5*rho.*Vinf.^2
 
     # reference quantities
     Sref = ref.S
@@ -821,43 +855,41 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # ---------- compute angle of attack necessary to match CL -----
     if fs.method == "CL"
-        alpha = getAlpha(CLref*q*Sref, CP, LIC, AIC, Vinf)
+        alpha = getAlpha(CLref.*q.*Sref, CP, LIC, AIC, Vinf)
     end
     # ------------------------------------------------------------------
 
     # -------- compute circulation -----------------
-    Vn = -Vinf*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
+    Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
     gamma = AIC\Vn
     # ----------------------------------------------
 
     # --------- aerodynamic forces ------------------
     L = dot(LIC, gamma)
     Di = gamma'*DIC*gamma
-    CDi = Di/q/Sref
-    CL = L/q/Sref
+    CDi = Di/minimum(q)/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
+    CL = L/minimum(q)/Sref
 
 
 
     # viscous drag KRM
     if pdrag.method=="pass"
         cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
+
         # compressibility drag - area weighted average
         CDc = 2*sum(cdc.*area)/Sref
+
         # parasite drag - area weighted average
         CDp = 2*sum(cdp.*area)/Sref
 
         # add viscous dependent induced drag
-
         Lambda_bar = sum(area.*wing.sweep)/sum(area)
         CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
 
-
-        D1 = 0.0
-        D2 = 0.0
-    else
+    else #quadratic method
         D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
-        Dp = pdrag.polar[1]*q*S + D1'*gamma + D2'*gamma.^2
-        CDp = Dp/q/Sref
+        Dp = pdrag.polar[1].*q.*S + D1'*gamma + D2'*gamma.^2
+        CDp = Dp./q./Sref
         CDc = 0.0
     end
 
@@ -869,6 +901,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # circulation at maneuver load
     bbb = AIC\cos(CP.dihedral)
     LL = dot(LIC, bbb)
+
     gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
 
     # compute weight
@@ -878,19 +911,21 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     W = W + kbar*S
 
     # weight coefficient
-    CW = W/q/Sref/cref
+    CW = W/minimum(q)/Sref/cref
     # -----------------------------------------------------------------
 
     #KRM moved paracitic and compressibility drag inside get viscous drag function
 
     # ----------- cl distribution at CLmax ----------------
-    cl = 2/Vinf*gamma./CP.chord
+    cl = 2.0./Vinf.*gamma./CP.chord
     # println(size(bbb))
     # println(size(CP.chord))
     # println(size(cl))
     # println(size(rho*Vinf*(CLmax*Sref-L/q)))
-    clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
-
+    one = (CLmax*Sref-L/minimum(q))
+    two = LL*bbb
+    #clmax_dist = cl + rho*Vinf.*(CLmax*Sref-L/minimum(q))./LL*bbb./CP.chord
+    clmax_dist = cl + rho*Vinf.*one./two./CP.chord
     # clmax as a function of thickness - polynomial fit
     tc = CP.tc*100
     clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
@@ -913,7 +948,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     MICac = getMIC(CP, rho, Vinf, xac[1])
     Mac = MICac'*gamma
 
-    Cmac = Mac/q/Sref/cref
+    Cmac = Mac./q./Sref/cref
     # ----------------------------------------------------------
 
     # --------------- structures --------------------------
@@ -956,8 +991,8 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
       # plot lift
       #       figure(50) hold on
       PyPlot.figure()
-      l = 2*gamma/Vinf/(ref.c)
-      l_mvr = 2*gamma_mvr/Vinf/(ref.c)
+      l = 2*gamma./Vinf./(ref.c)
+      l_mvr = 2*gamma_mvr./Vinf./(ref.c)
       eta = linspace(0,0.5,length(l))
       PyPlot.plot(eta,l,"b")
       PyPlot.plot(eta,l_mvr,"r")
