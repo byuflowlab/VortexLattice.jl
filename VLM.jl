@@ -918,10 +918,14 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # ----------- cl distribution at CLmax ----------------
     cl = 2.0./Vinf.*gamma./CP.chord
-    # println(size(bbb))
-    # println(size(CP.chord))
-    # println((cl))
-    # println((rho*Vinf*(CLmax*Sref-L/minimum(q))))
+    println("bbb")
+    println((bbb))
+    println("chord")
+    println((CP.chord))
+    println("cl")
+    println((cl))
+    println("rho vinf etc")
+    println((rho*Vinf*(CLmax*Sref-L/minimum(q))))
     one = rho*Vinf*(CLmax*Sref-L/minimum(q))
     two = LL*bbb
     # println((one))
