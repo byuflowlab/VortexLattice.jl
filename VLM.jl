@@ -927,13 +927,10 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # println("L")
     # println("q")
     # println(minimum(q))
-    one = rho*Vinf*(CLmax*Sref-L/minimum(q))
-    two = LL*bbb
-    println((one))
-    println((two))
-    clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/minimum(q))./LL*bbb./CP.chord
-    # clmax_dist = cl + one./two./CP.chord
-    # clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/minimum(q))/LL*bbb./CP.chord
+
+    clmax_dist = cl + (rho.*Vinf.*(CLmax*Sref-L/minimum(q))./LL).*bbb./CP.chord
+
+
     # clmax as a function of thickness - polynomial fit
     tc = CP.tc*100
     clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
@@ -1026,6 +1023,6 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
       PyPlot.show()
       # -------------------------------------------------
     end
-
+    println(cl_margin)
     return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
 end
