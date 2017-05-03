@@ -134,6 +134,69 @@ function geometry(wing::wingsection)
 end
 
 
+function atmosphere(altitude::Float64) #KRM moved here
+
+    # assumes english units
+    # [rho, mu, a, T, P] = atmosphere(altitude)
+
+    # ----------- constants ---------------
+    aT = [-6.5 0 1 2.8 0 -2.8 -2]*0.00054864 # temperature gradient (R/ft)
+    h = [0 11 20 32 47 51 71 84.852]*3280.8399 # altitude (ft)
+    g = 32.174 # gravitational acceleration
+    R = 1716.5 # specific gas constant
+    Tsl = 518.67 # sea level temperature
+    Psl = 2116.21662 # sea level pressure
+    musl = 3.73719712e-7 # sea level viscosity
+    S = 1.8*110.4 # constant in Sutherlands formula
+    gamma = 1.4
+    # ---------------------------------------
+
+    if altitude > h[end]
+      println("Altitude exceeds standard atmosphere data")
+    end
+
+    # ---- find temperature and pressure at defined points ----
+    Tpts = zeros(9)
+    Ppts = zeros(9)
+    Tpts[1] = Tsl
+    Ppts[1] = Psl
+
+    for i = 2:8
+        Tpts[i] = Tpts[i-1] + aT[i-1]*(h[i]-h[i-1])
+
+        if aT[i-1] == 0
+            Ppts[i] = Ppts[i-1]*exp(-g*(h[i]-h[i-1])/R/Tpts[i-1])
+        else
+            Ppts[i] = Ppts[i-1]*(Tpts[i-1]/Tpts[i])^(g/R/aT[i-1])
+        end
+    end
+    # ---------------------------------------------
+
+    # ------ find values at altitude ---------
+    hidx = find(altitude .>= h)[end]
+
+    T = Tpts[hidx] + aT[hidx]*(altitude-h[hidx])
+
+    if aT[hidx] == 0
+        P = Ppts[hidx]*exp(-g*(altitude-h[hidx])/R/Tpts[hidx])
+    else
+        P = Ppts[hidx]*(Tpts[hidx]/T)^(g/R/aT[hidx])
+    end
+
+    rho = P/R/T
+    # ----------------------------------------------
+
+    # ------- Sutherlands Law ------------
+    mu = musl*(T/Tsl)^(3.0/2)*(Tsl+S)/(T+S)
+    # -----------------------------------
+
+    # --------------- speed of sound -------------------
+    a = sqrt(gamma*R*T)
+
+    return rho, mu, a, T, P
+
+end
+
 ## -------- influence coefficients ---------------
 
 
@@ -244,12 +307,139 @@ Author: S. Andrew Ning
 -----------------------
 =#
 
-function getViscousDrag(cd1::Float64, cd2::Float64, CP::CPdata, rho::Float64, Vinf::Float64)
+function getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)#cd1::Float64, cd2::Float64, CP::CPdata, rho::Float64, Vinf::Float64) #KRM restructured
 
-  D1 = cd1*rho*Vinf*CP.ds
-  D2 = cd2*2*rho./CP.chord.*CP.ds
+    if pdrag.method == "pass" # Reynolds number dependent method
+        alt = pdrag.alt
+        xt = pdrag.xt
 
-  return D1, D2
+        # ----- estimate compressibility and parasite drag (strip theory + PASS method) -----
+        supercrit = 1
+        P = round(Int,round(wing.span/sum(wing.span)*wing.N)) # number of panels in each section
+        cdc = zeros(1,length(wing.span))
+        cdp = zeros(1,length(wing.span))
+        area = zeros(1,length(wing.span))
+        start = 1
+
+        for i = 1:length(wing.span)
+            finish = start + P[i] - 1
+
+            # rename for convenience
+            cr = wing.chord[i]
+            ct = wing.chord[i+1]
+            cbar = 1/2*(cr + ct)
+            tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
+            area[i] = cbar*wing.span[i]
+            mac = 2/3*(cr + ct - cr*ct/(cr+ct))
+            CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/Vinf/area[i]
+
+            # compressibility drag
+            cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
+
+            # parasite drag
+            cdp[i] = Pdrag(alt,mach,xt,mac,wing.sweep[i],tcbar)
+
+            start = finish + 1
+        end
+
+        return cdc,cdp,area
+
+    else
+        cd0 = pdrag.polar[1]
+        cd1 = pdrag.polar[2]
+        cd2 = pdrag.polar[3]
+        D1 = cd1*rho*Vinf*CP.ds
+        D2 = cd2*2*rho./CP.chord.*CP.ds
+        return D1, D2
+    end
+
+end
+
+function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
+
+    # ------------- constants ---------------
+    rho, mu, a, T = atmosphere(alt)
+    Re = rho*mach*a*mac/mu
+    # -----------------------------------------
+
+    # -------------- Cf ---------------------
+    # compute Cf based on transition location
+    Rex = Re*xt
+    if Rex <= 0
+      Rex = 0.0001
+    end
+    xeff = 38.7*xt*Rex^(-3.0/8) # effective boundary layer length
+    Rext = Re*(1-xt+xeff)
+
+    Cfturb = 0.455/(log10(Rext))^2.58
+    Cflam = 1.328/sqrt(Rex)
+    Cfstart = 0.455/(log10(Re*xeff))^2.58
+    Cf_inc = Cflam*xt + Cfturb*(1-xt+xeff) - Cfstart*xeff
+
+    # roughness increment
+    Cf_inc = 1.07*Cf_inc
+
+    # effect of mach number
+    Tw = 1 + 0.178*mach^2
+    Tp = 1 + 0.035*mach^2 + 0.45*(Tw-1)
+    mup = Tp^1.5*(T+216)/(Tp*T+216)
+    Rp = 1/mup/Tp
+    Cf = Cf_inc/Tp/Rp^0.2
+    # ---------------------------------------
+
+    # ------------ form factor ----------------------------
+    cossw = cos(sweep)
+    m0 = 0.5
+    z = (2-m0^2)*cossw/sqrt(1-(m0*cossw)^2)
+    k = 1 + tc*z + tc^4*100
+    # -----------------------------------------------------
+
+    # ---------- wetted area / S ----------------------
+    SwetS = 2*(1+0.2*tc)
+    # --------------------------------------------
+
+    # parasite drag
+    CDp = Cf*k*SwetS
+
+    return CDp
+end
+
+
+
+function Cdrag(CL, Lambda, tc, mach, supercrit) #KRM moved here
+
+    cosL = cos(Lambda)
+    clp = CL/cosL^2
+    tcp = tc/cosL
+
+    # compute Mcc
+    Mcc = 0.954-0.235*clp+0.0259*clp^2
+    Mcc = Mcc - (1.963-1.078*clp+0.350*clp^2)*tcp
+    Mcc = Mcc + (2.969-2.738*clp+1.469*clp^2)*tcp.^2
+    Mcc = Mcc + supercrit*.06
+    Mcc = Mcc/cosL
+
+    # compute Cdc
+    rm = mach / Mcc
+    dm = rm-1
+
+    if rm < .5
+      cdc = 0.0
+    elseif (rm >= .5 && rm < .8)
+      cdc = 1.3889e-4+5.5556e-4*dm+5.5556e-4*dm*dm
+    elseif (rm >= .8 && rm < .95)
+      cdc = 7.093e-4+6.733e-3*dm+.01956*dm*dm+.01185*dm*dm*dm
+    elseif (rm >= .95 && rm < 1.0)
+      cdc = .001000+.02727*dm+.4920*dm*dm+3.573*dm*dm*dm
+    elseif (rm >= 1.0 && rm < 1.075)
+      cdc = .001000+.02727*dm-.1952*dm*dm+19.09*dm*dm*dm
+    else
+      cdc = 0.01 + 0.33477*(dm-0.075) # linear extension
+    end
+
+    cdc = cdc*cosL^3
+
+    return cdc
 end
 
 
@@ -586,33 +776,15 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     end
 
     mach = fs.mach
-    rho = 1.0
-    Vinf = 1.0
+    rho, mu, a, T = atmosphere(pdrag.alt)
+    Vinf = mach*a
     q = 0.5*rho*Vinf^2
 
     # reference quantities
     Sref = ref.S
     cref = ref.c
 
-    # viscous drag (2 possible methods)
-    if pdrag.method == "pass" # Reynolds number dependent method
-        alt = pdrag.alt
-        xt = pdrag.xt
 
-        # not used
-        cd0 = 0.0
-        cd1 = 0.0
-        cd2 = 0.0
-
-    else # quadratic variation with section lift coefficient
-        cd0 = pdrag.polar[1]
-        cd1 = pdrag.polar[2]
-        cd2 = pdrag.polar[3]
-
-        # not used
-        alt = 0.0
-        xt = 0.0
-    end
 
     # structures
     qmvrN = mvr.qN # ratio of maneuver dynamic pressure to cruise dynamic pressure
@@ -640,8 +812,8 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # induced drag
     DIC = getDIC(TE.y, TE.z, rho)
 
-    # viscous drag
-    D1, D2 = getViscousDrag(cd1, cd2, CP, rho, Vinf)
+    # ----------------------------------------------------------------------
+
 
     # weight
     WIC, BMM = getWIC(CP, rho, Vinf)
@@ -661,15 +833,36 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # --------- aerodynamic forces ------------------
     L = dot(LIC, gamma)
     Di = gamma'*DIC*gamma
-    Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
-
-    println(L)
-    println(q)
-    println(Sref)
-
-    CL = L/q/Sref
     CDi = Di/q/Sref
-    CDp = Dp/q/Sref
+    CL = L/q/Sref
+
+
+
+    # viscous drag KRM
+    if pdrag.method=="pass"
+        cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)
+        # compressibility drag - area weighted average
+        CDc = 2*sum(cdc.*area)/Sref
+        # parasite drag - area weighted average
+        CDp = 2*sum(cdp.*area)/Sref
+
+        # add viscous dependent induced drag
+
+        Lambda_bar = sum(area.*wing.sweep)/sum(area)
+        CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
+
+
+        D1 = 0.0
+        D2 = 0.0
+    else
+        D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)
+        Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
+        CDp = Dp/q/Sref
+        CDc = 0.0
+    end
+
+
+
     # ------------------------------------------------
 
     # --------- weight (integrated bending moment over thickness --------
@@ -688,54 +881,14 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     CW = W/q/Sref/cref
     # -----------------------------------------------------------------
 
-    # # ----- estimate compressibility and parasite drag (strip theory + PASS method) -----
-    # supercrit = 1
-    # P = round(wing.span/sum(wing.span)*wing.N) # number of panels in each section
-    # cdc = zeros(1,length(wing.span))
-    # cdp = zeros(1,length(wing.span))
-    # area = zeros(1,length(wing.span))
-    # start = 1
-    #
-    # for i = 1:length(wing.span)
-    #   finish = start + P[i] - 1
-    #
-    #   # rename for convenience
-    #   cr = wing.chord[i]
-    #   ct = wing.chord[i+1]
-    #   cbar = 1/2*(cr + ct)
-    #   tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
-    #   area[i] = cbar*wing.span[i]
-    #   mac = 2/3*(cr + ct - cr*ct/(cr+ct))
-    #   CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/U/area[i]
-    #
-    #   # compressibility drag
-    #   cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
-    #
-    #   # parasite drag
-    #   cdp[i] = Pdrag(alt,mach,xt,mac,wing.sweep[i],tcbar)
-    #
-    #   start = finish + 1
-    # end
-    #
-    # # compressibility drag - area weighted average
-    # CDc = 2*sum(cdc.*area)/Sref[1]
-    #
-    # if pass_mthd
-    #   # parasite drag - area weighted average
-    #   CDp = 2*sum(cdp.*area)/Sref[1]
-    #
-    #   # add viscous dependent induced drag
-    #   Lambda_bar = area*wing.sweep'/sum(area)
-    #   CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
-    # end
-    # # ----------------------------------------------------------------------
+    #KRM moved paracitic and compressibility drag inside get viscous drag function
 
     # ----------- cl distribution at CLmax ----------------
     cl = 2/Vinf*gamma./CP.chord
-    println(size(bbb))
-    println(size(CP.chord))
-    println(size(cl))
-    println(size(rho*Vinf*(CLmax*Sref-L/q)))
+    # println(size(bbb))
+    # println(size(CP.chord))
+    # println(size(cl))
+    # println(size(rho*Vinf*(CLmax*Sref-L/q)))
     clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
 
     # clmax as a function of thickness - polynomial fit
@@ -831,5 +984,5 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
       # -------------------------------------------------
     end
 
-    return CL, CDi, CDp, CW, Cmac, cl_margin, gamma, CP
+    return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
 end
