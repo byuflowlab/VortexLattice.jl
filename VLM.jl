@@ -918,21 +918,22 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # ----------- cl distribution at CLmax ----------------
     cl = 2.0./Vinf.*gamma./CP.chord
-    println("rho")
-    println((rho))
-    println("Vinf")
-    println((Vinf))
-    println("Sref")
-    println((Sref))
-    println("L")
-    println("q")
-    println((q))
+    # println("rho")
+    # println((rho))
+    # println("Vinf")
+    # println((Vinf))
+    # println("Sref")
+    # println((Sref))
+    # println("L")
+    # println("q")
+    # println(minimum(q))
     one = rho*Vinf*(CLmax*Sref-L/minimum(q))
     two = LL*bbb
-    # println((one))
-    #clmax_dist = cl + rho*Vinf.*(CLmax*Sref-L/minimum(q))./LL*bbb./CP.chord
+    println((one))
+    println((two))
+    clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/minimum(q))./LL*bbb./CP.chord
     # clmax_dist = cl + one./two./CP.chord
-    clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
+    # clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/minimum(q))/LL*bbb./CP.chord
     # clmax as a function of thickness - polynomial fit
     tc = CP.tc*100
     clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
