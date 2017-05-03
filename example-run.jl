@@ -42,7 +42,7 @@ ref = ref_def(Sref, Sref/bref, 1.4)
 # ref.CLmax = 1.4
 
 # parasite drag - 2 methods either PASS method or strip theory with a quadratic varition in cl
-pdrag = pdrag_def([0.007 0 0.003], 35000.0, 0.05, "pass")
+pdrag = pdrag_def([0.007 0 0.003], 35000.0, 0.05, "quad")
 # pdrag.polar = [0.007 0 0.003] # only used in quad method
 # pdrag.alt = 35000 # only used in pass method
 # pdrag.xt = 0.05 # only used in pass method
@@ -59,10 +59,12 @@ mvr = mvr_def(2.5, 2.5, 0)
 # LE = LE_def([0],[0],[0])
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
-plots = true
+plots = false
 CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP = VLM(wing, fs, ref, pdrag, mvr, plots)
-println(CL)
-println(CDi)
-println(CDp)
-println(CDc)
-println(Cmac)
+# println(CL)
+# println(CDi)
+# println(CDp)
+# println(CDc)
+# println(Cmac)
+d = [CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma]
+writedlm("check_output.csv", d)

@@ -307,7 +307,7 @@ Author: S. Andrew Ning
 -----------------------
 =#
 
-function getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)#cd1::Float64, cd2::Float64, CP::CPdata, rho::Float64, Vinf::Float64) #KRM restructured
+function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Float64, CP::CPdata, rho::Float64, Vinf::Float64) #KRM restructured
 
     if pdrag.method == "pass" # Reynolds number dependent method
         alt = pdrag.alt
@@ -322,8 +322,6 @@ function getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)#cd1::Float64, cd2::Float6
         start = 1
 
         for i = 1:length(wing.span)
-            finish = start + P[i] - 1
-
             # rename for convenience
             cr = wing.chord[i]
             ct = wing.chord[i+1]
@@ -331,6 +329,8 @@ function getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)#cd1::Float64, cd2::Float6
             tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
             area[i] = cbar*wing.span[i]
             mac = 2/3*(cr + ct - cr*ct/(cr+ct))
+
+            finish = start + P[i] - 1
             CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/Vinf/area[i]
 
             # compressibility drag
@@ -840,7 +840,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # viscous drag KRM
     if pdrag.method=="pass"
-        cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)
+        cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
         # compressibility drag - area weighted average
         CDc = 2*sum(cdc.*area)/Sref
         # parasite drag - area weighted average
@@ -855,8 +855,8 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         D1 = 0.0
         D2 = 0.0
     else
-        D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,mach,gamma)
-        Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
+        D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
+        Dp = pdrag.polar[1]*q*S + D1'*gamma + D2'*gamma.^2
         CDp = Dp/q/Sref
         CDc = 0.0
     end
