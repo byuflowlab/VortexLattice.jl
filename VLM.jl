@@ -380,7 +380,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                     cdc[j] = Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
 
                     # parasite drag
-                    cdp[j] = Pdrag(alt,mach[j],xt,mac,wing.sweep[i],tcbar)
+                    cdp[j] = Pdrag(alt,mach[j],xt[j],mac,wing.sweep[i],tcbar)
 
                 end
                 start = finish + 1

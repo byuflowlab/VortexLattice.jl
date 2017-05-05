@@ -109,6 +109,7 @@ pdrag = NVLM.pdrag_def([0.007 0 0.003], 35000.0, 0.05, "pass")
 # pdrag.alt = 35000 # only used in pass method
 # pdrag.xt = 0.05 # only used in pass method
 # pdrag.method = "pass"
+pdrag.xt = ones(wing.N)*0.05
 
 # structures
 mvr = NVLM.mvr_def(2.5, 2.5, 0)
