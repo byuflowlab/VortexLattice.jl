@@ -359,7 +359,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
             if length(wing.twist)==length(wing.span)+1 #TODO: need to make twists not equal number of vortex elements across span
                 area[i] = cbar*wing.span[i]
                 finish = start + P[i] - 1
-                CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/Vinf/area[i]
+                CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/minimum(Vinf)/area[i]
 
                 # compressibility drag
                 cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
@@ -374,7 +374,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                 area_temp = cbar*wing.span[i]
                 for j = start:finish
                     area[j] = area_temp/(finish-start+1) #since we're doing it element by element, divide area by the number of elements we are traversing.
-                    CL_local = 0.1*sum(gamma[j]'.*CP.ds[j])*2.0./Vinf[j]./area[j]
+                    CL_local = 0.1*sum(gamma[j]'.*CP.ds[j])*2.0./minimum(Vinf)./area[j]
 
                     # compressibility drag
                     cdc[j] = Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
@@ -824,7 +824,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     mach = fs.mach
     rho, mu, a, T = atmosphere(pdrag.alt)
     Vinf = mach.*a
-    q = 0.5*rho.*Vinf.^2
+    q = 0.5*rho.*minimum(Vinf)^2
 
     # reference quantities
     Sref = ref.S
@@ -879,8 +879,8 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # --------- aerodynamic forces ------------------
         L = dot(LIC, gamma)
         Di = gamma'*DIC*gamma
-        CDi = Di/minimum(q)/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
-        CL = L/minimum(q)/Sref
+        CDi = Di/q/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
+        CL = L/q/Sref
 
 
 
@@ -923,13 +923,13 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         W = W + kbar*S
 
         # weight coefficient
-        CW = W/minimum(q)/Sref/cref
+        CW = W/q/Sref/cref
         # -----------------------------------------------------------------
 
         #KRM moved paracitic and compressibility drag inside get viscous drag function
 
         # ----------- cl distribution at CLmax ----------------
-        cl = 2.0./Vinf.*gamma./CP.chord
+        cl = 2.0./minimum(Vinf).*gamma./CP.chord
         # println("rho")
         # println((rho))
         # println("Vinf")
@@ -938,9 +938,9 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # println((Sref))
         # println("L")
         # println("q")
-        # println(minimum(q))
+        # println(q)
 
-        clmax_dist = cl + (rho.*Vinf.*(CLmax*Sref-L/minimum(q))./LL).*bbb./CP.chord
+        clmax_dist = cl + (rho.*minimum(Vinf).*(CLmax*Sref-L/q)./LL).*bbb./CP.chord
 
 
         # clmax as a function of thickness - polynomial fit
@@ -965,7 +965,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         MICac = getMIC(CP, rho, Vinf, xac[1])
         Mac = MICac'*gamma
 
-        Cmac = Mac/minimum(q)/Sref/cref
+        Cmac = Mac/q/Sref/cref
         # ----------------------------------------------------------
 
         # --------------- structures --------------------------
@@ -1008,14 +1008,26 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             # plot lift
             #       figure(50) hold on
             PyPlot.figure()
-            l = 2*gamma./Vinf./(ref.c)
-            l_mvr = 2*gamma_mvr./Vinf./(ref.c)
+            l = 2*gamma./minimum(Vinf)./(ref.c)
+            l_mvr = 2*gamma_mvr./minimum(Vinf)./(ref.c)
             eta = linspace(0,0.5,length(l))
             PyPlot.plot(eta,l,"b")
             PyPlot.plot(eta,l_mvr,"r")
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel("c_l c / c_ref")
             #   PyPlot.title("")
+
+            PyPlot.figure()
+            eta = linspace(0,0.5,length(l))
+            PyPlot.plot(eta,gamma,"b")
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel("gamma")
+
+            PyPlot.figure()
+            eta = linspace(0,0.5,length(l))
+            PyPlot.plot(eta,LIC.*gamma,"b")
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel("Lift")
 
             # plot cl
             PyPlot.figure()
