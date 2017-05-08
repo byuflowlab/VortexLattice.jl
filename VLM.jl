@@ -417,9 +417,19 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
     xeff = 38.7*xt*Rex^(-3.0/8) # effective boundary layer length
     Rext = Re*(1-xt+xeff)
 
+    if Rext<1
+        Rext = 1.0000001
+    end
+
+    Re_xeff = Re*xeff
+    
+    if Re_xeff<1
+        Re_xeff = 1.0000001
+    end
+
     Cfturb = 0.455/(log10(Rext))^2.58
     Cflam = 1.328/sqrt(Rex)
-    Cfstart = 0.455/(log10(Re*xeff))^2.58
+    Cfstart = 0.455/(log10(Re_xeff))^2.58
     Cf_inc = Cflam*xt + Cfturb*(1-xt+xeff) - Cfstart*xeff
 
     # roughness increment
