@@ -362,7 +362,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                 CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/minimum(Vinf)/area[i]
 
                 # compressibility drag
-                cdc[i] = Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
+                cdc[i] = 0#Cdrag(CL_local,wing.sweep[i],tcbar,mach,supercrit)
 
                 # parasite drag
                 cdp[i] = Pdrag(alt,mach,xt,mac,wing.sweep[i],tcbar)
@@ -377,7 +377,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                     CL_local = 0.1*sum(gamma[j]'.*CP.ds[j])*2.0./minimum(Vinf)./area[j]
 
                     # compressibility drag
-                    cdc[j] = Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
+                    cdc[j] = 0 #Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
 
                     # parasite drag
                     cdp[j] = Pdrag(alt,mach[j],xt[j],mac,wing.sweep[i],tcbar)
@@ -422,9 +422,13 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
     end
 
     Re_xeff = Re*xeff
-    
+
     if Re_xeff<1
         Re_xeff = 1.0000001
+    end
+
+    if mach>1 #TODO: this is a problem with the multi-prop-opt optimization
+        mach = 1
     end
 
     Cfturb = 0.455/(log10(Rext))^2.58
@@ -435,12 +439,12 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
     # roughness increment
     Cf_inc = 1.07*Cf_inc
 
-    # effect of mach number
-    Tw = 1 + 0.178*mach^2
-    Tp = 1 + 0.035*mach^2 + 0.45*(Tw-1)
-    mup = Tp^1.5*(T+216)/(Tp*T+216)
-    Rp = 1/mup/Tp
-    Cf = Cf_inc/Tp/Rp^0.2
+    # # effect of mach number #KRM remove mach effects
+    # Tw = 1 + 0.178*mach^2
+    # Tp = 1 + 0.035*mach^2 + 0.45*(Tw-1)
+    # mup = Tp^1.5*(T+216)/(Tp*T+216)
+    # Rp = 1/mup/Tp
+    # Cf = Cf_inc/Tp/Rp^0.2
     # ---------------------------------------
 
     # ------------ form factor ----------------------------
@@ -455,7 +459,7 @@ function Pdrag(alt, mach, xt, mac, sweep, tc) #KRM moved here
     # --------------------------------------------
 
     # parasite drag
-    CDp = Cf*k*SwetS
+    CDp = Cf_inc*k*SwetS #KRM remove mach effects
 
     return CDp
 end
