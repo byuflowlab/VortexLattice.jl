@@ -61,7 +61,7 @@ mvr = NVLM.mvr_def(2.5, 2.5, 0)
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = true
-CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
+CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP, cl_localVinf = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
 # println(CL)
 # println(CDi)
 # println(CDp)

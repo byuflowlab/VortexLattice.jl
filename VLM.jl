@@ -943,6 +943,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         #KRM moved paracitic and compressibility drag inside get viscous drag function
 
         # ----------- cl distribution at CLmax ----------------
+        cl_localVinf = 2.0./Vinf.*gamma./CP.chord
         cl = 2.0./minimum(Vinf).*gamma./CP.chord
         # println("rho")
         # println((rho))
@@ -999,69 +1000,70 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             #       plot_wing(LE,QC,TE,CP)
             N = length(QC.x)
             #       axis equal
-            PyPlot.figure()
-            #       if TE[3] < 0:
-            #         TE.y = -TE.y
-            #       end
-            for i = 1:N-1
-                PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
-                PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
-            end
-            PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-            #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
-            for i = 1:N-1
-                PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
-                PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
-            end
-            PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-            #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
-            PyPlot.xlabel("x")
-            PyPlot.ylabel("y")
-            PyPlot.title("Plot of wing")
+            # PyPlot.figure()
+            # #       if TE[3] < 0:
+            # #         TE.y = -TE.y
+            # #       end
+            # for i = 1:N-1
+            #     PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
+            #     PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
+            # end
+            # PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            # #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
+            # for i = 1:N-1
+            #     PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
+            #     PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
+            # end
+            # PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            # #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
+            # PyPlot.xlabel("x")
+            # PyPlot.ylabel("y")
+            # PyPlot.title("Plot of wing")
 
-            # plot lift
-            #       figure(50) hold on
-            PyPlot.figure()
+            ## plot lift
+            ##       figure(50) hold on
+            # PyPlot.figure()
             l = 2*gamma./minimum(Vinf)./(ref.c)
-            l_mvr = 2*gamma_mvr./minimum(Vinf)./(ref.c)
+            # l_mvr = 2*gamma_mvr./minimum(Vinf)./(ref.c)
             eta = linspace(0,0.5,length(l))
-            PyPlot.plot(eta,l,"b")
-            PyPlot.plot(eta,l_mvr,"r")
-            PyPlot.xlabel("xi / b")
-            PyPlot.ylabel("c_l c / c_ref")
+            # PyPlot.plot(eta,l,"b")
+            # PyPlot.plot(eta,l_mvr,"r")
+            # PyPlot.xlabel("xi / b")
+            # PyPlot.ylabel("c_l c / c_ref")
             #   PyPlot.title("")
 
-            PyPlot.figure()
-            eta = linspace(0,0.5,length(l))
-            PyPlot.plot(eta,gamma,"b")
-            PyPlot.xlabel("xi / b")
-            PyPlot.ylabel("gamma")
+            # PyPlot.figure()
+            # eta = linspace(0,0.5,length(l))
+            # PyPlot.plot(eta,gamma,"b")
+            # PyPlot.xlabel("xi / b")
+            # PyPlot.ylabel("gamma")
 
-            PyPlot.figure()
-            eta = linspace(0,0.5,length(l))
-            PyPlot.plot(eta,LIC.*gamma,"b")
-            PyPlot.xlabel("xi / b")
-            PyPlot.ylabel("Lift")
+            # PyPlot.figure()
+            # eta = linspace(0,0.5,length(l))
+            # PyPlot.plot(eta,LIC.*gamma,"b")
+            # PyPlot.xlabel("xi / b")
+            # PyPlot.ylabel("Lift")
 
             # plot cl
             PyPlot.figure()
             PyPlot.plot(eta,cl,"b")
             PyPlot.plot(eta,clmax_dist,"r")
             PyPlot.plot(eta,clmax,"r--")
+            PyPlot.plot(eta,cl_localVinf,"gx")
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel("c_l")
-            PyPlot.title("Plot of c_l")
+            PyPlot.title("Plot of c_l, green is with local Vinf")
 
             # plot bending over thickness
-            PyPlot.figure()
-            PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
-            PyPlot.xlabel("xi_str/b_str")
-            PyPlot.ylabel("M_b/t")
-            PyPlot.title("Plot of bending over thickness")
-            PyPlot.show()
+            # PyPlot.figure()
+            # PyPlot.plot(eta_str/eta_str[end]*0.5,Mb./(CP.tc.*CP.chord))
+            # PyPlot.xlabel("xi_str/b_str")
+            # PyPlot.ylabel("M_b/t")
+            # PyPlot.title("Plot of bending over thickness")
+            # PyPlot.show()
             # -------------------------------------------------
         end
 
-        return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP
+        return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP, cl_localVinf
     end
 end #module VLM
