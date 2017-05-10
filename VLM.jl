@@ -1046,13 +1046,13 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
             # plot cl
             PyPlot.figure()
-            PyPlot.plot(eta,cl,"b")
-            PyPlot.plot(eta,clmax_dist,"r")
-            PyPlot.plot(eta,clmax,"r--")
-            PyPlot.plot(eta,cl_localVinf,"gx")
+            PyPlot.plot(eta,cl,"b",label = "Local cl Freestream Normalized")
+            PyPlot.plot(eta,cl_localVinf,"g",label = "Local cl Blown Local Velocity Normalized")
+            PyPlot.plot(eta,clmax_dist,"r",label = "cl max distribution")
+            PyPlot.plot(eta,clmax,"r--",label = "Cl Max")
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel("c_l")
-            PyPlot.title("Plot of c_l, green is with local Vinf")
+            PyPlot.legend()
 
             # plot bending over thickness
             # PyPlot.figure()
