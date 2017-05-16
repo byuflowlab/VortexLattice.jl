@@ -92,7 +92,7 @@ function geometry(wing::wingsection)
         QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
         QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
         c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
-        if length(twist)==length(b)+1 #TODO: need to make twists not equal number of vortex elements across span
+        if length(twist)==length(b)+1
             t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
         end
         thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
@@ -117,7 +117,7 @@ function geometry(wing::wingsection)
     if length(twist)==length(b)+1
         CP.twist = 0.5*(t[1:N] + t[2:N+1])
     else
-        CP.twist = twist #TODO: need to make twists not equal number of vortex elements across span
+        CP.twist = twist 
     end
     CP.tc = 0.5*(thickness[1:N] + thickness[2:N+1])./CP.chord
     CP.x = 0.5*(QC.x[1:N] + QC.x[2:N+1]) + 0.5*CP.chord
@@ -996,29 +996,29 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         if (plots) #KRM Vinf was called U
 
             # ------------- plots --------------------
-            # plot wings
-            #       plot_wing(LE,QC,TE,CP)
+            #plot wings
+            #plot_wing(LE,QC,TE,CP)
             N = length(QC.x)
-            #       axis equal
-            # PyPlot.figure()
-            # #       if TE[3] < 0:
-            # #         TE.y = -TE.y
-            # #       end
-            # for i = 1:N-1
-            #     PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
-            #     PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
-            # end
-            # PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-            # #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
-            # for i = 1:N-1
-            #     PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
-            #     PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
-            # end
-            # PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
-            # #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
-            # PyPlot.xlabel("x")
-            # PyPlot.ylabel("y")
-            # PyPlot.title("Plot of wing")
+                  #axis equal
+            PyPlot.figure()
+            #       if TE[3] < 0:
+            #         TE.y = -TE.y
+            #       end
+            for i = 1:N-1
+                PyPlot.plot([LE.y[i], LE.y[i+1]], -[LE.x[i], LE.x[i+1]], "b")
+                PyPlot.plot([TE.y[i], TE.y[i+1]],-[TE.x[i], TE.x[i+1]], "b")
+            end
+            PyPlot.plot([LE.y[1], TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            #       PyPlot.plot([LE.y[end], TE.y[end]],-[LE.x[end], TE.x[end]], "b")
+            for i = 1:N-1
+                PyPlot.plot([-LE.y[i], -LE.y[i+1]],-[LE.x[i], LE.x[i+1]],"b")
+                PyPlot.plot([-TE.y[i], -TE.y[i+1]],-[TE.x[i], TE.x[i+1]],"b")
+            end
+            PyPlot.plot([-LE.y[1], -TE.y[1]],-[LE.x[1], TE.x[1]], "b")
+            #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
+            PyPlot.xlabel("x")
+            PyPlot.ylabel("y")
+            PyPlot.title("Plot of wing")
 
             ## plot lift
             ##       figure(50) hold on
@@ -1064,6 +1064,6 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             # -------------------------------------------------
         end
 
-        return CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP, cl_localVinf
+        return CL, CDi, CDp, CDc, CW, Cmac, cl, gamma, CP, cl_localVinf,clmax_dist
     end
 end #module VLM

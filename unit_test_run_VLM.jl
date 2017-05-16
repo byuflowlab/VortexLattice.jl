@@ -123,7 +123,7 @@ mvr = NVLM.mvr_def(2.5, 2.5, 0)
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = false
-CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
+CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP, cl_localVinf,clmax_dist = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
 
 d2 = ["TEST WITH MODIFIED SETUP - variable twist distribution, pass viscous drag, compressibility etc \n \n CL \n $CL \n  CDi \n $CDi \n  CDp \n $CDp \n  CDc \n $CDc \n  CW \n $CW \n  Cmac \n $Cmac \n  cl_margin \n $cl_margin \n  gamma \n $gamma"]
 d = [d1,d2]
