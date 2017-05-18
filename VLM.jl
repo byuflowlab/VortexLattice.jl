@@ -35,6 +35,7 @@ type fs_def
     alpha
     CL
     method
+    swirlmach
 end
 type ref_def
     S
@@ -887,7 +888,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # ------------------------------------------------------------------
 
         # -------- compute circulation -----------------
-        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
+        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))+fs.swirlmach.*a
         gamma = AIC\Vn
         # ----------------------------------------------
 

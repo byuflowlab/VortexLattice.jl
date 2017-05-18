@@ -30,11 +30,12 @@ Sref = dot(wing.chord[1:end-1]+wing.chord[2:end], wing.span)
 bref = 2*sum(wing.span.*cos(wing.dihedral))
 
 # freestream parameters - 2 methods either specify CL or angle of attack
-fs = NVLM.fs_def(0.01, 5*pi/180, 0.5, "alpha")
+fs = NVLM.fs_def(0.01, 5*pi/180, 0.5, "alpha",0.0)
 # fs.mach = 0.78
 # fs.alpha = 5*pi/180 # only used for alpha method
 # fs.CL = 0.5 # only used for CL method
 # fs.method = "alpha"
+# fs.swirlmach = "alpha"
 
 # reference and other parameters (used for force/moment coefficients)
 ref = NVLM.ref_def(Sref, Sref/bref, 1.4)
@@ -61,13 +62,13 @@ mvr = NVLM.mvr_def(2.5, 2.5, 0)
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = false
-CL1, CDi1, CDp1, CDc1, CW1, Cmac1, cl_margin1, gamma1, CP1 = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
+CL1, CDi1, CDp1, CDc1, CW1, Cmac1, cl1, gamma1, CP1 = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
 # println(CL)
 # println(CDi)
 # println(CDp)
 # println(CDc)
 # println(Cmac)
-d1 = ["TEST WITH ORIGINAL SETUP - non-variable twist distribution, and quad viscous drag etc \n \n CL \n $CL1 \n  CDi \n $CDi1 \n  CDp \n $CDp1 \n  CDc \n $CDc1 \n  CW \n $CW1 \n  Cmac \n $Cmac1 \n  cl_margin \n $cl_margin1 \n  gamma \n $gamma1 \n \n \n \n"]
+d1 = ["TEST WITH ORIGINAL SETUP - non-variable twist distribution, and quad viscous drag etc \n \n CL \n $CL1 \n  CDi \n $CDi1 \n  CDp \n $CDp1 \n  CDc \n $CDc1 \n  CW \n $CW1 \n  Cmac \n $Cmac1 \n  cl \n $cl1 \n  gamma \n $gamma1 \n \n \n \n"]
 
 
 #TEST WITH MODIFIED SETUP - variable twist distribution, and pass viscous drag etc
@@ -90,12 +91,13 @@ Sref = dot(wing.chord[1:end-1]+wing.chord[2:end], wing.span)
 bref = 2*sum(wing.span.*cos(wing.dihedral))
 
 # freestream parameters - 2 methods either specify CL or angle of attack
-fs = NVLM.fs_def(0.01, 5*pi/180, 0.5, "alpha")
+fs = NVLM.fs_def(0.01, 5*pi/180, 0.5, "alpha",[])
 # fs.mach = 0.78
 # fs.alpha = 5*pi/180 # only used for alpha method
 # fs.CL = 0.5 # only used for CL method
 # fs.method = "alpha"
 fs.mach = ones(wing.twist)*.01
+fs.swirlmach = zeros(fs.mach)
 
 # reference and other parameters (used for force/moment coefficients)
 ref = NVLM.ref_def(Sref, Sref/bref, 1.4)
@@ -123,8 +125,8 @@ mvr = NVLM.mvr_def(2.5, 2.5, 0)
 # CP = CP_def([0],[0],[0],[0],[0],[0],[0],[0],[0])
 
 plots = false
-CL, CDi, CDp, CDc, CW, Cmac, cl_margin, gamma, CP, cl_localVinf,clmax_dist = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
+CL, CDi, CDp, CDc, CW, Cmac, cl, gamma, CP, cl_localVinf,clmax_dist = NVLM.VLM(wing, fs, ref, pdrag, mvr, plots)
 
-d2 = ["TEST WITH MODIFIED SETUP - variable twist distribution, pass viscous drag, compressibility etc \n \n CL \n $CL \n  CDi \n $CDi \n  CDp \n $CDp \n  CDc \n $CDc \n  CW \n $CW \n  Cmac \n $Cmac \n  cl_margin \n $cl_margin \n  gamma \n $gamma"]
+d2 = ["TEST WITH MODIFIED SETUP - variable twist distribution, pass viscous drag, compressibility etc \n \n CL \n $CL \n  CDi \n $CDi \n  CDp \n $CDp \n  CDc \n $CDc \n  CW \n $CW \n  Cmac \n $Cmac \n  cl \n $cl \n  gamma \n $gamma"]
 d = [d1,d2]
 writedlm("check_output.csv", d)
