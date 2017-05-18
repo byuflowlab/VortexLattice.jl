@@ -1,3 +1,4 @@
+
 module NVLM
 using PyPlot #KRM wasn't included
 
@@ -117,7 +118,7 @@ function geometry(wing::wingsection)
     if length(twist)==length(b)+1
         CP.twist = 0.5*(t[1:N] + t[2:N+1])
     else
-        CP.twist = twist 
+        CP.twist = twist
     end
     CP.tc = 0.5*(thickness[1:N] + thickness[2:N+1])./CP.chord
     CP.x = 0.5*(QC.x[1:N] + QC.x[2:N+1]) + 0.5*CP.chord
