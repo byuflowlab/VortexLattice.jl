@@ -888,7 +888,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # ------------------------------------------------------------------
 
         # -------- compute circulation -----------------
-        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))+fs.swirlmach.*a
+        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))+fs.swirlmach.*a./cos(CP.twist+alpha)
         gamma = AIC\Vn
         # ----------------------------------------------
 
