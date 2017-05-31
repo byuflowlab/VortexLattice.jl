@@ -358,7 +358,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
             tcbar = (wing.tc[i]*wing.chord[i] + wing.tc[i+1]*wing.chord[i+1])/(wing.chord[i]+wing.chord[i+1])
             mac = 2/3*(cr + ct - cr*ct/(cr+ct))
 
-            if length(wing.twist)==length(wing.span)+1 #TODO: need to make twists not equal number of vortex elements across span
+            if length(wing.twist)==length(wing.span)+1
                 area[i] = cbar*wing.span[i]
                 finish = start + P[i] - 1
                 CL_local = 0.1*sum(gamma[start:finish]'.*CP.ds[start:finish])*2/minimum(Vinf)/area[i]
