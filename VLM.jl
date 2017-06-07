@@ -28,6 +28,7 @@ type wingsection
     sweep
     dihedral
     N
+    P
 end
 
 type fs_def
@@ -69,7 +70,7 @@ function geometry(wing::wingsection)
 
     # --------------------------------------------------------------
 
-    P = round(Int,round(b/sum(b)*N)) # divide up panels #KRM int depreciated in julia .5
+    P = wing.P#round(Int,round(b/sum(b)*N)) # divide up panels #KRM int depreciated in julia .5
 
     # -------------  Quarter Chord Locations --------------------------
     M = 1 + sum(P)
@@ -335,7 +336,7 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
 
         # ----- estimate compressibility and parasite drag (strip theory + PASS method) -----
         supercrit = 1
-        P = round(Int,round(wing.span/sum(wing.span)*wing.N))
+        P = wing.P
 
         if length(wing.twist)==length(wing.span)+1
             cdc = zeros(1,length(wing.span))
@@ -382,10 +383,11 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                     cdc[j] = 0 #Cdrag(CL_local,wing.sweep[i],tcbar,mach[j],supercrit)
 
                     # parasite drag
+
                     cdp[j] = Pdrag(alt,mach[j],xt[j],mac,wing.sweep[i],tcbar)
 
                 end
-                start = finish + 1
+                start = finish
 
             end
         end
@@ -895,7 +897,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # --------- aerodynamic forces ------------------
         L = dot(LIC, gamma)
         Di = gamma'*DIC*gamma
-        CDi = Di/q/Sref #TODO: make sure that the freestream velocity is input for q for this wthese wing results (not section)
+        CDi = Di/q/Sref
         CL = L/q/Sref
 
 
@@ -905,14 +907,15 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
 
             # compressibility drag - area weighted average
-            CDc = 2*sum(cdc.*area)/Sref
+            CDc = 0#2*sum(cdc.*area)/Sref
 
             # parasite drag - area weighted average
             CDp = 2*sum(cdp.*area)/Sref
 
             # add viscous dependent induced drag
-            Lambda_bar = sum(area.*wing.sweep)/sum(area)
-            CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar)^2
+            # println("L area: $(length(area)), L sweep: $(length(wing.sweep))")
+            Lambda_bar = sum(area.*wing.sweep)/sum(area) #TODO, this multi-sweep is going to change the entire
+            CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar[1])^2
 
         else #quadratic method
             D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
