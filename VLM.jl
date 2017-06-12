@@ -373,7 +373,10 @@ function getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)#cd1::Float64, cd2::Fl
                 start = finish + 1
 
             else # if there are variable twists and mach distributions, go through each one
-                finish = start + P[i] - 1
+                finish = start + P[i]
+                if i==1
+                    finish = finish-1
+                end
                 area_temp = cbar*wing.span[i]
                 for j = start:finish
                     area[j] = area_temp/(finish-start+1) #since we're doing it element by element, divide area by the number of elements we are traversing.
@@ -842,6 +845,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     mach = fs.mach
     rho, mu, a, T = atmosphere(pdrag.alt)
     Vinf = mach.*a
+
     q = 0.5*rho.*minimum(Vinf)^2
 
     # reference quantities
@@ -899,11 +903,13 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         Di = gamma'*DIC*gamma
         CDi = Di/q/Sref
         CL = L/q/Sref
+        dl = LE.y[2:end]-LE.y[1:end-1]
 
-
+        di = -rho/2*gamma.*Vn.*dl
+        # cdp = zeros(wing.N)
 
         # viscous drag KRM
-        if pdrag.method=="pass"
+        # if pdrag.method=="pass"
             cdc, cdp, area = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
 
             # compressibility drag - area weighted average
@@ -914,15 +920,15 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
             # add viscous dependent induced drag
             # println("L area: $(length(area)), L sweep: $(length(wing.sweep))")
-            Lambda_bar = sum(area.*wing.sweep)/sum(area) #TODO, this multi-sweep is going to change the entire
+            Lambda_bar = sum(area.*wing.sweep')/sum(area) #TODO, this multi-sweep is going to change the entire
             CDi = CDi + 0.38*CDp*CL^2/cos(Lambda_bar[1])^2
 
-        else #quadratic method
-            D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
-            Dp = pdrag.polar[1].*q.*S + D1'*gamma + D2'*gamma.^2
-            CDp = Dp./q./Sref
-            CDc = 0.0
-        end
+        # else #quadratic method
+        #     D1, D2 = getViscousDrag(pdrag,wing,CP,Vinf,rho,mach,gamma)
+        #     Dp = pdrag.polar[1].*q.*S + D1'*gamma + D2'*gamma.^2
+        #     CDp = Dp./q./Sref
+        #     CDc = 0.0
+        # end
 
 
 
@@ -1030,7 +1036,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             # PyPlot.figure()
             l = 2*gamma./minimum(Vinf)./(ref.c)
             # l_mvr = 2*gamma_mvr./minimum(Vinf)./(ref.c)
-            eta = linspace(0,0.5,length(l))
+            eta = CP.y/maximum(CP.y)*0.5#linspace(0,0.5,length(l))
             # PyPlot.plot(eta,l,"b")
             # PyPlot.plot(eta,l_mvr,"r")
             # PyPlot.xlabel("xi / b")
@@ -1051,13 +1057,36 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
             # plot cl
             PyPlot.figure()
-            PyPlot.plot(eta,cl,"b",label = "Local cl Freestream Normalized")
-            PyPlot.plot(eta,cl_localVinf,"g",label = "Local cl Blown Local Velocity Normalized")
+            PyPlot.plot(eta,cl,"b.-",markeredgecolor = "k",label = "Local cl Freestream Normalized")
+            PyPlot.plot(eta,cl_localVinf,"g.-",markeredgecolor = "k",label = "Local cl Blown Local Velocity Normalized")
             PyPlot.plot(eta,clmax_dist,"r",label = "cl max distribution")
             PyPlot.plot(eta,clmax,"r--",label = "Cl Max")
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel("c_l")
             PyPlot.legend()
+
+            # plot cdi
+            PyPlot.figure()
+            PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
+            # PyPlot.plot(eta,cdp,"g.-",markeredgecolor = "k",label = "Local viscous drag contribution")
+            PyPlot.plot(eta,ones(di)*mean(di),"r-",markeredgecolor = "k",label = "Average Local Di")
+            PyPlot.text(0.5, 0.5,"Di: $Di", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel(L"d_i")
+            PyPlot.ylim([-.5,8])
+            PyPlot.legend()
+
+            # plot cdp
+            PyPlot.figure()
+            #PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
+            PyPlot.plot(eta,cdp',"g.-",markeredgecolor = "k",label = "Local viscous drag contribution")
+            PyPlot.plot(eta,ones(cdp')*mean(cdp),"r-",markeredgecolor = "k",label = "Average Local dp")
+            # PyPlot.text(0.5, 0.5,"Dp: $Dp", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel(L"cd_p")
+            # PyPlot.ylim([-.5,8])
+            PyPlot.legend()
+
 
             # plot bending over thickness
             # PyPlot.figure()
