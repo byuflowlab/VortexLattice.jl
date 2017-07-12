@@ -29,6 +29,8 @@ type wingsection
     dihedral
     N
     P
+    Rtip
+    numProps
 end
 
 type fs_def
@@ -894,13 +896,21 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         # ------------------------------------------------------------------
 
         # -------- compute circulation -----------------
-        Vn = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))+fs.swirlmach.*a./cos(CP.twist+alpha)
+        Vnb = -Vinf.*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral)) #span normal wash
+        Vnp = -fs.swirlmach.*a./cos(CP.twist+alpha) # prop normal wash
+        Vn = Vnb+Vnp
         gamma = AIC\Vn
         # ----------------------------------------------
 
         # --------- aerodynamic forces ------------------
         L = dot(LIC, gamma)
-        Di = gamma'*DIC*gamma
+        dC = sqrt((TE.y[2:end]-TE.y[1:end-1]).^2+(TE.z[2:end]-TE.z[1:end-1]).^2)
+        Di = rho/2 * (sum(abs(gamma.*(Vnb+2*Vnp)).*dC))
+        swirlLoss = sum(rho/2*(fs.swirlmach.*a).^2.0*2*pi*wing.Rtip)*wing.numProps
+        #println(swirlLoss)
+        Di = Di#+swirlLoss #gamma'*DIC*gamma + swirlLoss
+        Di2 = gamma'*DIC*gamma
+        println("Di: $Di swirlLoss,$swirlLoss Di2: $Di2")
         CDi = Di/q/Sref
         CL = L/q/Sref
         dl = LE.y[2:end]-LE.y[1:end-1]
@@ -917,7 +927,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
             # parasite drag - area weighted average
             CDp = 2*sum(cdp.*area)/Sref
-
+            Dp = CDp*q*Sref
             # add viscous dependent induced drag
             # println("L area: $(length(area)), L sweep: $(length(wing.sweep))")
             Lambda_bar = sum(area.*wing.sweep')/sum(area) #TODO, this multi-sweep is going to change the entire
@@ -1029,6 +1039,10 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             #       PyPlot.plot([-LE.y[end], -TE.y[end]],-[LE.x[end], TE.x[end]],"b")
             PyPlot.xlabel("x")
             PyPlot.ylabel("y")
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
             PyPlot.title("Plot of wing")
 
             ## plot lift
@@ -1059,33 +1073,75 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             PyPlot.figure()
             PyPlot.plot(eta,cl,"b.-",markeredgecolor = "k",label = "Local cl Freestream Normalized")
             PyPlot.plot(eta,cl_localVinf,"g.-",markeredgecolor = "k",label = "Local cl Blown Local Velocity Normalized")
-            PyPlot.plot(eta,clmax_dist,"r",label = "cl max distribution")
-            PyPlot.plot(eta,clmax,"r--",label = "Cl Max")
+            PyPlot.plot(eta,clmax_dist,"r--",label = "cl max distribution")
+            PyPlot.plot(eta,ones(cl)*mean(cl),"r-",label = "Average Local cl")
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel("c_l")
+            PyPlot.ylim([0.2,1.9])
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
             PyPlot.legend()
 
             # plot cdi
             PyPlot.figure()
             PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
             # PyPlot.plot(eta,cdp,"g.-",markeredgecolor = "k",label = "Local viscous drag contribution")
-            PyPlot.plot(eta,ones(di)*mean(di),"r-",markeredgecolor = "k",label = "Average Local Di")
-            PyPlot.text(0.5, 0.5,"Di: $Di", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.plot(eta,ones(di)*mean(di),"r-",markeredgecolor = "k",label = "Average Local induced drag contribution")
+            PyPlot.text(0.5, 0.5,"Di: $Di", horizontalalignment="left",verticalalignment="bottom",)
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel(L"d_i")
             PyPlot.ylim([-.5,8])
-            PyPlot.legend()
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
+            PyPlot.legend(loc = "best")
 
             # plot cdp
             PyPlot.figure()
             #PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
             PyPlot.plot(eta,cdp',"g.-",markeredgecolor = "k",label = "Local viscous drag contribution")
-            PyPlot.plot(eta,ones(cdp')*mean(cdp),"r-",markeredgecolor = "k",label = "Average Local dp")
-            # PyPlot.text(0.5, 0.5,"Dp: $Dp", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.plot(eta,ones(cdp')*mean(cdp),"r-",markeredgecolor = "k",label = L"$Average \ Local \ cd_p$")
+            PyPlot.text(0.5, 0.5,"Dp: $Dp", horizontalalignment="left",verticalalignment="bottom",)
             PyPlot.xlabel("xi / b")
             PyPlot.ylabel(L"cd_p")
-            # PyPlot.ylim([-.5,8])
+            PyPlot.ylim([0.009,0.015])
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
             PyPlot.legend()
+
+            # plot twist
+            PyPlot.figure()
+            #PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
+            PyPlot.plot(eta,CP.twist*180/pi,"g.-",markeredgecolor = "k",label = "Twist")
+            #PyPlot.text(0.5, 0.5,"Dp: $Dp", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel(L"Twist \ (degrees)")
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
+            #PyPlot.ylim([-12.0,18.0])
+            # PyPlot.legend()
+
+            #plot Velocity profiles
+
+            PyPlot.figure()
+            #PyPlot.plot(eta,di,"b.-",markeredgecolor = "k",label = "Local induced drag contribution")
+            PyPlot.plot(eta,fs.swirlmach.*a,"g.-",markeredgecolor = "k",label = "Swirl Velocity")
+            PyPlot.plot(eta,Vinf,"b.-",markeredgecolor = "k",label = "Axial Velocity")
+            #PyPlot.text(0.5, 0.5,"Dp: $Dp", horizontalalignment="right",verticalalignment="top",)
+            PyPlot.xlabel("xi / b")
+            PyPlot.ylabel(L"Velocity \ (m/s)")
+            ax = gca()
+            axis("tight")
+            ax[:spines]["top"][:set_visible](false) # Hide the top edge of the axis
+            ax[:spines]["right"][:set_visible](false) # Hide the right edge of the axis
+            PyPlot.legend(loc = "best")
 
 
             # plot bending over thickness
@@ -1097,7 +1153,9 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
             # PyPlot.show()
             # -------------------------------------------------
         end
-
+        # bref = Sref/cref
+        # AR = bref^2/Sref
+        # CDi = CL^2/(pi*.95*AR)
         return CL, CDi, CDp, CDc, CW, Cmac, cl, gamma, CP, cl_localVinf,clmax_dist
     end
 end #module VLM
