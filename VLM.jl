@@ -29,26 +29,25 @@ struct wingsection
 end
 
 struct fs_def
-  mach
-  alpha
-  CL
-  method
+    alpha
+    CL
+    method
 end
 struct ref_def
-  S
-  c
-  CLmax
+    S
+    c
+    CLmax
 end
 struct pdrag_def
-  polar
-  alt
-  xt
-  method
+    polar
+    alt
+    xt
+    method
 end
 struct mvr_def
-  qN
-  n
-  kbar
+    qN
+    n
+    kbar
 end
 
 ## -------- geometry ---------------
@@ -601,7 +600,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
         CLref = 0.0
     end
 
-    mach = fs.mach
+    # mach = fs.mach
     rho = 1.0
     Vinf = 1.0
     q = 0.5*rho*Vinf^2
