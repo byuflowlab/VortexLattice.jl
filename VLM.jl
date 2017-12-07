@@ -1,4 +1,4 @@
-module NVLM
+module VLM
 
 struct CPdata
     chord::Array{Float64, 1}
@@ -30,25 +30,34 @@ end
 
 struct fs_def
     alpha
-    CL
-    method
+    beta
+    rho
+    Vinf
+    # CL
+    # method
 end
 struct ref_def
     S
     c
     CLmax
 end
-struct pdrag_def
-    polar
-    alt
-    xt
-    method
+
+struct velocity
+    x
+    y
+    z
 end
-struct mvr_def
-    qN
-    n
-    kbar
-end
+# struct pdrag_def
+#     polar
+#     alt
+#     xt
+#     method
+# end
+# struct mvr_def
+#     qN
+#     n
+#     kbar
+# end
 
 ## -------- geometry ---------------
 
@@ -73,11 +82,6 @@ function geometry(wing::wingsection)
     c = zeros(M)
     t = zeros(M)
     thickness = zeros(M)
-    # QC = position(zeros(M), zeros(M), zeros(M))
-    # LE = position(zeros(M), zeros(M), zeros(M))
-    # TE = position(zeros(M), zeros(M), zeros(M))
-    # CP = CPdata(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N), zeros(N),
-    #     zeros(N), zeros(N), zeros(N))
     QCx = zeros(M)
     QCy = zeros(M)
     QCz = zeros(M)
@@ -159,8 +163,8 @@ lift influence coefficients
 Author: S. Andrew Ning
 ---------------------
 =#
-function getLIC(CP::CPdata, rho::Float64, Vinf::Float64)
-    LIC = 2*rho*Vinf*cos.(CP.dihedral).*CP.ds
+function getLIC(CP::CPdata, rho::Float64, Vinf::Array{Float64, 1})
+    LIC = 2*rho*Vinf.*cos.(CP.dihedral).*CP.ds
 end
 
 #=
@@ -556,18 +560,18 @@ Updates: 1/28/09 - created
 ---------------------------------------------------
 =#
 
-function getAlpha(Ltarget::Float64, CP::CPdata, LIC::Array{Float64, 1}, AIC::Array{Float64, 2}, Vinf::Float64)
-
-    # solve quadratic equation for alpha
-    qq = LIC/AIC
-    a = -U*qq*sin.(CP.twist)'
-    b = -U*qq*(cos.(CP.twist).*cos.(CP.dihedral))'
-    c = Ltarget
-    # alpha = acos((a*c + b*sqrt(a^2+b^2-c^2))/(a^2+b^2));
-    alpha = asin(c/b - a/b*(a*c + b*sqrt(a^2+b^2-c^2))/(a^2 + b^2))
-
-    return alpha
-end
+# function getAlpha(Ltarget::Float64, CP::CPdata, LIC::Array{Float64, 1}, AIC::Array{Float64, 2}, Vinf::Float64)
+#
+#     # solve quadratic equation for alpha
+#     qq = LIC/AIC
+#     a = -U*qq*sin.(CP.twist)'
+#     b = -U*qq*(cos.(CP.twist).*cos.(CP.dihedral))'
+#     c = Ltarget
+#     # alpha = acos((a*c + b*sqrt(a^2+b^2-c^2))/(a^2+b^2));
+#     alpha = asin(c/b - a/b*(a*c + b*sqrt(a^2+b^2-c^2))/(a^2 + b^2))
+#
+#     return alpha
+# end
 
 
 ## -------- vortex lattice method ---------------
@@ -589,60 +593,63 @@ Updates: repackaged with features from several different versions - 1/30/09
 ----------------------------------------------------------------------
 =#
 
-function VLM(wing, fs, ref, pdrag, mvr, plots)
+function run(wing, fs, Vext)
 
     # freestream properties
-    if fs.method == "CL" # specify CL
-        CLref = fs.CL
-        alpha = 0.0
-    else
-        alpha = fs.alpha
-        CLref = 0.0
-    end
+    # if fs.method == "CL" # specify CL
+    #     CLref = fs.CL
+    #     alpha = 0.0
+    # else
+    #     alpha = fs.alpha
+    #     CLref = 0.0
+    # end
+    alpha = fs.alpha
+    beta = fs.beta
+    rho = fs.rho
+    Vinf = fs.Vinf
 
-    # mach = fs.mach
-    rho = 1.0
-    Vinf = 1.0
-    q = 0.5*rho*Vinf^2
+    # # mach = fs.mach
+    # rho = 1.0
+    # Vinf = 1.0
+    # q = 0.5*rho*Vinf^2
 
     # reference quantities
-    Sref = ref.S
-    cref = ref.c
+    # Sref = ref.S
+    # cref = ref.c
+    # CLmax = ref.CLmax
 
-    # viscous drag (2 possible methods)
-    if pdrag.method == "pass" # Reynolds number dependent method
-        alt = pdrag.alt
-        xt = pdrag.xt
+    # # viscous drag (2 possible methods)
+    # if pdrag.method == "pass" # Reynolds number dependent method
+    #     alt = pdrag.alt
+    #     xt = pdrag.xt
+    #
+    #     # not used
+    #     cd0 = 0.0
+    #     cd1 = 0.0
+    #     cd2 = 0.0
+    #
+    # else # quadratic variation with section lift coefficient
+    #     cd0 = pdrag.polar[1]
+    #     cd1 = pdrag.polar[2]
+    #     cd2 = pdrag.polar[3]
+    #
+    #     # not used
+    #     alt = 0.0
+    #     xt = 0.0
+    # end
 
-        # not used
-        cd0 = 0.0
-        cd1 = 0.0
-        cd2 = 0.0
+    # # structures
+    # qmvrN = mvr.qN # ratio of maneuver dynamic pressure to cruise dynamic pressure
+    # n = mvr.n # load factor
+    # kbar = mvr.kbar # coefficient used in computing area dependent weight (3.57e4 or 0)
 
-    else # quadratic variation with section lift coefficient
-        cd0 = pdrag.polar[1]
-        cd1 = pdrag.polar[2]
-        cd2 = pdrag.polar[3]
-
-        # not used
-        alt = 0.0
-        xt = 0.0
-    end
-
-    # structures
-    qmvrN = mvr.qN # ratio of maneuver dynamic pressure to cruise dynamic pressure
-    n = mvr.n # load factor
-    kbar = mvr.kbar # coefficient used in computing area dependent weight (3.57e4 or 0)
-
-    # stall
-    CLmax = ref.CLmax
     # -------------------------------------
 
     # ------------- geometry ------------------
     QC, TE, CP, LE = geometry(wing)
 
     # compute wing area
-    S = 2*sum(CP.chord.*CP.ds)
+    # S = 2*sum(CP.chord.*CP.ds)
     # ------------------------------------------
 
     # ---------- force influence coefficients --------------------
@@ -650,54 +657,75 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     AIC = getAIC(QC, TE, CP)
 
     # lift
-    LIC = getLIC(CP, rho, Vinf)
+    # LIC = getLIC(CP, rho, Vinfeff)
 
     # induced drag
     DIC = getDIC(TE.y, TE.z, rho)
 
     # viscous drag
-    D1, D2 = getViscousDrag(cd1, cd2, CP, rho, Vinf)
+    # D1, D2 = getViscousDrag(cd1, cd2, CP, rho, Vinf)
 
     # weight
-    WIC, BMM = getWIC(CP, rho, Vinf)
+    # WIC, BMM = getWIC(CP, rho, Vinf)
     # -----------------------------------------------
 
-    # ---------- compute angle of attack necessary to match CL -----
-    if fs.method == "CL"
-        alpha = getAlpha(CLref*q*Sref, CP, LIC, AIC, Vinf)
-    end
-    # ------------------------------------------------------------------
+    # # ---------- compute angle of attack necessary to match CL -----
+    # if fs.method == "CL"
+    #     alpha = getAlpha(CLref*q*Sref, CP, LIC, AIC, Vinf)
+    # end
+    # # ------------------------------------------------------------------
 
     # -------- compute circulation -----------------
-    Vn = -Vinf*(cos(alpha)*sin.(CP.twist) + sin(alpha)*cos.(CP.twist).*cos.(CP.dihedral))
+    Vinfn = (Vinf*cos(alpha)*cos(beta)*sin.(CP.twist) +
+        Vinf*sin(beta)*cos.(CP.twist).*sin.(CP.dihedral) +
+        Vinf*sin(alpha)*cos(beta)*cos.(CP.twist).*cos.(CP.dihedral))
+    Vextn = (Vext.x.*cos(beta).*sin.(CP.twist) +
+        -Vext.y.*cos.(CP.twist).*sin.(CP.dihedral) +
+        Vext.z.*cos.(CP.twist).*cos.(CP.dihedral))
+    Vn = -(Vinfn + Vextn)
+
     gamma = AIC\Vn
     # ----------------------------------------------
 
-    # --------- aerodynamic forces ------------------
-    L = dot(LIC, gamma)
-    Di = gamma'*DIC*gamma
-    Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
 
-    CL = L/q/Sref
-    CDi = Di/q/Sref
-    CDp = Dp/q/Sref
+    # total velocity in direction of Vinf
+    Vinfeff = Vinf + Vext.x*cos(alpha)*cos(beta) + Vext.y*sin(beta) + Vext.z*sin(alpha)*cos(beta)
+
+
+    # --------- aerodynamic forces ------------------
+    # L = dot(LIC, gamma)
+    # Kutta Joukowski
+    L = sum(2*rho*Vinfeff.*gamma.*cos.(CP.dihedral).*CP.ds)
+
+    Di = gamma'*DIC*gamma
+
+    # add near field drag from external normalwash
+    Di += sum(-rho*Vextn.*gamma.*CP.ds)
+
+
+
+    # Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
+
+    # CL = L/q/Sref
+    # CDi = Di/q/Sref
+    # CDp = Dp/q/Sref
     # ------------------------------------------------
 
-    # --------- weight (integrated bending moment over thickness --------
+    # # --------- weight (integrated bending moment over thickness --------
     # circulation at maneuver load
-    bbb = AIC\cos.(CP.dihedral)
-    LL = dot(LIC, bbb)
-    gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
-
-    # compute weight
-    W = qmvrN*WIC'*gamma_mvr
-
-    # add area dependent weight
-    W = W + kbar*S
-
-    # weight coefficient
-    CW = W/q/Sref/cref
-    # -----------------------------------------------------------------
+    # bbb = AIC\cos.(CP.dihedral)
+    # LL = dot(LIC, bbb)
+    # gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
+    #
+    # # compute weight
+    # W = qmvrN*WIC'*gamma_mvr
+    #
+    # # add area dependent weight
+    # W = W + kbar*S
+    #
+    # # weight coefficient
+    # CW = W/q/Sref/cref
+    # # -----------------------------------------------------------------
 
     # # ----- estimate compressibility and parasite drag (strip theory + PASS method) -----
     # supercrit = 1
@@ -743,42 +771,43 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # ----------- cl distribution at CLmax ----------------
     cl = 2/Vinf*gamma./CP.chord
-    clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
-
-    # clmax as a function of thickness - polynomial fit
-    tc = CP.tc*100
-    clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
-
-    cl_margin = clmax - clmax_dist
+    cllocal = cl*Vinf./Vinfeff
+    # clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
+    #
+    # # clmax as a function of thickness - polynomial fit
+    # tc = CP.tc*100
+    # clmax = -1.748 + 0.8013*tc - 0.06567*tc.^2 + 0.0022307*tc.^3 - 2.7634e-5*tc.^4
+    #
+    # cl_margin = clmax - clmax_dist
     # ----------------------------------------
 
-    # --------- pitching moment about a.c. --------------------
-    # pitching moment about quarter chord
-    MIC = getMIC(CP, rho, Vinf, QC.x[1])
+    # # --------- pitching moment about a.c. --------------------
+    # # pitching moment about quarter chord
+    # MIC = getMIC(CP, rho, Vinf, QC.x[1])
+    #
+    # # find aerodynamic center
+    # dRHS = -sin(alpha)*sin.(CP.twist) + cos(alpha)*cos.(CP.twist).*cos.(CP.dihedral)
+    # dbc = AIC\dRHS
+    # dMda = MIC'*dbc
+    # dLda = LIC'*dbc
+    # xac = -dMda/dLda + QC.x[1]
+    #
+    # # find Moment about a.c.
+    # MICac = getMIC(CP, rho, Vinf, xac[1])
+    # Mac = MICac'*gamma
+    #
+    # Cmac = Mac/q/Sref/cref
+    # # ----------------------------------------------------------
 
-    # find aerodynamic center
-    dRHS = -sin(alpha)*sin.(CP.twist) + cos(alpha)*cos.(CP.twist).*cos.(CP.dihedral)
-    dbc = AIC\dRHS
-    dMda = MIC'*dbc
-    dLda = LIC'*dbc
-    xac = -dMda/dLda + QC.x[1]
-
-    # find Moment about a.c.
-    MICac = getMIC(CP, rho, Vinf, xac[1])
-    Mac = MICac'*gamma
-
-    Cmac = Mac/q/Sref/cref
-    # ----------------------------------------------------------
-
-    # --------------- structures --------------------------
-    # bending moment distribution
-    Mb = qmvrN*BMM*gamma
-
-    # distance along structural span
-    ds_str = CP.ds./cos.(CP.sweep)
-    eta_str = [0; cumsum(ds_str, 2)]
-    eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
-    # --------------------------------------------------------------
+    # # --------------- structures --------------------------
+    # # bending moment distribution
+    # Mb = qmvrN*BMM*gamma
+    #
+    # # distance along structural span
+    # ds_str = CP.ds./cos.(CP.sweep)
+    # eta_str = [0; cumsum(ds_str, 2)]
+    # eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
+    # # --------------------------------------------------------------
 
     # if (plots)
     #   # ------------- plots --------------------
@@ -837,7 +866,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     #   # -------------------------------------------------
     # end
 
-    return CL, CDi, CDp, CW, Cmac, cl_margin, gamma, CP, cl
+    return L, Di, CP, cl, cllocal, Vinfeff
 end
 
 end
