@@ -1,5 +1,6 @@
+module NVLM
 
-type CPdata
+struct CPdata
     chord::Array{Float64, 1}
     twist::Array{Float64, 1}
     tc::Array{Float64, 1}
@@ -11,13 +12,13 @@ type CPdata
     ds::Array{Float64, 1}
 end
 
-type position
+struct position
     x::Array{Float64, 1}
     y::Array{Float64, 1}
     z::Array{Float64, 1}
 end
 
-type wingsection
+struct wingsection
     span
     chord
     twist
@@ -27,24 +28,24 @@ type wingsection
     N
 end
 
-type fs_def
+struct fs_def
   mach
   alpha
   CL
   method
 end
-type ref_def
+struct ref_def
   S
   c
   CLmax
 end
-type pdrag_def
+struct pdrag_def
   polar
   alt
   xt
   method
 end
-type mvr_def
+struct mvr_def
   qN
   n
   kbar
@@ -65,7 +66,7 @@ function geometry(wing::wingsection)
 
     # --------------------------------------------------------------
 
-    P = int(round(b/sum(b)*N)) # divide up panels
+    P = round.(Int64, b/sum(b)*N) # divide up panels
 
     # -------------  Quarter Chord Locations --------------------------
     M = 1 + sum(P)
@@ -73,59 +74,76 @@ function geometry(wing::wingsection)
     c = zeros(M)
     t = zeros(M)
     thickness = zeros(M)
-    QC = position(zeros(M), zeros(M), zeros(M))
-    LE = position(zeros(M), zeros(M), zeros(M))
-    TE = position(zeros(M), zeros(M), zeros(M))
-    CP = CPdata(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N), zeros(N),
-        zeros(N), zeros(N), zeros(N))
+    # QC = position(zeros(M), zeros(M), zeros(M))
+    # LE = position(zeros(M), zeros(M), zeros(M))
+    # TE = position(zeros(M), zeros(M), zeros(M))
+    # CP = CPdata(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N), zeros(N),
+    #     zeros(N), zeros(N), zeros(N))
+    QCx = zeros(M)
+    QCy = zeros(M)
+    QCz = zeros(M)
+    LEx = zeros(M)
+    LEy = zeros(M)
+    LEz = zeros(M)
+    TEx = zeros(M)
+    TEy = zeros(M)
+    TEz = zeros(M)
+    CPx = zeros(N)
+    CPy = zeros(N)
+    CPz = zeros(N)
 
     last = 1
 
     for i = 1:length(b)
-      first = last
-      last = first + P[i]
-      eta = linspace(0, b[i], P[i]+1)
+        first = last
+        last = first + P[i]
+        eta = linspace(0, b[i], P[i]+1)
 
-      QC.x[first:last] = QC.x[first] + eta*tan(Lambda[i])
-      QC.y[first:last] = QC.y[first] + eta*cos(phi[i])
-      QC.z[first:last] = QC.z[first] + eta*sin(phi[i])
-      c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
-      t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
-      thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
+        QCx[first:last] = QCx[first] + eta*tan(Lambda[i])
+        QCy[first:last] = QCy[first] + eta*cos(phi[i])
+        QCz[first:last] = QCz[first] + eta*sin(phi[i])
+        c[first:last] = chord[i] + eta*(chord[i+1]-chord[i])/b[i] # chord
+        t[first:last] = twist[i] + eta*(twist[i+1]-twist[i])/b[i] # twist
+        thickness[first:last] = tc[i]*chord[i] + eta*(tc[i+1]*chord[i+1]-tc[i]*chord[i])/b[i] # thickness
     end
+    QC = position(QCx, QCy, QCz)
     # --------------------------------------------------------------
 
     # ------------ Trailing Edge Locations --------------------------
-    TE.x = QC.x + 3.0/4*c
-    TE.y = QC.y
-    TE.z = QC.z
+    TEx = QCx + 3.0/4*c
+    TEy = QCy
+    TEz = QCz
+    TE = position(TEx, TEy, TEz)
     # ----------------------------------------------------------------
 
     # -------------- Leading Edge locations ------------------------
-    LE.x = QC.x - c/4
-    LE.y = QC.y
-    LE.z = QC.z
+    LEx = QCx - c/4
+    LEy = QCy
+    LEz = QCz
+    LE = position(LEx, LEy, LEz)
     # -----------------------------------------------------------------
 
     # ------------- Control Point Locations --------------------------
-    CP.chord = 0.5*(c[1:N] + c[2:N+1])
-    CP.twist = 0.5*(t[1:N] + t[2:N+1])
-    CP.tc = 0.5*(thickness[1:N] + thickness[2:N+1])./CP.chord
-    CP.x = 0.5*(QC.x[1:N] + QC.x[2:N+1]) + 0.5*CP.chord
-    CP.y = 0.5*(QC.y[1:N] + QC.y[2:N+1])
-    CP.z = 0.5*(QC.z[1:N] + QC.z[2:N+1])
+    chord = 0.5*(c[1:N] + c[2:N+1])
+    twist = 0.5*(t[1:N] + t[2:N+1])
+    tc = 0.5*(thickness[1:N] + thickness[2:N+1])./chord
+    CPx = 0.5*(QC.x[1:N] + QC.x[2:N+1]) + 0.5*chord
+    CPy = 0.5*(QC.y[1:N] + QC.y[2:N+1])
+    CPz = 0.5*(QC.z[1:N] + QC.z[2:N+1])
 
-    CP.dihedral = zeros(N)
-    CP.sweep = zeros(N)
+    dihedral = zeros(N)
+    sweep = zeros(N)
 
     last = 0
     for i = 1:length(b)
       first = last + 1
       last = first + P[i] - 1
-      CP.dihedral[first:last] = phi[i]
-      CP.sweep[first:last] = Lambda[i]
+      dihedral[first:last] = phi[i]
+      sweep[first:last] = Lambda[i]
     end
-    CP.ds = sqrt((QC.y[2:N+1]-QC.y[1:N]).^2 + (QC.z[2:N+1]-QC.z[1:N]).^2)
+    ds = sqrt.((QC.y[2:N+1]-QC.y[1:N]).^2 + (QC.z[2:N+1]-QC.z[1:N]).^2)
+
+    CP = CPdata(chord, twist, tc, CPx, CPy, CPz, dihedral, sweep, ds)
 
     return QC, TE, CP, LE
 
@@ -143,7 +161,7 @@ Author: S. Andrew Ning
 ---------------------
 =#
 function getLIC(CP::CPdata, rho::Float64, Vinf::Float64)
-    LIC = 2*rho*Vinf*cos(CP.dihedral).*CP.ds
+    LIC = 2*rho*Vinf*cos.(CP.dihedral).*CP.ds
 end
 
 #=
@@ -158,7 +176,7 @@ function getMIC(CP::CPdata, rho::Float64, Vinf::Float64, xcg::Float64)
 
     xQC = CP.x - 0.5*CP.chord # quarter chord locations
 
-    MIC = -(xQC - xcg)*2*rho*Vinf.*cos(CP.dihedral).*CP.ds
+    MIC = -(xQC - xcg)*2*rho*Vinf.*cos.(CP.dihedral).*CP.ds
 
 end
 
@@ -432,7 +450,7 @@ function getAIC(QC::position, TE::position, CP::CPdata)
     AIC = zeros(m, n)
 
     for j = 1:n
-        AIC[:, j] = -v[:, j].*sin(CP.dihedral) + w[:, j].*cos(CP.dihedral)
+        AIC[:, j] = -v[:, j].*sin.(CP.dihedral) + w[:, j].*cos.(CP.dihedral)
     end
 
     return AIC
@@ -483,7 +501,7 @@ function getWIC(CP::CPdata, rho::Float64, Vinf::Float64)
 
 
     # integrate along structural span
-    ds_str = CP.ds./cos(CP.sweep)
+    ds_str = CP.ds./cos.(CP.sweep)
 
     BMM = rho*Vinf*R.*repmat(ds.', N, 1)  #(ones(N, 1)*ds)
     WIC = (2*(ds_str./(tc.*chord)).'*BMM).'
@@ -543,8 +561,8 @@ function getAlpha(Ltarget::Float64, CP::CPdata, LIC::Array{Float64, 1}, AIC::Arr
 
     # solve quadratic equation for alpha
     qq = LIC/AIC
-    a = -U*qq*sin(CP.twist)'
-    b = -U*qq*(cos(CP.twist).*cos(CP.dihedral))'
+    a = -U*qq*sin.(CP.twist)'
+    b = -U*qq*(cos.(CP.twist).*cos.(CP.dihedral))'
     c = Ltarget
     # alpha = acos((a*c + b*sqrt(a^2+b^2-c^2))/(a^2+b^2));
     alpha = asin(c/b - a/b*(a*c + b*sqrt(a^2+b^2-c^2))/(a^2 + b^2))
@@ -652,7 +670,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     # ------------------------------------------------------------------
 
     # -------- compute circulation -----------------
-    Vn = -Vinf*(cos(alpha)*sin(CP.twist) + sin(alpha)*cos(CP.twist).*cos(CP.dihedral))
+    Vn = -Vinf*(cos(alpha)*sin.(CP.twist) + sin(alpha)*cos.(CP.twist).*cos.(CP.dihedral))
     gamma = AIC\Vn
     # ----------------------------------------------
 
@@ -661,10 +679,6 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     Di = gamma'*DIC*gamma
     Dp = cd0*q*S + D1'*gamma + D2'*gamma.^2
 
-    println(L)
-    println(q)
-    println(Sref)
-
     CL = L/q/Sref
     CDi = Di/q/Sref
     CDp = Dp/q/Sref
@@ -672,7 +686,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # --------- weight (integrated bending moment over thickness --------
     # circulation at maneuver load
-    bbb = AIC\cos(CP.dihedral)
+    bbb = AIC\cos.(CP.dihedral)
     LL = dot(LIC, bbb)
     gamma_mvr = gamma + ((n/qmvrN-1)*(LIC'*gamma)/LL*bbb')'
 
@@ -730,10 +744,6 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
 
     # ----------- cl distribution at CLmax ----------------
     cl = 2/Vinf*gamma./CP.chord
-    println(size(bbb))
-    println(size(CP.chord))
-    println(size(cl))
-    println(size(rho*Vinf*(CLmax*Sref-L/q)))
     clmax_dist = cl + rho*Vinf*(CLmax*Sref-L/q)/LL*bbb./CP.chord
 
     # clmax as a function of thickness - polynomial fit
@@ -748,7 +758,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     MIC = getMIC(CP, rho, Vinf, QC.x[1])
 
     # find aerodynamic center
-    dRHS = -sin(alpha)*sin(CP.twist) + cos(alpha)*cos(CP.twist).*cos(CP.dihedral)
+    dRHS = -sin(alpha)*sin.(CP.twist) + cos(alpha)*cos.(CP.twist).*cos.(CP.dihedral)
     dbc = AIC\dRHS
     dMda = MIC'*dbc
     dLda = LIC'*dbc
@@ -766,7 +776,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     Mb = qmvrN*BMM*gamma
 
     # distance along structural span
-    ds_str = CP.ds./cos(CP.sweep)
+    ds_str = CP.ds./cos.(CP.sweep)
     eta_str = [0; cumsum(ds_str, 2)]
     eta_str = 0.5*(eta_str[1:end-1] + eta_str[2:end])
     # --------------------------------------------------------------
@@ -828,5 +838,7 @@ function VLM(wing, fs, ref, pdrag, mvr, plots)
     #   # -------------------------------------------------
     # end
 
-    return CL, CDi, CDp, CW, Cmac, cl_margin, gamma, CP
+    return CL, CDi, CDp, CW, Cmac, cl_margin, gamma, CP, cl
+end
+
 end
