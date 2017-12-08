@@ -70,11 +70,12 @@ function geometry(wing::wingsection)
     twist = wing.twist
     tc = wing.tc
     phi = wing.dihedral
-    N = wing.N
+    N = sum(wing.N)
+    P = wing.N
 
     # --------------------------------------------------------------
 
-    P = round.(Int64, b/sum(b)*N) # divide up panels
+    # P = round.(Int64, b/sum(b)*N) # divide up panels
 
     # -------------  Quarter Chord Locations --------------------------
     M = 1 + sum(P)
@@ -866,7 +867,7 @@ function run(wing, fs, Vext)
     #   # -------------------------------------------------
     # end
 
-    return L, Di, CP, cl, cllocal, Vinfeff
+    return L, Di, cl, cllocal, Vinfeff
 end
 
 end
