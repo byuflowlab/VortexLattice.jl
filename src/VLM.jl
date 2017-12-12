@@ -692,6 +692,8 @@ function run(wing, fs, Vext)
     # total velocity in direction of Vinf
     Vinfeff = Vinf + Vext.x*cos(alpha)*cos(beta) + Vext.y*sin(beta) + Vext.z*sin(alpha)*cos(beta)
 
+    # effective angle of attack
+    alphaeff = atan.(-Vn/Vinf)
 
     # --------- aerodynamic forces ------------------
     # L = dot(LIC, gamma)
@@ -867,7 +869,7 @@ function run(wing, fs, Vext)
     #   # -------------------------------------------------
     # end
 
-    return L, Di, cl, cllocal, Vinfeff
+    return L, Di, cl, cllocal, Vinfeff, alphaeff
 end
 
 end
