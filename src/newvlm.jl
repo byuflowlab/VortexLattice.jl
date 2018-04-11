@@ -29,10 +29,13 @@ function getVhat(r1, r2)
     f5 = cross(r2, [1.0; 0; 0])/(nr2 - r2[1])
     f6 = 1.0/nr2
 
-    Vhat = f1*f2 + f3*f4 - f5*f6
+    Vhat = (f1*f2 + f3*f4 - f5*f6)/(4*pi)
 
     return Vhat
 end
+
+
+
 
 
 function getAIC(geom::panelgeometry, fs::freestream, symmetric)
