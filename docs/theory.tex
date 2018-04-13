@@ -11,6 +11,7 @@
 %\usepackage[caption=false,justification=raggedright,singlelinecheck=false]{subfig}
 %\usepackage{booktabs} % better tables
 \usepackage[capitalise]{cleveref}
+\usepackage{indentfirst}
 
 \begin{document}
 
@@ -38,7 +39,7 @@ Then substituting in the vector potential yields Laplace's equation:
 \nabla^2 \phi = 0
 \end{equation}
 
-Solutions are generally built up using singularities that already satisfy Laplace's equation and the boundary condition in the far-field.  In this case we use straight line vortex filaments.  A lifting surface is divided into panels, and each panel has a horseshoe vortex as shown in \cref{fig:horseshoe}.  
+Solutions are generally built up using singularities that already satisfy Laplace's equation and the boundary condition in the far-field.  In this case we use straight line vortex filaments.  A lifting surface is divided into panels, and each panel has a horseshoe vortex as shown in \cref{fig:horseshoe}, with the horse vortex extending into the $+x$ direction of the body axes.  
 
 The first of Helmholtz' vortex theorems states that the vortex strength (and direction) must be constant throughout the horseshoe vortex.  The second theorem states that the vortex must form a closed path or end at the boundary.  We take the boundary infinitely far away and so can treat the vortex with three segments (hence the horseshoe name).  
 
@@ -49,9 +50,9 @@ The first of Helmholtz' vortex theorems states that the vortex strength (and dir
 \label{fig:horseshoe}
 \end{figure}
 
-A VLM use the thin airfoil assumption so that  lifting surfaces are flat (not curved).  Although a wing may be represented with multiple flat surfaces, for example a wing and winglets.  Curved surfaces require a more general 3D panel method.
+A VLM use the thin airfoil assumption so that  lifting surfaces are flat (not curved).  W wing may be represented with multiple flat surfaces, for example a wing and winglets.  Curved surfaces require a more general 3D panel method.
 
-Although in general a VLM can have both spanwise and chordwise panel, in our case we only use one chordwise panel.  This modeling choice is called a Weissinger formulation, and is appropriate for high aspect ratio wings where resolving the chordwise pressure distribution is of less interest.  
+Although in general a VLM can have both spanwise and chordwise panels, in our case we only use one chordwise panel.  This modeling choice is called a Weissinger formulation [ref], and is appropriate for high aspect ratio wings where resolving the chordwise pressure distribution is of less interest.  
 
 
 % \section{Boundary Conditions}
@@ -66,7 +67,7 @@ A vortex lattice method uses what is called a lumped vortex method, this means t
 \begin{center}
 \includegraphics[width=1.5in]{figs/lumped-vortex}
 \end{center}
-We now have a choice on where to place the lumped vortex, and the control point.  The typical approach can be motivated by assuming that the airfoil has parabolic camber.  Because we only have one chordwise control point we cannot resolving flow tangency at multiple points along the camber line, and so it makes sense to impose the camber in the placement of the control point.  A parabolic camber is a reasonable approximation for a general camber line.  This means that the camber line is described by:
+We now have a choice on where to place the lumped vortex, and the control point.  The typical approach can be motivated by assuming that the airfoil has parabolic camber of a generic form.  Because we have only one chordwise control point we cannot resolving flow tangency at multiple points along the camber line, and so it makes sense to impose the camber in the placement of the control point.  A parabolic camber is a reasonable approximation for a general camber line.  This means that the camber line is described by:
 \begin{equation}
 \bar{y} = 4 \epsilon \frac{x}{c} (c - x)
 \end{equation}
@@ -120,11 +121,11 @@ As noted the control point on each panel is at the section's three quarters-chor
 \begin{equation}
     \vec{V}_n|_{cp} = 0
 \end{equation}
-where the $cp$ subscript denotes a control point, and the boundary condition is applied at each control point separately.  The velocity can be broken up into four terms: the freestream velocity, velocity from rigid-body rotation, self-induced velocity from the panels, and other external velocity sources such as upstream wakes or gusts.  The freestream velocity is defined as the negative of the translational motion of the vehicle (thus it is constant for the entire aircraft, unlike gusts which may vary along the aircraft and are lumped in $\vec V_{other}$).
+where the $cp$ subscript denotes a control point, and the boundary condition is applied at each control point separately.  The velocity can be broken up into four terms: the freestream velocity, velocity from rigid-body rotation, self-induced velocity from the vortices, and other external velocity sources such as upstream wakes or gusts.  The freestream velocity is defined as the negative of the translational motion of the vehicle (thus it is constant for the entire aircraft, unlike gusts which may vary along the aircraft and are lumped in $\vec V_{other}$). The flow tangency boundary condition is thus:
 \begin{equation}
     \left[(\vec{V}_\infty - \vec{\Omega} \times \vec{r}_b + \vec{V}_{ind} + \vec{V}_{other}) \cdot \hat{n} \right]_{cp}= 0
 \end{equation}
-We move the induced term to one side, and all other terms to the other side (where the cp subscript is dropped for simplicity in notation):
+where $\vec{r}_b$ is a vector from the aircraft center of gravity to a point of interest.  We will move the induced term to one side, and all other terms to the other side (where the cp subscript is dropped for simplicity in notation):
 \begin{equation}
     \vec{V}_{ind} \cdot \hat{n} = - (\vec{V}_\infty - \vec{\Omega} \times \vec{r} +  \vec{V}_{other}) \cdot \hat{n}
 \end{equation}
@@ -132,9 +133,14 @@ To keep the notation simple we will denote the velocity on the right-hand side a
 \begin{equation}
 \vec{V}_{ind} \cdot \hat{n} = - \vec{V}_{ext} \cdot \hat{n}
 \end{equation}
-Each normalwash is a scalar and thus independent of the coordinate system.  In other words, we can use different coordinate systems to compute different portions of the sum, as long as the coordinate system is consistent for the two vectors in the dot product.  All of the external velocity computations  will use body axes, and the induced velocities will use wind axes.  In other words:
+% Each normalwash is a scalar and thus independent of the coordinate system.  In other words, we can use different coordinate systems to compute different portions of the sum, as long as the coordinate system is consistent for the two vectors in the dot product.  All of the external velocity computations  will use body axes, and the induced velocities will use wind axes.  In other words:
+% \begin{equation}
+% \vec{V}_{ind, w} \cdot \hat{n}_w = - \vec{V}_{ext, b} \cdot \hat{n}_b
+% \label{eq:flowtangency}
+% \end{equation}
+In general the rotational velocity, self-induced velocity, and external velocity all vary along the aircraft, and so this boundary condition will be applied at each control point $i$.
 \begin{equation}
-\vec{V}_{ind, w} \cdot \hat{n}_w = - \vec{V}_{ext, b} \cdot \hat{n}_b
+\vec{V}_{ind, i} \cdot \hat{n}_i = - \vec{V}_{ext, i} \cdot \hat{n}_i
 \label{eq:flowtangency}
 \end{equation}
 
@@ -142,7 +148,7 @@ Each normalwash is a scalar and thus independent of the coordinate system.  In o
 
 Angle of attack and sideslip angle are defined in the standard way (\cref{fig:alphabeta2}).  In this case, the the freestream velocity vector in the body axes is: 
 \begin{equation}
-    \vec{V}_{\infty, b} = V_\infty
+    \vec{V}_{\infty} = V_\infty
     \begin{bmatrix}
     \cos\alpha\cos\beta\\
     -\sin\beta\\
@@ -180,7 +186,7 @@ Angle of attack and sideslip angle are defined in the standard way (\cref{fig:al
 % \end{align}
 
 
-The rotational velocity is simply:
+The rotational velocity is defined about the center of gravity and is simply:
 \begin{equation}
     \Omega =
     \begin{bmatrix}
@@ -189,7 +195,7 @@ The rotational velocity is simply:
 \end{equation}
 The radial vector used in determining rotational velocities is the distance from the aircraft center of gravity to the control point of interest:
 \begin{equation}
-\vec{r}_b = \vec r_{cp} - \vec r_{cg}
+\vec{r}_i = \vec r_{cp, i} - \vec r_{cg}
 \end{equation}
 Because we only have one chordwise panel, it doesn't make sense to use camber in defining the normal direction (and camber was implicitly accounted for in the use of positioning the bound vortex and control point).  The normal vector is a function of the local twist and dihedral as shown in the figure below.  Twist cannot be lumped with angle of attack for nonplanar wings.  Imagine the twist on a winglet (sometimes called the cant angle), it moves  the surface in a very different way than changing the angle of attack of the entire aircraft.
 \begin{center}
@@ -206,7 +212,7 @@ From the figure we can resolve $\hat\zeta$ and $\hat{n}$ into components as foll
 \end{align}
 Substituting \cref{eq:hatzeta} into \cref{eq:hatn} yields:
 \begin{equation}
-    \hat{n}_b =
+    \hat{n} =
     \begin{bmatrix}
         \sin\theta\\
         -\cos\theta\sin\phi\\
@@ -217,23 +223,23 @@ Substituting \cref{eq:hatzeta} into \cref{eq:hatn} yields:
 
 \subsection{Induced Velocities}
 
-A wind-aligned coordinate system is easiest in computing the induced velocities as it allows for the trailing vortices to be in the $+x$ direction.  This means we need to convert our normal vector from the body axes to the wind axes, which is done through the two rotation matrices as shown below.
-\begin{equation}
-\hat{n}_w = 
-\begin{bmatrix}
-\cos\beta & -\sin\beta & 0 \\
-\sin\beta & \cos\beta & 0 \\
-0 & 0 & 1\\
-\end{bmatrix}
-\begin{bmatrix}
-\cos\alpha & 0 & \sin\alpha \\
-0 & 1 & 0\\
--\sin\alpha & 0 & \cos\alpha \\
-\end{bmatrix}
-\hat{n}_b
-\end{equation}
+% A wind-aligned coordinate system is easiest in computing the induced velocities as it allows for the trailing vortices to be in the $+x$ direction.  This means we need to convert our normal vector from the body axes to the wind axes, which is done through the two rotation matrices as shown below.
+% \begin{equation}
+% \hat{n}_w = 
+% \begin{bmatrix}
+% \cos\beta & -\sin\beta & 0 \\
+% \sin\beta & \cos\beta & 0 \\
+% 0 & 0 & 1\\
+% \end{bmatrix}
+% \begin{bmatrix}
+% \cos\alpha & 0 & \sin\alpha \\
+% 0 & 1 & 0\\
+% -\sin\alpha & 0 & \cos\alpha \\
+% \end{bmatrix}
+% \hat{n}_b
+% \end{equation}
 
-However, this presents a modeling choice.  Vortices could go straight back in $+x$ from the quarter chord or could follow along the wing surface to the trailing edge and then go straight back in $+x$ [fig].  We will choose the former, as this is consistent with thin airfoil theory which VLM is based on.  Wing twist is already modeled only in the boundary condition---horseshoe vortices are not rotated with the local twist angle.  Doing so would create numerical issues with nonaligned, but nearby vortices.  For a planar wing, angle of attack could be complete encapsulated in the twist variable (though not for a nonplanar wing) so it makes sense to treat these consistently. Essentially this is a small angle approximation for angle of attack, sideslip, and twist.  Realistically, only small angles are physically meaningful for these quantities anyway otherwise viscous effects would be important and flow would not be irrotational.  Dihedral, on the other is a (potentially) large angle and so the vortices must follow wing dihedral. Angle of attack, sideslip, and twist are still accounted for in the boundary conditions.
+% However, this presents a modeling choice.  Vortices could go straight back in $+x$ from the quarter chord or could follow along the wing surface to the trailing edge and then go straight back in $+x$ [fig].  We will choose the former, as this is consistent with thin airfoil theory which VLM is based on.  Wing twist is already modeled only in the boundary condition---horseshoe vortices are not rotated with the local twist angle.  Doing so would create numerical issues with nonaligned, but nearby vortices.  For a planar wing, angle of attack could be complete encapsulated in the twist variable (though not for a nonplanar wing) so it makes sense to treat these consistently. Essentially this is a small angle approximation for angle of attack, sideslip, and twist.  Realistically, only small angles are physically meaningful for these quantities anyway otherwise viscous effects would be important and flow would not be irrotational.  Dihedral, on the other is a (potentially) large angle and so the vortices must follow wing dihedral. Angle of attack, sideslip, and twist are still accounted for in the boundary conditions.
 
 From the Biot-Savart law the induced velocity from a vortex filament is given by the integral
 \begin{equation}
@@ -249,7 +255,7 @@ which we can reexpress as
 \end{equation}
 where $\hat{V}$ is the induced velocity at the control point, for unit circulation.  Thus, the boundary condition at the $i$th control point (\cref{eq:flowtangency}) becomes:
 \begin{equation}
-\sum_j \Gamma_j \hat{V}_{ij} \cdot \hat{n}_{w,i} = - \vec V_{ext,b,i} \cdot \hat{n}_{b,i}
+\sum_j \Gamma_j \hat{V}_{ij} \cdot \hat{n}_{i} = - \vec V_{ext,i} \cdot \hat{n}_{i}
 \end{equation}
 Each control point is one equation, and putting them all together forms a linear system of equations:
 \begin{equation}
@@ -257,11 +263,11 @@ Each control point is one equation, and putting them all together forms a linear
 \end{equation}
 where 
 \begin{equation}
-b_i = - \vec V_{ext, b, i} \cdot \hat{n}_{b, i}
+b_i = - \vec V_{ext, i} \cdot \hat{n}_{i}
 \end{equation}
 and the aerodynamic influence coefficient matrix is given by:
 \begin{equation}
-AIC_{ij} = \hat{V}_{ij} \cdot \hat{n}_{w,i}
+AIC_{ij} = \hat{V}_{ij} \cdot \hat{n}_{i}
 \end{equation}
 The main challenge then is to determine $\hat{V}_{ij}$
 
@@ -476,6 +482,7 @@ Finally, we want the velocity for unit circulation and so
 -
 \frac{\vec{r}_{2} \times \hat{x}}{(|\vec{r}_{2}| - r_{2x} )} \frac{1}{|\vec{r_{2}}|} 
 \right]
+\label{eq:vhorseshoe}
 \end{equation}
 where each vector points from the corner of the horseshoe vortex at position j to control point i:
 \begin{align}
@@ -486,6 +493,95 @@ where each vector points from the corner of the horseshoe vortex at position j t
 \subsection{Symmetry}
 
 If the aircraft is symmetric then it is more efficient to only solve for the circulation on half of the aircraft.  This reduces the size of the linear system in half.  Solving a dense linear system is approximately an $\mathcal{O}(n^3)$ operation, and the linear system solve is the main computational cost of the VLM, so if taking advantage of symmetry is possible it is generally worth doing.  This is straightforward in constructing the AIC matrix.  The only change is that each control point we need to add the influence of horseshoe vortex $i$ as well as its mirror image $-i$.  The vector $\vec{r}_{-i}$ is identical to $\vec{r}_{i}$ except that the sign of the y component is flipped (we are assuming symmetry about the x-z plane).
+
+\section{Near-Field Forces and Moments}
+
+With the exception of induced drag, which is most accurately computed in the farfield, all other forces and moments are computed in the near field using the Kutta-Joukowski theorem:
+\begin{equation}
+\vec F^\prime_i = \rho \vec V_i \times \vec \Gamma_i
+\end{equation}
+First, we must compute the local velocity vector at each bound vortex.  Like the boundary condition, this requires a sum of the the freestream velocity (translation), rotation, induced velocity and other external velocities.  
+\begin{equation}
+\vec V = \vec{V}_\infty - \vec{\Omega} \times \vec{r}_b + \vec{V}_{ind} + \vec{V}_{other}
+\end{equation}
+This time the induced velocity is not computed at the control points, but rather at the center of the bound vortex.  We can reuse \cref{eq:vhorseshoe}, but evaluated at the center of each bound vortex.  This eliminates the first term because the bound vortex does not induce any velocity on itself.  The velocity induced at the center of vortex i is
+\begin{equation}
+\vec{V}_{ind, i} = \sum \Gamma_j \hat{V}_{ij}
+\end{equation}
+The induced velocity per unit circulation, $\hat{V}_{ij}$, is computed using the following vectors.
+\begin{align}
+\vec{r}_1 &= {\vec r}_{i,mid} - \vec{r}_{j}\\
+\vec{r}_2 &= {\vec r}_{i,mid} - \vec{r}_{j+1}
+\end{align}
+where ${\vec r}_{i,mid} = (\vec{r}_i + \vec{r}_{i+1})/2$.  
+
+
+Using the Kutta-Joukowski theorem, where the force is constant across a panel results in a force for each panel of:
+\begin{equation}
+\vec F_i = \rho \vec V_i \times \vec \Gamma_i \Delta s_i
+\end{equation}
+where the direction of $\Gamma$ is defined by
+\begin{equation}
+\vec \Gamma_i \Delta s_i = \Gamma_i (\vec{r}_{i+1} - \vec{r}_{i})
+\end{equation}
+The total forces are then
+\begin{align}
+\vec{F} &= \sum_i \vec{F}_i\\
+&= \sum_i \rho \Gamma_i \left(\sum_j (\Gamma_j \hat{V}_{ij} ) + \vec{V}_\infty - \vec{\Omega} \times \vec{r}_i + \vec{V}_{other, i}\right)\times  (\vec{r}_{i+1} - \vec{r}_{i})
+\end{align}
+The total moments are given by:
+\begin{equation}
+M = \sum_i \vec r_{m, i} \times \vec{F}_i
+\end{equation}
+where $\vec r_{m, i}$ is the vector originating from some specified reference point (often the aircraft c.g.) and ending at the location of force $F_i$ (i.e., $\vec r_{m, i} = \vec r_{i, mid} - \vec r_{cg}$).
+
+These forces and moments are in the body coordinate system.  However, as aerodynamicists, we generally care about forces in the wind axes (oriented with the freestream) because that is the coordinate system where lift and drag are defined.  The rotation from body axes to wind axes is accomplished by the following rotations:
+\begin{equation}
+\begin{bmatrix}
+D\\
+Y\\
+L
+\end{bmatrix}
+= 
+\begin{bmatrix}
+\cos\beta & -\sin\beta & 0 \\
+\sin\beta & \cos\beta & 0 \\
+0 & 0 & 1\\
+\end{bmatrix}
+\begin{bmatrix}
+\cos\alpha & 0 & \sin\alpha \\
+0 & 1 & 0\\
+-\sin\alpha & 0 & \cos\alpha \\
+\end{bmatrix}
+\begin{bmatrix}
+F_x\\
+F_y\\
+F_z
+\end{bmatrix}
+\end{equation}
+We rotate moments similarly, although for dynamics leaving them in the body-coordinate system in generally preferred.
+
+% Computing lift is straightforward.  From the Kutta-Joukowski theorem we can compute the force per unit length as:
+% This gives a force in the wind-aligned coordinate system.  Because the wing may have dihedral, only the vertical component contributes to lift.
+% \begin{equation}
+% L = \sum_i F^\prime_i \cos\phi_i \Delta s_i
+% \end{equation}
+% Or in terms of a vector-vector product:
+% \begin{equation}
+% L = LIC^T \Gamma
+% \end{equation}
+% where
+% \begin{equation}
+% LIC_i = \rho V_\infty (y_{i+1} - y_i)
+% \end{equation}
+
+% \subsection{Symmetry}
+% If the wing is symmetric then we only need circulation over half of the lifting surface.  The summation is identical except we multiply by a factor of 2 to get the lift over the whole lifting surface.
+% \begin{equation}
+% LIC_i = 2 \rho V_\infty (y_{i+1} - y_i)
+% \end{equation}
+
+
 
 \section{Induced Drag Influence Coefficients (DIC)}
 
@@ -606,28 +702,5 @@ DIC_{ij} = \frac{\rho_\infty}{2\pi} \left(k_{i,j} - k_{i, j+1} - k_{i, -j} + k_{
 
 
 
-\section{Lift Induced Coefficients (LIC)}
-Computing lift is straightforward.  From the Kutta-Joukowski theorem we can compute the force per unit length as:
-\begin{equation}
-F^\prime = \rho_\infty \vec V_\infty \times \vec \Gamma_i
-\end{equation}
-This gives a force in the wind-aligned coordinate system.  Because the wing may have dihedral, only the vertical component contributes to lift.
-\begin{equation}
-L = \sum_i F^\prime_i \cos\phi_i \Delta s_i
-\end{equation}
-Or in terms of a vector-vector product:
-\begin{equation}
-L = LIC^T \Gamma
-\end{equation}
-where
-\begin{equation}
-LIC_i = \rho V_\infty (y_{i+1} - y_i)
-\end{equation}
-
-\subsection{Symmetry}
-If the wing is symmetric then we only need circulation over half of the lifting surface.  The summation is identical except we multiply by a factor of 2 to get the lift over the whole lifting surface.
-\begin{equation}
-LIC_i = 2 \rho V_\infty (y_{i+1} - y_i)
-\end{equation}
 
 \end{document}
