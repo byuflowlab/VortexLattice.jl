@@ -16,6 +16,9 @@ struct panelgeometry
     theta
     phi
     npanels
+    Sref
+    cref
+    bref
 end
 
 
@@ -160,6 +163,9 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
 
     Fvec = zeros(3, N)
     Mvec = zeros(3, N)
+    Vvec = zeros(3, N)
+    Fpvec = zeros(3, N)
+    DD = zeros(N)
 
     for i = 1:N  # control points
 
@@ -169,19 +175,40 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
             r2 = [xmid[i] - x[j+1]; ymid[i] - y[j+1]; zmid[i] - z[j+1]]
             Vij = vhat_trailing(r1, r2)
             Vindi += Vij*Gamma[j]
+
+            if symmetric
+                # flip sign for y, but r1 is on left which now corresponds to j+1 and vice vesa
+                r1 = [xmid[i] - x[j+1]; ymid[i] + y[j+1]; zmid[i] - z[j+1]]
+                r2 = [xmid[i] - x[j]; ymid[i] + y[j]; zmid[i] - z[j]]
+                Vij = vhat_trailing(r1, r2)
+                Vindi += Vij*Gamma[j]
+            end
         end
 
         rmidi = [xmid[i]; ymid[i]; zmid[i]]
         Vext = ext_velocity(fs, rmidi)
-        Vi = Vindi + Vext
+        Vvec[:, i] = Vindi + Vext
         
-        Deltas = [x[i+1] - x[i]; y[i+1] - y[i]; z[i+1] - z[i]]
-        Fvec[:, i] = rho*Gamma[i]*cross(Vi, Deltas)
+        Delta_s = [x[i+1] - x[i]; y[i+1] - y[i]; z[i+1] - z[i]]
+        Fvec[:, i] = rho*Gamma[i]*cross(Vvec[:, i], Delta_s)
         Mvec[:, i] = cross(rmidi - fs.rcg, Fvec[:, i])
+        
+        DD[i] = norm(Delta_s)
+        # force per unit length
+        Fpvec[:, i] = Fvec[:, i]/norm(Delta_s)
     end
 
     Fb = sum(Fvec, 2)
     Mb = sum(Mvec, 2)
+    Vmag = sqrt.(Vvec[1, :].^2 + Vvec[2, :].^2 + Vvec[3, :].^2)    
+
+    if symmetric
+        Fb *= 2
+        Mb *= 2
+        Fb[2] = 0.0
+        Mb[1] = 0.0
+        Mb[3] = 0.0
+    end
 
     # rotation matrix
     Rb = [cos(fs.beta) -sin(fs.beta) 0;
@@ -192,8 +219,14 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
         -sin(fs.alpha) 0 cos(fs.alpha)]
     Fw = Rb*Ra*Fb
     Mw = Rb*Ra*Mb
-    
-    return Fw, Mw
+
+    Fwpvec = zeros(3, N)
+    for i = 1:N
+        Fwpvec[:, i] = Rb*Ra*Fpvec[:, i]
+    end
+    Lp = Fwpvec[3, :]
+
+    return Fw, Mw, Vmag, Lp
 end
 
 function simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
@@ -225,9 +258,7 @@ function simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
     theta = θt*ybar*2/b
     phi = ϕ*ones(npanels)
         
-    if symmetric
-        geom = panelgeometry(x, y, z, c, theta, phi, npanels)
-    else
+    if !symmetric
         # mirror over y axis
         y = [-y[end:-1:1]; y[2:end]]
         x = [x[end:-1:1]; x[2:end]]
@@ -236,9 +267,9 @@ function simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
         c = [c[end:-1:1]; c]
         theta = [theta[end:-1:1]; theta]
         phi = [-phi[end:-1:1]; phi]
-
-        geom = panelgeometry(x, y, z, c, theta, phi, npanels)
     end
+
+    geom = panelgeometry(x, y, z, c, theta, phi, npanels, S, S/b, b)
 
     return geom
 end
@@ -320,19 +351,23 @@ end
 function vlm(geom::panelgeometry, fs::freestream, symmetric)
 
     Gamma = circulation(geom, fs, symmetric)
-    F, M = forces_moments(geom, fs, Gamma, symmetric)
+    F, M, Vmag, Lp = forces_moments(geom, fs, Gamma, symmetric)
 
     # trefftz plane analysis for drag
     DIC = dic(geom.y, geom.z, fs.rho, symmetric)
     Di = dot(Gamma, DIC*Gamma)
     F[1] = Di
 
+    # force and moment coefficients
+    CF = F/(0.5*rho*Vinf^2*geom.Sref)
+    CM = M./(0.5*rho*Vinf^2*[geom.bref; geom.cref; geom.bref])
+
     # lift and cl dist
     xmid, ymid, zmid = mid_points(geom)
-    cl = 2*Gamma./(fs.Vinf*geom.c)
-    l = 2*Gamma./(fs.Vinf*mean(geom.c))
+    cl = Lp./(0.5*rho*Vinf^2*geom.c)
+    l = Lp/(0.5*rho*Vinf^2*geom.cref)
     
-    return F, M, ymid, zmid, l, cl
+    return CF, CM, ymid, zmid, l, cl
 end
 
 
@@ -341,7 +376,7 @@ symmetric = true
 b = 5.0
 AR = 8.0
 λ = 0.6
-Λ = 0.0
+Λ = 20.0*pi/180
 ϕ = 0.0
 θt = -2.0*pi/180
 npanels = 100
@@ -356,7 +391,7 @@ rcg = [0.0; 0.0; 0.0]
 vother = nothing
 fs = freestream(rho, Vinf, alpha, beta, Omega, rcg, vother)
 
-F, M, ymid, zmid, l, cl = vlm(geom, fs, symmetric)
+CF, CM, ymid, zmid, l, cl = vlm(geom, fs, symmetric)
 
 using PyPlot
 figure()
