@@ -1,14 +1,14 @@
-struct freestream
+struct Freestream
     rho
     Vinf
     alpha
     beta
-    Omega  # length: 3
+    Omega  # length: 3 (p, q, r)
     rcg  # length: 3
     vother  # Vother = vother(r).  can also use nothing
 end
 
-struct panelgeometry
+struct Geometry
     x  # length: npanels + 1
     y
     z
@@ -20,6 +20,58 @@ struct panelgeometry
     cref
     bref
 end
+
+struct SDeriv
+    alpha
+    beta
+    p
+    q
+    r
+end
+
+# import Base: +
+
+
+SDeriv() = SDeriv(zeros(1), zeros(1), zeros(1), zeros(1), zeros(1)) 
+SDeriv(N) = SDeriv(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N)) 
+SDeriv(M, N) = SDeriv(zeros(M, N), zeros(M, N), zeros(M, N), zeros(M, N), zeros(M, N)) 
+Base.:+(x::SDeriv, y::SDeriv) = SDeriv(x.alpha + y.alpha, x.beta + y.beta, x.p + y.p, x.q + y.q, x.r + y.r)
+Base.:*(x::Any, y::SDeriv) = SDeriv(x * y.alpha, x * y.beta, x * y.p, x * y.q, x * y.r)
+Base.:*(x::SDeriv, y::Any) = SDeriv(x.alpha * y, x.beta * y, x.p * y, x.q * y, x.r * y)
+Base.:-(x::SDeriv) = SDeriv(-x.alpha, -x.beta, -x.p, -x.q, -x.r)
+Base.:/(x::SDeriv, y::Any) = SDeriv(x.alpha / y, x.beta / y, x.p / y, x.q / y, x.r / y)
+Base.dot(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(dot(x.alpha, y), dot(x.beta, y), dot(x.p, y), dot(x.q, y), dot(x.r, y))
+Base.cross(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(cross(x.alpha, y), cross(x.beta, y), cross(x.p, y), cross(x.q, y), cross(x.r, y))
+Base.sum(x::SDeriv, n) = SDeriv(sum(x.alpha, n), sum(x.beta, n), sum(x.p, n), sum(x.q, n), sum(x.r, n))
+
+function Base.getindex(x::SDeriv, i)
+    return SDeriv(x.alpha[i], x.beta[i], x.p[i], x.q[i], x.r[i])
+end
+function Base.getindex(x::SDeriv, i, j)
+    return SDeriv(x.alpha[i, j], x.beta[i, j], x.p[i, j], x.q[i, j], x.r[i, j])
+end
+function Base.setindex!(x::SDeriv, y::SDeriv, i)
+    x.alpha[i] = y.alpha
+    x.beta[i] = y.beta
+    x.p[i] = y.p
+    x.q[i] = y.q
+    x.r[i] = y.r
+end
+function Base.setindex!(x::SDeriv, y::Any, i)
+    x.alpha[i] = y
+    x.beta[i] = y
+    x.p[i] = y
+    x.q[i] = y
+    x.r[i] = y
+end
+function Base.setindex!(x::SDeriv, y::SDeriv, i, j)
+    x.alpha[i, j] = y.alpha
+    x.beta[i, j] = y.beta
+    x.p[i, j] = y.p
+    x.q[i, j] = y.q
+    x.r[i, j] = y.r
+end
+Base.endof(x) = length(x.alpha)
 
 
 function vhat_trailing(r1, r2)
@@ -71,8 +123,17 @@ function control_points(geom)
     return xcp, ycp, zcp
 end
 
+function normalvector(geom, i)
 
-function aic(geom::panelgeometry, symmetric)
+    nhat = [sin(geom.theta[i]); 
+            -cos(geom.theta[i])*sin(geom.phi[i]);
+            cos(geom.theta[i])*cos(geom.phi[i])]
+
+    return nhat
+end
+
+
+function aic(geom::Geometry, symmetric)
 
     N = geom.npanels
     x = geom.x
@@ -85,9 +146,7 @@ function aic(geom::panelgeometry, symmetric)
     AIC = zeros(N, N)
     for i = 1:N  # CP
         # normal vector body axis
-        nhat = [sin(geom.theta[i]); 
-            -cos(geom.theta[i])*sin(geom.phi[i]);
-            cos(geom.theta[i])*cos(geom.phi[i])]
+        nhat = normalvector(geom, i)
 
         for j = 1:N  # QC
             r1 = [xcp[i] - x[j]; ycp[i] - y[j]; zcp[i] - z[j]]
@@ -110,9 +169,9 @@ function aic(geom::panelgeometry, symmetric)
 end
 
 
-function ext_velocity(fs::freestream, r)
+function ext_velocity(fs::Freestream, r)
 
-    # freestream velocity in body coordinate
+    # Freestream velocity in body coordinate
     Vinf = fs.Vinf*[cos(fs.alpha)*cos(fs.beta);
         -sin(fs.beta);
         sin(fs.alpha)*cos(fs.beta)]
@@ -123,11 +182,25 @@ function ext_velocity(fs::freestream, r)
         Vext += fs.vother(r)
     end
 
-    return Vext
+    # for stability derivatives
+    dVda = fs.Vinf*[-sin(fs.alpha)*cos(fs.beta);
+        0.0;
+        cos(fs.alpha)*cos(fs.beta)]
+    dVdb = fs.Vinf*[-cos(fs.alpha)*sin(fs.beta);
+        -cos(fs.beta);
+        -sin(fs.alpha)*sin(fs.beta)]
+    rvec = r - fs.rcg
+    dVdp = [0.0; rvec[3]; -rvec[2]]
+    dVdq = [-rvec[3]; 0.0; rvec[1]]
+    dVdr = [rvec[2]; -rvec[1]; 0.0]
+
+    dVext = SDeriv(dVda, dVdb, dVdp, dVdq, dVdr)
+
+    return Vext, dVext
 end
 
 
-function vn_ext(geom::panelgeometry, fs::freestream)
+function vn_ext(geom::Geometry, fs::Freestream)
     
     # initialize
     N = geom.npanels
@@ -138,22 +211,25 @@ function vn_ext(geom::panelgeometry, fs::freestream)
     xcp, ycp, zcp = control_points(geom)
     
     b = zeros(N)
+    db = SDeriv(N)
+
     for i = 1:N
 
-        nhat = [sin(theta[i]); 
-            -cos(theta[i])*sin(phi[i]);
-            cos(theta[i])*cos(phi[i])]
+        nhat = normalvector(geom, i)
 
-        Vext = ext_velocity(fs, [xcp[i]; ycp[i]; zcp[i]])
+        Vext, dVext = ext_velocity(fs, [xcp[i]; ycp[i]; zcp[i]])
 
         b[i] = -dot(Vext, nhat)
+
+        # for stability derivatives
+        db[i] = -dot(dVext, nhat)
     end
 
-    return b
+    return b, db
 end
 
 
-function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
+function forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric)
     N = geom.npanels
     x = geom.x
     y = geom.y
@@ -165,16 +241,22 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
     Mvec = zeros(3, N)
     Vvec = zeros(3, N)
     Fpvec = zeros(3, N)
-    DD = zeros(N)
+    
+    dVvec = SDeriv(3, N)
+    dFvec = SDeriv(3, N)
+    dMvec = SDeriv(3, N)
 
     for i = 1:N  # control points
 
         Vindi = 0.0
+        dVi = SDeriv(0.0, 0.0, 0.0, 0.0, 0.0)
         for j = 1:N  # vortices  
             r1 = [xmid[i] - x[j]; ymid[i] - y[j]; zmid[i] - z[j]]
             r2 = [xmid[i] - x[j+1]; ymid[i] - y[j+1]; zmid[i] - z[j+1]]
             Vij = vhat_trailing(r1, r2)
             Vindi += Vij*Gamma[j]
+        
+            dVi += Vij*dGamma[j]
 
             if symmetric
                 # flip sign for y, but r1 is on left which now corresponds to j+1 and vice vesa
@@ -182,25 +264,32 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
                 r2 = [xmid[i] - x[j]; ymid[i] + y[j]; zmid[i] - z[j]]
                 Vij = vhat_trailing(r1, r2)
                 Vindi += Vij*Gamma[j]
+
+                dVi += Vij*dGamma[j]
             end
         end
 
         rmidi = [xmid[i]; ymid[i]; zmid[i]]
-        Vext = ext_velocity(fs, rmidi)
+        Vext, dVext = ext_velocity(fs, rmidi)
         Vvec[:, i] = Vindi + Vext
+        
+        dVvec[:, i] = dVi + dVext
         
         Delta_s = [x[i+1] - x[i]; y[i+1] - y[i]; z[i+1] - z[i]]
         Fvec[:, i] = rho*Gamma[i]*cross(Vvec[:, i], Delta_s)
         Mvec[:, i] = cross(rmidi - fs.rcg, Fvec[:, i])
-        
-        DD[i] = norm(Delta_s)
+
+        dFvec[:, i] = rho*cross(Gamma[i]*dVvec[:, i] + dGamma[i]*Vvec[:, i], Delta_s)
+    
         # force per unit length
         Fpvec[:, i] = Fvec[:, i]/norm(Delta_s)
     end
 
     Fb = sum(Fvec, 2)
     Mb = sum(Mvec, 2)
-    Vmag = sqrt.(Vvec[1, :].^2 + Vvec[2, :].^2 + Vvec[3, :].^2)    
+    Vmag = sqrt.(Vvec[1, :].^2 + Vvec[2, :].^2 + Vvec[3, :].^2)
+
+    dFb = sum(dFvec, 2)
 
     if symmetric
         Fb *= 2
@@ -208,6 +297,9 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
         Fb[2] = 0.0
         Mb[1] = 0.0
         Mb[3] = 0.0
+        
+        dFb *= 2
+        dFb[2] = 0.0
     end
 
     # rotation matrix
@@ -220,13 +312,22 @@ function forces_moments(geom::panelgeometry, fs::freestream, Gamma, symmetric)
     Fw = Rb*Ra*Fb
     Mw = Rb*Ra*Mb
 
+    dRa = SDeriv([-sin(fs.alpha) 0.0 cos(fs.alpha);
+            0 0 0;
+            -cos(fs.alpha) 0 -sin(fs.alpha)], 0.0, 0.0, 0.0, 0.0)
+    dRb = SDeriv(0.0, [-sin(fs.beta) -cos(fs.beta) 0;
+            cos(fs.beta) -sin(fs.beta) 0.0;
+            0 0 0.0], 0.0, 0.0, 0.0)
+
+    dFw = Rb*Ra*dFb + Rb*dRa*Fb + dRb*Ra*Fb
+
     Fwpvec = zeros(3, N)
     for i = 1:N
         Fwpvec[:, i] = Rb*Ra*Fpvec[:, i]
     end
     Lp = Fwpvec[3, :]
 
-    return Fw, Mw, Vmag, Lp
+    return Fw, Mw, Vmag, Lp, dFw
 end
 
 function simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
@@ -269,20 +370,22 @@ function simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
         phi = [-phi[end:-1:1]; phi]
     end
 
-    geom = panelgeometry(x, y, z, c, theta, phi, npanels, S, S/b, b)
+    geom = Geometry(x, y, z, c, theta, phi, npanels, S, S/b, b)
 
     return geom
 end
 
 
-function circulation(geom::panelgeometry, fs::freestream, symmetric)
+function circulation(geom::Geometry, fs::Freestream, symmetric)
 
     AIC = aic(geom, symmetric)
-    b = vn_ext(geom, fs)
+    b, db = vn_ext(geom, fs)
 
     Gamma = AIC\b
 
-    return Gamma
+    dGamma = SDeriv(AIC\db.alpha, AIC\db.beta, AIC\db.p, AIC\db.q, AIC\db.r)
+
+    return Gamma, dGamma
 end
 
 
@@ -348,10 +451,10 @@ end
 # end
 
 
-function vlm(geom::panelgeometry, fs::freestream, symmetric)
+function vlm(geom::Geometry, fs::Freestream, symmetric)
 
-    Gamma = circulation(geom, fs, symmetric)
-    F, M, Vmag, Lp = forces_moments(geom, fs, Gamma, symmetric)
+    Gamma, dGamma = circulation(geom, fs, symmetric)
+    F, M, Vmag, Lp, dF = forces_moments(geom, fs, Gamma, dGamma, symmetric)
 
     # trefftz plane analysis for drag
     DIC = dic(geom.y, geom.z, fs.rho, symmetric)
@@ -362,12 +465,14 @@ function vlm(geom::panelgeometry, fs::freestream, symmetric)
     CF = F/(0.5*rho*Vinf^2*geom.Sref)
     CM = M./(0.5*rho*Vinf^2*[geom.bref; geom.cref; geom.bref])
 
+    dCF = dF/(0.5*rho*Vinf^2*geom.Sref)
+
     # lift and cl dist
     xmid, ymid, zmid = mid_points(geom)
     cl = Lp./(0.5*rho*Vinf^2*geom.c)
     l = Lp/(0.5*rho*Vinf^2*geom.cref)
     
-    return CF, CM, ymid, zmid, l, cl
+    return CF, CM, ymid, zmid, l, cl, dCF
 end
 
 
@@ -389,9 +494,9 @@ beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 rcg = [0.0; 0.0; 0.0]
 vother = nothing
-fs = freestream(rho, Vinf, alpha, beta, Omega, rcg, vother)
+fs = Freestream(rho, Vinf, alpha, beta, Omega, rcg, vother)
 
-CF, CM, ymid, zmid, l, cl = vlm(geom, fs, symmetric)
+CF, CM, ymid, zmid, l, cl, dCF = vlm(geom, fs, symmetric)
 
 using PyPlot
 figure()
