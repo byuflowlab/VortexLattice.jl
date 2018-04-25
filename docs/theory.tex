@@ -154,6 +154,7 @@ Angle of attack and sideslip angle are defined in the standard way (\cref{fig:al
     -\sin\beta\\
     \sin\alpha\cos\beta
     \end{bmatrix}
+    \label{eq:Vinf}
 \end{equation}
 % Note that the subscript distinguishes that this is the velocity in the body axes, not in the wind axes that we will be using in other parts of the problem $V_{\infty,w} = V_\infty \hat{x}_w$.
 
@@ -219,6 +220,11 @@ Substituting \cref{eq:hatzeta} into \cref{eq:hatn} yields:
         \cos\theta\cos\phi\\
     \end{bmatrix}
 \end{equation}
+Using the panel discretization
+\begin{align}
+    \sin\phi_i &= \frac{z_{i+1} - z_i}{\sqrt{(y_{i+1} - y_i)^2 + (z_{i+1} - z_i)^2}}\\
+    \cos\phi_i &= \frac{y_{i+1} - y_i}{\sqrt{(y_{i+1} - y_i)^2 + (z_{i+1} - z_i)^2}}
+\end{align}
 % Other induced velocities will just be defined as a user-supplied vector at each control point.
 
 \subsection{Induced Velocities}
@@ -260,10 +266,12 @@ where $\hat{V}$ is the induced velocity at the control point, for unit circulati
 Each control point is one equation, and putting them all together forms a linear system of equations:
 \begin{equation}
 [AIC] \Gamma = b 
+\label{eq:linearsystem}
 \end{equation}
 where 
 \begin{equation}
 b_i = - \vec V_{ext, i} \cdot \hat{n}_{i}
+\label{eq:rhs}
 \end{equation}
 and the aerodynamic influence coefficient matrix is given by:
 \begin{equation}
@@ -528,12 +536,24 @@ The total forces are then
 \begin{align}
 \vec{F} &= \sum_i \vec{F}_i\\
 &= \sum_i \rho \Gamma_i \left(\sum_j (\Gamma_j \hat{V}_{ij} ) + \vec{V}_\infty - \vec{\Omega} \times \vec{r}_i + \vec{V}_{other, i}\right)\times  (\vec{r}_{i+1} - \vec{r}_{i})
+\label{eq:forces}
 \end{align}
 The total moments are given by:
 \begin{equation}
-M = \sum_i \vec r_{m, i} \times \vec{F}_i
+\vec M = \sum_i \vec r_{m, i} \times \vec{F}_i
 \end{equation}
 where $\vec r_{m, i}$ is the vector originating from some specified reference point (often the aircraft c.g.) and ending at the location of force $F_i$ (i.e., $\vec r_{m, i} = \vec r_{i, mid} - \vec r_{cg}$).
+
+For convenience, we can also express these calculations as matrix vector products (help when deriving derivatives for the stability derivatives).  For example, the x-component of the force is given by:
+\begin{equation}
+F_x  = \Gamma^T C_x \Gamma + e_x^T \Gamma
+\label{eq:forcematrixvector}
+\end{equation}
+where
+\begin{align}
+{C_x}_{ij} &= \rho \left(\hat{V}_{ij} \times (\vec{r}_{i+1} - \vec{r}_{i})\right)_x\\
+{e_x}_{i} &= \rho \left((\vec{V}_\infty - \vec{\Omega} \times \vec{r}_i + \vec{V}_{other, i}) \times (\vec{r}_{i+1} - \vec{r}_{i})\right)_x
+\end{align}
 
 These forces and moments are in the body coordinate system.  However, as aerodynamicists, we generally care about forces in the wind axes (oriented with the freestream) because that is the coordinate system where lift and drag are defined.  The rotation from body axes to wind axes is accomplished by the following rotations:
 \begin{equation}
@@ -558,6 +578,7 @@ F_x\\
 F_y\\
 F_z
 \end{bmatrix}
+\label{eq:forceswindframe}
 \end{equation}
 We rotate moments similarly, although for dynamics leaving them in the body-coordinate system in generally preferred.
 
@@ -580,7 +601,6 @@ We rotate moments similarly, although for dynamics leaving them in the body-coor
 % \begin{equation}
 % LIC_i = 2 \rho V_\infty (y_{i+1} - y_i)
 % \end{equation}
-
 
 
 \section{Induced Drag Influence Coefficients (DIC)}
@@ -699,6 +719,118 @@ DIC_{ij} = \frac{\rho_\infty}{2\pi} \left(k_{i,j} - k_{i, j+1} - k_{i, -j} + k_{
 % k_{i,j} - k_{i, j+1} - k_{i, -j} + k_{i, -(j+1)}
 % \right)
 % \end{equation}
+
+
+\section{Stability Derivatives}
+
+Let's start with derivatives with respect to angle of attack and sideslip.  From \cref{eq:Vinf} we can find derivatives for the freestream:
+\begin{align}
+\frac{d\vec{V}_{\infty}}{d\alpha} &= V_\infty
+    \begin{bmatrix}
+    -\sin\alpha\cos\beta\\
+    0\\
+    \cos\alpha\cos\beta
+    \end{bmatrix}
+% \frac{d\vec{V}_{\infty}}{d\beta} &= V_\infty
+%     \begin{bmatrix}
+%     -\cos\alpha\sin\beta\\
+%     -\cos\beta\\
+%     -\sin\alpha\sin\beta
+%     \end{bmatrix}\\
+\end{align}
+The right hand side vector $b$ in \cref{eq:rhs} is given by:
+\begin{equation}
+b_i = - (\vec{V}_\infty - \vec{\Omega} \times \vec{r}_i +  \vec{V}_{other, i}) \cdot \hat{n}_{i}
+\end{equation}
+Thus:
+\begin{equation}
+\frac{d b_i}{d \alpha} = - \frac{d\vec{V}_{\infty}}{d\alpha} \cdot \hat{n}_i
+\end{equation}
+The circulation is solved as in \cref{eq:linearsystem} and so the derivative of the circulation is solved as:
+\begin{equation}
+ \frac{d \Gamma}{d \alpha} = [AIC]^{-1} \frac{d b}{d \alpha}
+\end{equation}
+where for computational efficiency we perform a linear system solve and not a matrix inversion.  The velocity at each panel center is given by the term in parenthesis in \cref{eq:forces}, and its derivative is:
+\begin{equation}
+\frac{d \vec{V}_i}{d \alpha} = \sum_j ( \frac{d \Gamma_j}{d \alpha}\hat{V}_{ij})+ \frac{d \vec{V}_\infty}{d \alpha}
+\end{equation}
+The derivative of the forces is then:
+\begin{equation}
+\frac{d \vec{F}}{d \alpha} = \rho \sum_i \left[\left(\Gamma_i \frac{d \vec{V}_i}{d \alpha} +  \frac{d \Gamma_i}{d\alpha} V_i \right) \times (\vec{r}_{i+1} - \vec{r}_{i}) \right]
+\end{equation}
+and the moments:
+\begin{equation}
+\frac{d\vec M}{d\alpha} = \sum_i \vec r_{m, i} \times \frac{d \vec{F}_i}{d\alpha}
+\end{equation}
+% \begin{align}
+% \vec{F} &= \sum_i \vec{F}_i\\
+% &= \sum_i \rho \Gamma_i \left(\sum_j (\Gamma_j \hat{V}_{ij} ) + \vec{V}_\infty - \vec{\Omega} \times \vec{r}_i + \vec{V}_{other, i}\right)\times  (\vec{r}_{i+1} - \vec{r}_{i})
+% \end{align}
+% \begin{equation}
+% \frac{d F_x}{d\alpha} = \Gamma^T (C_x^T + C_x) \frac{d \Gamma}{d \alpha} + e_x^T \frac{d \Gamma}{d \alpha} + \Gamma^T \frac{d e_x}{d \alpha}
+% \end{equation}
+% where
+% \begin{equation}
+% \frac{d e_x}{d \alpha} =  \rho \left(\frac{d\vec{V}_{\infty}}{d\alpha} \times (\vec{r}_{i+1} - \vec{r}_{i}) \right)_x
+% \end{equation}
+% and similarly for the y and z components of the force.  
+The forces in the wind frame are given by \cref{eq:forceswindframe} and so
+\begin{equation}
+\frac{d }{d\alpha} \begin{bmatrix}
+D\\
+Y\\
+L
+\end{bmatrix} 
+= R_\beta R_\alpha \frac{d }{d\alpha} 
+\begin{bmatrix}
+F_x\\
+F_y\\
+F_z
+\end{bmatrix}
++ 
+R_\beta \frac{d R_\alpha}{d\alpha} 
+\begin{bmatrix}
+F_x\\
+F_y\\
+F_z
+\end{bmatrix}
+\end{equation}
+where $R_\beta$ and $R_\alpha$ are the rotation matrices and
+\begin{equation}
+\frac{d R_\alpha}{d\alpha}  =
+\begin{bmatrix}
+-\sin\alpha & 0 & \cos\alpha \\
+0 & 0 & 0\\
+-\cos\alpha & 0 & -\sin\alpha \\
+\end{bmatrix}
+\end{equation}
+Finally, the lift and drag coefficients differ only by a constant term and so:
+\begin{equation}
+\frac{d }{d\alpha} 
+\begin{bmatrix}
+C_D\\
+C_Y\\
+C_L
+\end{bmatrix} 
+=
+\frac{1}{q_\infty S_{ref}}
+\frac{d }{d\alpha} 
+\begin{bmatrix}
+D\\
+Y\\
+L
+\end{bmatrix} 
+\end{equation}
+This process is the same for sideslip, and rotation.  The derivative for $p, q, r$ are easily found for the total velocity by expanding the cross product.
+\begin{equation}
+- \Omega \times r = 
+\begin{bmatrix}
+- q r_z + r r_y\\
+p r_z - r r_x\\
+- p r_y + q r_x
+\end{bmatrix}
+\end{equation}
+
 
 
 
