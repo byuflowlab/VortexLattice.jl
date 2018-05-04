@@ -1,0 +1,8 @@
+echo -e "oper\na a 1\nx\n\nquit\n" > commands
+cat commands - | ./avl3.35 nonplanarwing1.avl > output
+grep -o "CLtot.*" output
+grep -o "CDff.*" output
+grep -o "Cmtot.*" output
+grep -o "CYtot.*" output
+grep -o "Cltot.*" output
+grep -o "Cntot.*" output

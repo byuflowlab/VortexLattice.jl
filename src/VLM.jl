@@ -391,7 +391,7 @@ end
 """
     dic(y, z, rho, symmetric)
 
-Far-field method.  Induced drag coefficient matrix.  TODO: just calc induced drag directly.
+Far-field method.  Induced drag coefficient matrix.
 """
 function dic(Gamma, y, z, rho, symmetric)
     # y, z are QC
@@ -415,14 +415,11 @@ function dic(Gamma, y, z, rho, symmetric)
         return kij
     end
 
-    # DIC matrix
-    # DIC = zeros(N, N)
     Di = 0.0
 
     if symmetric
         for j = 1:N
             for i = 1:N
-                # DIC[i, j] = rho/(2*pi)*(getk(i, j) - getk(i, j+1) - getk(i, -j) + getk(i, -(j+1)))
                 Di += rho*Gamma[i]*Gamma[j]/(2*pi)*(getk(i, j) - getk(i, j+1) - getk(i, -j) + getk(i, -(j+1)))
             end
         end
@@ -477,10 +474,10 @@ function run(geom::Geometry, fs::Freestream, symmetric)
     # force and moment coefficients
     q = 0.5*fs.rho*fs.Vinf^2
 
-    CF = F/(q*geom.Sref)
+    CF = F./(q*geom.Sref)
     CM = M./(q*geom.Sref*[geom.bref; geom.cref; geom.bref])
     
-    dCF = dF/(q*geom.Sref)
+    dCF = dF./(q*geom.Sref)
     dCM = M./(q*geom.Sref*[geom.bref; geom.cref; geom.bref])
 
     # lift and cl dist
