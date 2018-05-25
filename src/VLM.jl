@@ -1,29 +1,31 @@
 module VLM
 
+struct Panel
+    rl
+    rr    
+    chord
+    theta
+end
+
 struct Freestream
-    rho
     Vinf
     alpha
     beta
     Omega  # length: 3 (p, q, r)
-    rcg  # length: 3
     vother  # Vother = vother(x, y, z).  can also use nothing
 end
 
-struct Geometry
-    x  # length: npanels + 1
-    y
-    z
-    c  # length: npanels
-    theta
-    npanels
-    Sref
-    cref
-    bref
+struct Reference
+    S
+    c
+    b
+    rcg
 end
+
 
 include("geometry.jl")  # defines some convenience functions for generating geometry
 include("sderiv.jl")  # defines stability derivative type and some associated methods
+
 
 """
     vhat_trailing(r1, r2)
@@ -67,14 +69,33 @@ function vhat_horseshoe(r1, r2)
     Vhat += (f1*f2)/(4*pi)
 end
 
+
 """
-    vhat_horseshoe(xcp, ycp, zcp, i, x, y, z, j, symmetric)
+    flipy(r)
+
+flip sign of y-component of vector (used for symmetry)
+"""
+function flipy(r)
+    return [r[1]; -r[2]; r[3]]
+end
+
+
+function not_on_symmetry_plane(r1, r2)
+    return !(isapprox(r1[2], 0.0, atol=1e-12) && isapprox(r2[2], 0.0, atol=1e-12))
+end
+
+function not_on_symmetry_plane(p::Panel)
+    return not_on_symmetry_plane(p.rl, p.rr)
+end
+
+"""
+    vhat(rcp, rl, rr, symmetric, include_bound)
 
 Computes the induced velocity (per unit circulation) for a horseshoe vortex, with trailing
-vortices in the +x direction.  The velocity is computed at control point i
-with vortices j and j+1
+vortices in the +x direction.  The velocity is computed at control point rcp
+with from a panel defined by positino rl and rr
 """
-function vhat(xcp, ycp, zcp, i, x, y, z, j, symmetric, include_bound)
+function vhat(rcp, rl, rr, symmetric, include_bound)
     
     if include_bound
         vfunc = vhat_horseshoe
@@ -82,24 +103,15 @@ function vhat(xcp, ycp, zcp, i, x, y, z, j, symmetric, include_bound)
         vfunc = vhat_trailing
     end
 
-    r1 = [xcp[i] - x[j]; 
-            ycp[i] - y[j]; 
-            zcp[i] - z[j]]
-    r2 = [xcp[i] - x[j+1]; 
-            ycp[i] - y[j+1]; 
-            zcp[i] - z[j+1]]
-        
+    r1 = rcp - rl
+    r2 = rcp - rr        
     Vhat = vfunc(r1, r2)
 
-    if symmetric  # add contribution from other side
-        # flip sign for y, but r1 is on left which now corresponds to j+1 and vice vesa
-        r1 = [xcp[i] - x[j+1]; 
-              ycp[i] + y[j+1]; 
-              zcp[i] - z[j+1]]
-        r2 = [xcp[i] - x[j]; 
-              ycp[i] + y[j]; 
-              zcp[i] - z[j]]
-
+    if symmetric && not_on_symmetry_plane(rl, rr) # add contribution from other side
+        # flip sign for y, but r1 is on left which now corresponds to rr and vice vesa
+        
+        r1 = rcp - flipy(rr)
+        r2 = rcp - flipy(rl)
         Vhat += vfunc(r1, r2)
     end
 
@@ -108,71 +120,78 @@ end
 
 
 """
-    mid_points(geom::Geometry)
+    mid_point(p::Panel)
 
-Compute the positions of the middle of each horseshoe vortex.
+Compute the positions of the middle of each bound vortex
 """
-function mid_points(geom::Geometry)
-    
-    N = geom.npanels
-    xmid = 0.5*(geom.x[1:N] + geom.x[2:N+1])
-    ymid = 0.5*(geom.y[1:N] + geom.y[2:N+1])
-    zmid = 0.5*(geom.z[1:N] + geom.z[2:N+1])
-
-    return xmid, ymid, zmid
+function mid_point(p::Panel)
+    return 0.5*(p.rl + p.rr)
 end
 
 
 """
-    control_points(geom::Geometry)
+    control_point(p::Panel)
 
-Compute the positions of the control points for each horseshoe vortex.
+Compute the positions of the control points for each panel
 """
-function control_points(geom::Geometry)
+function control_point(p::Panel)
 
-    xcp, ycp, zcp = mid_points(geom)
-    xcp += geom.c/2.0  # add 3/4 chord point
+    rcp = mid_point(p)
+    rcp[1] += p.chord/2.0  # add 3/4 chord point
 
-    return xcp, ycp, zcp
+    return rcp
 end
 
 
 """
-    normalvector(geom::Geometry, i)
+    normal_vector(p::Panel)
 
-Compute the normal vector for section i of the wing.
+Compute the normal vector for the panel
 """
-function normalvector(geom::Geometry, i)
+function normal_vector(p::Panel)
 
-    dy = geom.y[i+1] - geom.y[i]
-    dz = geom.z[i+1] - geom.z[i]
+    delta = p.rr - p.rl
+    dy = delta[2]
+    dz = delta[3]
     ds = sqrt(dy^2 + dz^2)
     sphi = dz/ds
     cphi = dy/ds
 
-    nhat = [sin(geom.theta[i]); 
-            -cos(geom.theta[i])*sphi;
-            cos(geom.theta[i])*cphi]
+    nhat = [sin(p.theta); 
+            -cos(p.theta)*sphi;
+            cos(p.theta)*cphi]
 
     return nhat
 end
 
 
+"""
+    normal_vector_magnitude_2d(p::Panel)
+
+Compute the normal vector for the panel when projected in to the Trefftz plane (including magnitude)
+"""
+function normal_vector_magnitude_2d(p::Panel)
+    # includes magnitude
+
+    delta = p.rr - p.rl
+    dy = delta[2]
+    dz = delta[3]
+    
+    nhat = [0.0; -dz; dy]
+
+    return nhat
+end
+
 
 """
-    aic(geom::Geometry, symmetric)
+    aic(v::Vehicle, symmetric)
 
 aerodynamic influence coefficients
 """
-function aic(geom::Geometry, symmetric)
+function aic(panels::Array{Panel, 1}, symmetric)
 
-    N = geom.npanels
-    x = geom.x
-    y = geom.y
-    z = geom.z
-    
-    # control point locations
-    xcp, ycp, zcp = control_points(geom)
+    # rename
+    N = length(panels)
 
     include_bound = true  # include bound vortices
     
@@ -180,13 +199,13 @@ function aic(geom::Geometry, symmetric)
     for i = 1:N  # CP
 
         # normal vector body axis
-        nhat = normalvector(geom, i)
+        nhat = normal_vector(panels[i])
+        rcp = control_point(panels[i])
 
         for j = 1:N  # QC
-            Vij = vhat(xcp, ycp, zcp, i, x, y, z, j, symmetric, include_bound)
+            Vij = vhat(rcp, panels[j].rl, panels[j].rr, symmetric, include_bound)
             AIC[i, j] = dot(Vij, nhat)
         end
-
     end
 
     return AIC
@@ -195,20 +214,20 @@ end
 """
     ext_velocity(fs::Freestream, x, y, z)
 
-Compute the external velocity at location x, y, z,
+Compute the external velocity at location r
 and the corresonding (partial) stability derivatives
 """
-function ext_velocity(fs::Freestream, x, y, z)
+function ext_velocity(fs::Freestream, r, rcg)
 
     # Freestream velocity in body coordinate
     Vinf = fs.Vinf*[cos(fs.alpha)*cos(fs.beta);
         -sin(fs.beta);
         sin(fs.alpha)*cos(fs.beta)]
 
-    Vext = Vinf - cross(fs.Omega, [x; y; z] - fs.rcg)
+    Vext = Vinf - cross(fs.Omega, r - rcg)
 
     if fs.vother != nothing
-        Vext += fs.vother(x, y, z)
+        Vext += fs.vother(r)
     end
 
     # for stability derivatives
@@ -218,7 +237,7 @@ function ext_velocity(fs::Freestream, x, y, z)
     dVdb = fs.Vinf*[-cos(fs.alpha)*sin(fs.beta);
         -cos(fs.beta);
         -sin(fs.alpha)*sin(fs.beta)]
-    rvec = [x; y; z] - fs.rcg
+    rvec = r - rcg
     dVdp = [0.0; rvec[3]; -rvec[2]]
     dVdq = [-rvec[3]; 0.0; rvec[1]]
     dVdr = [rvec[2]; -rvec[1]; 0.0]
@@ -230,18 +249,15 @@ end
 
 
 """
-    vn_ext(geom::Geometry, fs::Freestream)
+    vehicle::Vehicle, fs::Freestream
 
 Compute the normal component of the external velocity along the geometry.
 This forms the right hand side of the circulation linear system solve.
 """
-function vn_ext(geom::Geometry, fs::Freestream)
-    
-    # control point locations
-    xcp, ycp, zcp = control_points(geom)
+function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
     
     # initialize
-    N = geom.npanels
+    N = length(panels)
     b = zeros(N)
     db = SDeriv(N)
 
@@ -249,10 +265,10 @@ function vn_ext(geom::Geometry, fs::Freestream)
     for i = 1:N
 
         # normal vector
-        nhat = normalvector(geom, i)
+        nhat = normal_vector(panels[i])
 
         # external velocity
-        Vext, dVext = ext_velocity(fs, xcp[i], ycp[i], zcp[i])
+        Vext, dVext = ext_velocity(fs, control_point(panels[i]), ref.rcg)
 
         # right hand side vector
         b[i] = -dot(Vext, nhat)
@@ -266,18 +282,32 @@ end
 
 
 """
+    circulation(vehicle::Vehicle, fs::Freestream, symmetric)
+
+Solve for circulation distribution.
+"""
+function circulation(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
+
+    AIC = aic(panels, symmetric)
+    b, db = vn_ext(panels, ref, fs)
+
+    Gamma = AIC\b
+
+    dGamma = SDeriv(AIC\db.alpha, AIC\db.beta, AIC\db.p, AIC\db.q, AIC\db.r)
+
+    return Gamma, dGamma
+end
+
+
+"""
     forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric)
 
 Computes the forces and moments acting on the aircraft using the given circulation.
 """
-function forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric)
-    N = geom.npanels
-    x = geom.x
-    y = geom.y
-    z = geom.z
+function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, Gamma, dGamma, symmetric)
 
-    # forces evaluated at midpoint of panels (on bound vortex)
-    xmid, ymid, zmid = mid_points(geom)
+    rho = 1.0  # cancels out from normalization
+    N = length(panels)
 
     # initialize
     Fb = zeros(3)  # forces
@@ -290,36 +320,35 @@ function forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric
 
     include_bound = false  # bound vortices don't contribute
 
-    # compute induced velocity at quarter-quard midpoints (rather than at control points)
     for i = 1:N  # control points
 
         Vindi = 0.0
         dVindi = SDeriv(0.0, 0.0, 0.0, 0.0, 0.0)
 
+        rmid = mid_point(panels[i])  # compute induced velocity at quarter-quard midpoints (rather than at control points)
+
         for j = 1:N  # vortices  
-            Vij = vhat(xmid, ymid, zmid, i, x, y, z, j, symmetric, include_bound)
+            Vij = vhat(rmid, panels[j].rl, panels[j].rr, symmetric, include_bound)
             Vindi += Vij*Gamma[j]
         
             dVindi += Vij*dGamma[j]
         end
 
         # add external velocity
-        Vext, dVext = ext_velocity(fs, xmid[i], ymid[i], zmid[i])
+        Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
         Vi = Vindi + Vext
         dVi = dVindi + dVext
         Vvec[:, i] = Vi  # save velocity distribution in a vector
         
         # forces and moments
-        Delta_s = [x[i+1] - x[i]; 
-                   y[i+1] - y[i]; 
-                   z[i+1] - z[i]]
-        Fbi = fs.rho*Gamma[i]*cross(Vi, Delta_s)
+        Delta_s = panels[i].rr - panels[i].rl
+        Fbi = rho*Gamma[i]*cross(Vi, Delta_s)
         Fb += Fbi
-        Mb += cross([xmid[i]; ymid[i]; zmid[i]] - fs.rcg, Fbi)
+        Mb += cross(rmid - ref.rcg, Fbi)
 
-        dFbi = fs.rho*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
+        dFbi = rho*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
         dFb += dFbi
-        dMb += cross([xmid[i]; ymid[i]; zmid[i]] - fs.rcg, dFbi)
+        dMb += cross(rmid - ref.rcg, dFbi)
     
         # force per unit length
         Fpvec[:, i] = Fbi/norm(Delta_s)
@@ -341,21 +370,24 @@ function forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric
     end
 
     # rotation matrix from body to wind coordinate system
-    Rb = [cos(fs.beta) -sin(fs.beta) 0;
-        sin(fs.beta) cos(fs.beta) 0.0;
+    alpha = fs.alpha
+    beta = fs.beta
+
+    Rb = [cos(beta) -sin(beta) 0;
+        sin(beta) cos(beta) 0.0;
         0 0 1]
-    Ra = [cos(fs.alpha) 0.0 sin(fs.alpha);
+    Ra = [cos(alpha) 0.0 sin(alpha);
         0 1 0;
-        -sin(fs.alpha) 0 cos(fs.alpha)]
+        -sin(alpha) 0 cos(alpha)]
     Fw = Rb*Ra*Fb
     Mw = Rb*Ra*Mb
 
     # stability derivatives
-    dRa = SDeriv([-sin(fs.alpha) 0.0 cos(fs.alpha);
+    dRa = SDeriv([-sin(alpha) 0.0 cos(alpha);
             0 0 0;
-            -cos(fs.alpha) 0 -sin(fs.alpha)], 0.0, 0.0, 0.0, 0.0)
-    dRb = SDeriv(0.0, [-sin(fs.beta) -cos(fs.beta) 0;
-            cos(fs.beta) -sin(fs.beta) 0.0;
+            -cos(alpha) 0 -sin(alpha)], 0.0, 0.0, 0.0, 0.0)
+    dRb = SDeriv(0.0, [-sin(beta) -cos(beta) 0;
+            cos(beta) -sin(beta) 0.0;
             0 0 0.0], 0.0, 0.0, 0.0)
 
     dFw = Rb*Ra*dFb + Rb*dRa*Fb + dRb*Ra*Fb
@@ -370,21 +402,26 @@ function forces_moments(geom::Geometry, fs::Freestream, Gamma, dGamma, symmetric
     return Fw, Mw, Vvec, Fwpvec, dFw, dMw
 end
 
+
+
 """
-    circulation(geom::Geometry, fs::Freestream, symmetric)
-
-Solve for circulation distribution.
+a subcomponent of Trefftz plane induced drag calculation.
 """
-function circulation(geom::Geometry, fs::Freestream, symmetric)
+function Disub(rleft, rright, Gammaj, ri, Gammai, ndsi)
+    rho = 1.0  # normalizes away
+    
+    # left
+    rij = ri - rleft
+    Vthetai = -cross([-Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
+    Di = rho/2.0*Gammai*dot(Vthetai, ndsi)
 
-    AIC = aic(geom, symmetric)
-    b, db = vn_ext(geom, fs)
+    # right
+    rij = ri - rright
+    Vthetai = -cross([Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
+    
+    Di += rho/2.0*Gammai*dot(Vthetai, ndsi)
 
-    Gamma = AIC\b
-
-    dGamma = SDeriv(AIC\db.alpha, AIC\db.beta, AIC\db.p, AIC\db.q, AIC\db.r)
-
-    return Gamma, dGamma
+    return Di
 end
 
 
@@ -393,42 +430,27 @@ end
 
 Far-field method.  Induced drag coefficient matrix.
 """
-function dic(Gamma, y, z, rho, symmetric)
-    # y, z are QC
+function dic(panels::Array{Panel, 1}, Gamma, symmetric)
     
-    # #panels is one less than #vortices
-    N = length(y) - 1
-
-    # center points of panels
-    ybar = 0.5*(y[1:N] + y[2:N+1])
-    zbar = 0.5*(z[1:N] + z[2:N+1])
-
-    function getk(i, j)
-        signj = sign(j)
-        j = abs(j)
-
-        ry = ybar[i] - signj*y[j]
-        rz = zbar[i] - z[j]
-        r = ry^2 + rz^2
-        kij = (rz*(z[i+1] - z[i]) + ry*(y[i+1] - y[i]))/r
-
-        return kij
-    end
-
+    N = length(panels)
+    
     Di = 0.0
+    for j = 1:N
+        for i = 1:N
+            ndsi = normal_vector_magnitude_2d(panels[i])
+            ri = mid_point(panels[i])
 
+            # sum up vortex contributions
+            Di += Disub(panels[j].rl, panels[j].rr, Gamma[j], ri, Gamma[i], ndsi)
+            
+            if symmetric && not_on_symmetry_plane(panels[j])
+                Di += Disub(flipy(panels[j].rr), flipy(panels[j].rl), Gamma[j], ri, Gamma[i], ndsi)
+            end
+        end
+    end
+    
     if symmetric
-        for j = 1:N
-            for i = 1:N
-                Di += rho*Gamma[i]*Gamma[j]/(2*pi)*(getk(i, j) - getk(i, j+1) - getk(i, -j) + getk(i, -(j+1)))
-            end
-        end
-    else  # not symmetric
-        for j = 1:N
-            for i = 1:N
-                Di += rho*Gamma[i]*Gamma[j]/(4*pi)*(getk(i, j) - getk(i, j+1))
-            end
-        end
+        Di *= 2
     end
 
     return Di
@@ -450,7 +472,7 @@ end
 # end
 
 """
-    function run(geom::Geometry, fs::Freestream, symmetric)
+    function run(vehicle::Vehicle, fs::Freestream, symmetric)
 
 run the vortex lattice method
 
@@ -461,59 +483,37 @@ run the vortex lattice method
 - l, cl: lift distribution (Lp/(q cref)), lift coefficient distribution (Lp/(q c))
 - dCF, dCM: stability derivatives, wind axes
 """
-function run(geom::Geometry, fs::Freestream, symmetric)
+function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
-    Gamma, dGamma = circulation(geom, fs, symmetric)
-    F, M, Vmag, Fp, dF, dM = forces_moments(geom, fs, Gamma, dGamma, symmetric)
+    Gamma, dGamma = circulation(panels, ref, fs, symmetric)
+    F, M, Vmag, Fp, dF, dM = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
     Lp = Fp[3, :]
 
     # trefftz plane analysis for drag
-    Di = dic(Gamma, geom.y, geom.z, fs.rho, symmetric)
+    Di = dic(panels, Gamma, symmetric)
     F[1] = Di
 
     # force and moment coefficients
-    q = 0.5*fs.rho*fs.Vinf^2
+    rho = 1.0  # cancels out from normalization
+    q = 0.5*rho*fs.Vinf^2
+    Sref = ref.S
+    bref = ref.b
+    cref = ref.c
 
-    CF = F./(q*geom.Sref)
-    CM = M./(q*geom.Sref*[geom.bref; geom.cref; geom.bref])
+    CF = F./(q*Sref)
+    CM = M./(q*Sref*[bref; cref; bref])
     
-    dCF = dF./(q*geom.Sref)
-    dCM = M./(q*geom.Sref*[geom.bref; geom.cref; geom.bref])
+    dCF = dF./(q*Sref)
+    dCM = M./(q*Sref*[bref; cref; bref])
 
     # lift and cl dist
-    xmid, ymid, zmid = mid_points(geom)
-    cl = Lp./(q*geom.c)
-    l = Lp/(q*geom.cref)
+    ymid = [mid_point(p)[2] for p in panels]
+    zmid = [mid_point(p)[3] for p in panels]
+    chord = [p.chord for p in panels]
+    cl = Lp./(q*chord)
+    l = Lp/(q*cref)
     
     return CF, CM, ymid, zmid, l, cl, dCF, dCM
 end
 
 end
-
-# symmetric = true
-
-# b = 5.0
-# AR = 8.0
-# λ = 0.6
-# Λ = 20.0*pi/180
-# ϕ = 0.0
-# θt = -2.0*pi/180
-# npanels = 100
-# geom = simpletapered(b, AR, λ, Λ, ϕ, θt, npanels, symmetric)
-
-# rho = 1.0
-# Vinf = 2.0
-# alpha = 5.0*pi/180
-# beta = 0.0
-# Omega = [0.0; 0.0; 0.0]
-# rcg = [0.0; 0.0; 0.0]
-# vother = nothing
-# fs = Freestream(rho, Vinf, alpha, beta, Omega, rcg, vother)
-
-# CF, CM, ymid, zmid, l, cl, dCF = vlm(geom, fs, symmetric)
-
-# using PyPlot
-# figure()
-# plot(ymid, l)
-# plot(ymid, cl)
-# gcf()
