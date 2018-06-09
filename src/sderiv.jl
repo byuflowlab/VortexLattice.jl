@@ -17,6 +17,7 @@ Base.:*(x::Any, y::SDeriv) = SDeriv(x * y.alpha, x * y.beta, x * y.p, x * y.q, x
 Base.:*(x::SDeriv, y::Any) = SDeriv(x.alpha * y, x.beta * y, x.p * y, x.q * y, x.r * y)
 Base.:-(x::SDeriv) = SDeriv(-x.alpha, -x.beta, -x.p, -x.q, -x.r)
 Base.:/(x::SDeriv, y::Any) = SDeriv(x.alpha / y, x.beta / y, x.p / y, x.q / y, x.r / y)
+Base.broadcast(::typeof(Base.:/), x::SDeriv, y::Any) = SDeriv(x.alpha ./ y, x.beta ./ y, x.p ./ y, x.q ./ y, x.r ./ y)
 Base.dot(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(dot(x.alpha, y), dot(x.beta, y), dot(x.p, y), dot(x.q, y), dot(x.r, y))
 Base.cross(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(cross(x.alpha, y), cross(x.beta, y), cross(x.p, y), cross(x.q, y), cross(x.r, y))
 Base.cross(x::Array{T, 1}, y::SDeriv) where T<:Any = SDeriv(cross(x, y.alpha), cross(x, y.beta), cross(x, y.p), cross(x, y.q), cross(x, y.r))

@@ -39,7 +39,6 @@ Cl, Cm, Cn = CM
 @test Cl == 0.0
 @test Cn == 0.0
 
-
 # -----------------------------
 
 # ---- simple wing without symmetry -----
@@ -56,6 +55,65 @@ Cl, Cm, Cn = CM
 @test isapprox(CY, 0.0, atol=1e-16)
 @test isapprox(Cl, 0.0, atol=1e-16)
 @test isapprox(Cn, 0.0, atol=1e-16)
+
+
+CDa, CYa, CLa = dCF.alpha
+Cla, Cma, Cna = dCM.alpha
+CDb, CYb, CLb = dCF.beta
+Clb, Cmb, Cnb = dCM.beta
+CDp, CYp, CLp = dCF.p
+Clp, Cmp, Cnp = dCM.p
+CDq, CYq, CLq = dCF.q
+Clq, Cmq, Cnq = dCM.q
+CDr, CYr, CLr = dCF.r
+Clr, Cmr, Cnr = dCM.r
+
+@test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+@test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+@test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+@test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+@test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+@test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+
+# TODO: check sign of beta.
+
+# h = 1e-6
+# betap = beta + h
+# fsp = VLM.Freestream(Vinf, alpha, betap, Omega, vother)
+# CFp, CMp, _, _, _, _, _, _ = VLM.run(panels, ref, fsp, symmetric)
+# Clp, Cmp, Cnp = CMp
+# (Clp - Cl)/h
+
+# h = 1e-6
+# Omegap = Omega + [h; 0; 0]
+# fsp = VLM.Freestream(Vinf, alpha, beta, Omegap, vother)
+# CFp, CMp, _, _, _, _, _, _ = VLM.run(panels, ref, fsp, symmetric)
+# Clp, Cmp, Cnp = CMp
+# (Clp - Cl)/h
+
+# Stability-axis derivatives...
+
+#                              alpha                beta
+#                   ----------------    ----------------
+#  z' force CL |    CLa =   4.638090    CLb =   0.000000
+#  y  force CY |    CYa =   0.000000    CYb =  -0.000007
+#  x' mom.  Cl'|    Cla =   0.000000    Clb =  -0.025749
+#  y  mom.  Cm |    Cma =  -0.429247    Cmb =  -0.000000
+#  z' mom.  Cn'|    Cna =  -0.000000    Cnb =   0.000466
+
+#                      roll rate  p'      pitch rate  q'        yaw rate  r'
+#                   ----------------    ----------------    ----------------
+#  z' force CL |    CLp =  -0.000000    CLq =   5.549788    CLr =   0.000000
+#  y  force CY |    CYp =   0.047000    CYq =  -0.000000    CYr =  -0.000745
+#  x' mom.  Cl'|    Clp =  -0.518725    Clq =   0.000000    Clr =   0.064243
+#  y  mom.  Cm |    Cmp =   0.000000    Cmq =  -0.517095    Cmr =  -0.000000
+#  z' mom.  Cn'|    Cnp =  -0.019846    Cnq =  -0.000000    Cnr =  -0.000898
+
+#  Neutral point  Xnp =   0.685096
 
 # reset
 duplicate = false

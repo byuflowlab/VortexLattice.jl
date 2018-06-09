@@ -495,7 +495,8 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
     # force and moment coefficients
     rho = 1.0  # cancels out from normalization
-    q = 0.5*rho*fs.Vinf^2
+    Vinf = fs.Vinf
+    q = 0.5*rho*Vinf^2
     Sref = ref.S
     bref = ref.b
     cref = ref.c
@@ -504,7 +505,15 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     CM = M./(q*Sref*[bref; cref; bref])
     
     dCF = dF./(q*Sref)
-    dCM = M./(q*Sref*[bref; cref; bref])
+    dCM = dM./(q*Sref*[bref; cref; bref])
+
+    # # normalize p, q, r    
+    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*Vinf/bref, dCF.q*2*Vinf/cref, dCF.r*2*Vinf/bref)
+    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*Vinf/bref, dCM.q*2*Vinf/cref, dCM.r*2*Vinf/bref)
+
+    # rotate p, q, r, to stability axes
+    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*cos(fs.alpha) + dCF.r*sin(fs.alpha), dCF.q, -dCF.p*sin(fs.alpha) + dCF.r*cos(fs.alpha))
+    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*cos(fs.alpha) + dCM.r*sin(fs.alpha), dCM.q, -dCM.p*sin(fs.alpha) + dCM.r*cos(fs.alpha))
 
     # lift and cl dist
     ymid = [mid_point(p)[2] for p in panels]
