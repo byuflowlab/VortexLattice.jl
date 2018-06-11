@@ -2,7 +2,7 @@ module VLM
 
 struct Panel
     rl
-    rr    
+    rr
     chord
     theta
 end
@@ -35,11 +35,11 @@ direction, at a control point located at r1 relative to the start of the left tr
 and r2 relative to the start of the right trailing vortex.
 """
 function vhat_trailing(r1, r2)
-    
+
     nr1 = norm(r1)
     nr2 = norm(r2)
     xhat = [1.0; 0; 0]
-    
+
     f1 = cross(r1, xhat)/(nr1 - r1[1])/nr1
     f2 = cross(r2, xhat)/(nr2 - r2[1])/nr2
 
@@ -59,13 +59,13 @@ function vhat_horseshoe(r1, r2)
 
     # contribution from trailing vortices
     Vhat = vhat_trailing(r1, r2)
-    
+
     # contribution from bound vortex
     nr1 = norm(r1)
     nr2 = norm(r2)
     f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
     f2 = (1.0/nr1 + 1.0/nr2)
-    
+
     Vhat += (f1*f2)/(4*pi)
 end
 
@@ -96,7 +96,7 @@ vortices in the +x direction.  The velocity is computed at control point rcp
 with from a panel defined by positino rl and rr
 """
 function vhat(rcp, rl, rr, symmetric, include_bound)
-    
+
     if include_bound
         vfunc = vhat_horseshoe
     else
@@ -104,12 +104,12 @@ function vhat(rcp, rl, rr, symmetric, include_bound)
     end
 
     r1 = rcp - rl
-    r2 = rcp - rr        
+    r2 = rcp - rr
     Vhat = vfunc(r1, r2)
 
     if symmetric && not_on_symmetry_plane(rl, rr) # add contribution from other side
         # flip sign for y, but r1 is on left which now corresponds to rr and vice vesa
-        
+
         r1 = rcp - flipy(rr)
         r2 = rcp - flipy(rl)
         Vhat += vfunc(r1, r2)
@@ -157,7 +157,7 @@ function normal_vector(p::Panel)
     sphi = dz/ds
     cphi = dy/ds
 
-    nhat = [sin(p.theta); 
+    nhat = [sin(p.theta);
             -cos(p.theta)*sphi;
             cos(p.theta)*cphi]
 
@@ -176,7 +176,7 @@ function normal_vector_magnitude_2d(p::Panel)
     delta = p.rr - p.rl
     dy = delta[2]
     dz = delta[3]
-    
+
     nhat = [0.0; -dz; dy]
 
     return nhat
@@ -194,7 +194,7 @@ function aic(panels::Array{Panel, 1}, symmetric)
     N = length(panels)
 
     include_bound = true  # include bound vortices
-    
+
     AIC = zeros(N, N)
     for i = 1:N  # CP
 
@@ -255,11 +255,12 @@ Compute the normal component of the external velocity along the geometry.
 This forms the right hand side of the circulation linear system solve.
 """
 function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
-    
+
     # initialize
     N = length(panels)
     b = zeros(N)
     db = SDeriv(N)
+    Vinfeff = zeros(N)
 
     # iterate through panels
     for i = 1:N
@@ -275,9 +276,13 @@ function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
 
         # (partial) stability derivatives
         db[i] = -dot(dVext, nhat)
+
+        # effective blown velocity Vinf already included
+        Vinfeff[i] = Vext[1]*cos(fs.alpha)*cos(fs.beta) + Vext[2]*sin(fs.beta) + Vext[3]*sin(fs.alpha)*cos(fs.beta)
+
     end
 
-    return b, db
+    return b, db, Vinfeff
 end
 
 
@@ -289,13 +294,15 @@ Solve for circulation distribution.
 function circulation(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
     AIC = aic(panels, symmetric)
-    b, db = vn_ext(panels, ref, fs)
+    b, db, Vinfeff = vn_ext(panels, ref, fs)
 
     Gamma = AIC\b
 
     dGamma = SDeriv(AIC\db.alpha, AIC\db.beta, AIC\db.p, AIC\db.q, AIC\db.r)
 
-    return Gamma, dGamma
+    alphaeff = atan.(-b/fs.Vinf)
+
+    return Gamma, dGamma, alphaeff, Vinfeff
 end
 
 
@@ -314,7 +321,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     Mb = zeros(3)  # moments
     Fpvec = zeros(3, N)  # distributed forces
     Vvec = zeros(3, N)  # distributed velocity
-    
+
     dFb = SDeriv(3)
     dMb = SDeriv(3)
 
@@ -327,10 +334,10 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
 
         rmid = mid_point(panels[i])  # compute induced velocity at quarter-quard midpoints (rather than at control points)
 
-        for j = 1:N  # vortices  
+        for j = 1:N  # vortices
             Vij = vhat(rmid, panels[j].rl, panels[j].rr, symmetric, include_bound)
             Vindi += Vij*Gamma[j]
-        
+
             dVindi += Vij*dGamma[j]
         end
 
@@ -339,7 +346,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         Vi = Vindi + Vext
         dVi = dVindi + dVext
         Vvec[:, i] = Vi  # save velocity distribution in a vector
-        
+
         # forces and moments
         Delta_s = panels[i].rr - panels[i].rl
         Fbi = rho*Gamma[i]*cross(Vi, Delta_s)
@@ -349,7 +356,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         dFbi = rho*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
         dFb += dFbi
         dMb += cross(rmid - ref.rcg, dFbi)
-    
+
         # force per unit length
         Fpvec[:, i] = Fbi/norm(Delta_s)
     end
@@ -361,7 +368,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         Fb[2] = 0.0
         Mb[1] = 0.0
         Mb[3] = 0.0
-        
+
         dFb *= 2
         dMb *= 2
         dFb[2] = 0.0
@@ -409,7 +416,7 @@ a subcomponent of Trefftz plane induced drag calculation.
 """
 function Disub(rleft, rright, Gammaj, ri, Gammai, ndsi)
     rho = 1.0  # normalizes away
-    
+
     # left
     rij = ri - rleft
     Vthetai = -cross([-Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
@@ -418,7 +425,7 @@ function Disub(rleft, rright, Gammaj, ri, Gammai, ndsi)
     # right
     rij = ri - rright
     Vthetai = -cross([Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
-    
+
     Di += rho/2.0*Gammai*dot(Vthetai, ndsi)
 
     return Di
@@ -431,9 +438,9 @@ end
 Far-field method.  Induced drag coefficient matrix.
 """
 function dic(panels::Array{Panel, 1}, Gamma, symmetric)
-    
+
     N = length(panels)
-    
+
     Di = 0.0
     for j = 1:N
         for i = 1:N
@@ -442,13 +449,13 @@ function dic(panels::Array{Panel, 1}, Gamma, symmetric)
 
             # sum up vortex contributions
             Di += Disub(panels[j].rl, panels[j].rr, Gamma[j], ri, Gamma[i], ndsi)
-            
+
             if symmetric && not_on_symmetry_plane(panels[j])
                 Di += Disub(flipy(panels[j].rr), flipy(panels[j].rl), Gamma[j], ri, Gamma[i], ndsi)
             end
         end
     end
-    
+
     if symmetric
         Di *= 2
     end
@@ -476,16 +483,17 @@ end
 
 run the vortex lattice method
 
-# Returns 
+# Returns
 - CF: force coefficients, wind axes
 - CM: moment coefficients, wind axes, about provided c.g.
 - ymid, zmid: middle points along quarter chord bound vortex
 - l, cl: lift distribution (Lp/(q cref)), lift coefficient distribution (Lp/(q c))
 - dCF, dCM: stability derivatives, wind axes
+- Fp: forces per unit length in the freestream frame: x - drag, y - wing compression, z - lift
 """
 function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
-    Gamma, dGamma = circulation(panels, ref, fs, symmetric)
+    Gamma, dGamma, alphaeff, Vinfeff = circulation(panels, ref, fs, symmetric)
     F, M, Vmag, Fp, dF, dM = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
     Lp = Fp[3, :]
 
@@ -496,13 +504,14 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     # force and moment coefficients
     rho = 1.0  # cancels out from normalization
     q = 0.5*rho*fs.Vinf^2
+
     Sref = ref.S
     bref = ref.b
     cref = ref.c
 
     CF = F./(q*Sref)
     CM = M./(q*Sref*[bref; cref; bref])
-    
+
     dCF = dF./(q*Sref)
     dCM = M./(q*Sref*[bref; cref; bref])
 
@@ -511,9 +520,11 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     zmid = [mid_point(p)[3] for p in panels]
     chord = [p.chord for p in panels]
     cl = Lp./(q*chord)
-    l = Lp/(q*cref)
-    
-    return CF, CM, ymid, zmid, l, cl, dCF, dCM
+
+    qloc = 0.5*rho*Vinfeff.^2
+    cllocal = Lp./(qloc.*chord)
+
+    return CF, CM, ymid, zmid, cl, dCF, dCM, Fp, alphaeff, Vinfeff, cllocal
 end
 
 end
