@@ -70,7 +70,7 @@ function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
     cr = 2*S/(b*(1 + λ))
     ct = cr*λ
 
-    xle = [0.0; cr/4.0 +b/2.0*tan(Λ) - ct/4.0]
+    xle = [0.0; cr/4.0 + b/2.0*tan(Λ) - ct/4.0]
     yle = [0.0; b/2*cos(ϕ)]
     zle = [0.0; b/2*sin(ϕ)]
     chord = [cr; ct]
