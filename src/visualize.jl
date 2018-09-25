@@ -1,3 +1,5 @@
+module VLMVisualize
+
 using PyPlot
 
 function visualizegeometry(panels)
@@ -39,4 +41,6 @@ function visualizegeometry(panels)
     xlabel("x")
     ylabel("y")
     zlabel("z")
+end
+
 end
