@@ -352,8 +352,8 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         dFb += dFbi
         dMb += cross(rmid - ref.rcg, dFbi)
     
-        # force per unit length 
-        Fpvec[:, i] = Fbi/norm(Delta_s)  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
+        # force per unit length in spanwise-direction
+        Fpvec[:, i] = Fbi/Delta_s[2]  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
     end
 
 
@@ -413,11 +413,13 @@ function Disub(rleft, rright, Gammaj, ri, Gammai, ndsi)
     
     # left
     rij = ri - rleft
+    rij[1] = 0.0  # 2D plane (no x-component)
     Vthetai = -cross([-Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
     Di = RHO/2.0*Gammai*dot(Vthetai, ndsi)
-
+    
     # right
     rij = ri - rright
+    rij[1] = 0.0  # 2D plane (no x-component)
     Vthetai = -cross([Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
     
     Di += RHO/2.0*Gammai*dot(Vthetai, ndsi)
@@ -521,7 +523,7 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     chord = [p.chord for p in panels]
     cl = Lp./(qinf*chord)
     l = Lp/(qinf*cref)
-    
+
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
     
