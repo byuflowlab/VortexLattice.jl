@@ -1,4 +1,4 @@
-echo -e "oper\na a 1\nx\n\nquit\n" > commands
+echo -e "oper\na a 1\nx\nst\n\n\nquit\n" > commands
 cat commands - | ./avl3.35 simplewing1.avl > output
 grep -o "CLtot.*" output
 grep -o "CDff.*" output

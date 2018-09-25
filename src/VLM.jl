@@ -8,11 +8,10 @@ struct Panel
 end
 
 struct Freestream
-    Vinf
     alpha
     beta
-    Omega  # length: 3 (p, q, r)
-    vother  # Vother = vother(x, y, z).  can also use nothing
+    Omega  # length: 3 (p, q, r), normalized by Vinf
+    vother  # Vext = vother(rvec), normalized by Vinf.  can also use nothing
 end
 
 struct Reference
@@ -21,6 +20,10 @@ struct Reference
     b
     rcg
 end
+
+# normalized (so these don't matter, but include for clarity)
+const RHO = 1.0
+const VINF = 1.0
 
 
 include("geometry.jl")  # defines some convenience functions for generating geometry
@@ -220,27 +223,27 @@ and the corresonding (partial) stability derivatives
 function ext_velocity(fs::Freestream, r, rcg)
 
     # Freestream velocity in body coordinate
-    Vinf = fs.Vinf*[cos(fs.alpha)*cos(fs.beta);
+    Vext = VINF*[cos(fs.alpha)*cos(fs.beta);
         -sin(fs.beta);
         sin(fs.alpha)*cos(fs.beta)]
 
-    Vext = Vinf - cross(fs.Omega, r - rcg)
+    Vext -= VINF*cross(fs.Omega, r - rcg)  # unnormalize
 
     if fs.vother != nothing
-        Vext += fs.vother(r)
+        Vext += VINF*fs.vother(r)  # unnormalize
     end
 
     # for stability derivatives
-    dVda = fs.Vinf*[-sin(fs.alpha)*cos(fs.beta);
+    dVda = VINF*[-sin(fs.alpha)*cos(fs.beta);
         0.0;
         cos(fs.alpha)*cos(fs.beta)]
-    dVdb = fs.Vinf*[-cos(fs.alpha)*sin(fs.beta);
+    dVdb = VINF*[-cos(fs.alpha)*sin(fs.beta);
         -cos(fs.beta);
         -sin(fs.alpha)*sin(fs.beta)]
     rvec = r - rcg
-    dVdp = [0.0; rvec[3]; -rvec[2]]
-    dVdq = [-rvec[3]; 0.0; rvec[1]]
-    dVdr = [rvec[2]; -rvec[1]; 0.0]
+    dVdp = VINF*[0.0; rvec[3]; -rvec[2]]
+    dVdq = VINF*[-rvec[3]; 0.0; rvec[1]]
+    dVdr = VINF*[rvec[2]; -rvec[1]; 0.0]
 
     dVext = SDeriv(dVda, dVdb, dVdp, dVdq, dVdr)
 
@@ -306,14 +309,13 @@ Computes the forces and moments acting on the aircraft using the given circulati
 """
 function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, Gamma, dGamma, symmetric)
 
-    rho = 1.0  # cancels out from normalization
     N = length(panels)
 
     # initialize
     Fb = zeros(3)  # forces
     Mb = zeros(3)  # moments
     Fpvec = zeros(3, N)  # distributed forces
-    Vvec = zeros(3, N)  # distributed velocity
+    Vmag = zeros(N)  # distributed velocity magnitude
     
     dFb = SDeriv(3)
     dMb = SDeriv(3)
@@ -338,20 +340,20 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
         Vi = Vindi + Vext
         dVi = dVindi + dVext
-        Vvec[:, i] = Vi  # save velocity distribution in a vector
+        Vmag[i] = norm(Vi)  # save magnitude of velocity distribution in a vector
         
         # forces and moments
         Delta_s = panels[i].rr - panels[i].rl
-        Fbi = rho*Gamma[i]*cross(Vi, Delta_s)
+        Fbi = RHO*Gamma[i]*cross(Vi, Delta_s)
         Fb += Fbi
         Mb += cross(rmid - ref.rcg, Fbi)
 
-        dFbi = rho*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
+        dFbi = RHO*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
         dFb += dFbi
         dMb += cross(rmid - ref.rcg, dFbi)
     
-        # force per unit length
-        Fpvec[:, i] = Fbi/norm(Delta_s)
+        # force per unit length 
+        Fpvec[:, i] = Fbi/norm(Delta_s)  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
     end
 
 
@@ -393,13 +395,13 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     dFw = Rb*Ra*dFb + Rb*dRa*Fb + dRb*Ra*Fb
     dMw = Rb*Ra*dMb + Rb*dRa*Mb + dRb*Ra*Mb
 
-    # rotate distributed forces
+    # rotate distributed forces from body to wind frame
     Fwpvec = zeros(3, N)
     for i = 1:N
         Fwpvec[:, i] = Rb*Ra*Fpvec[:, i]
     end
 
-    return Fw, Mw, Vvec, Fwpvec, dFw, dMw
+    return Fw, Mw, Vmag, Fwpvec, dFw, dMw
 end
 
 
@@ -408,18 +410,17 @@ end
 a subcomponent of Trefftz plane induced drag calculation.
 """
 function Disub(rleft, rright, Gammaj, ri, Gammai, ndsi)
-    rho = 1.0  # normalizes away
     
     # left
     rij = ri - rleft
     Vthetai = -cross([-Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
-    Di = rho/2.0*Gammai*dot(Vthetai, ndsi)
+    Di = RHO/2.0*Gammai*dot(Vthetai, ndsi)
 
     # right
     rij = ri - rright
     Vthetai = -cross([Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
     
-    Di += rho/2.0*Gammai*dot(Vthetai, ndsi)
+    Di += RHO/2.0*Gammai*dot(Vthetai, ndsi)
 
     return Di
 end
@@ -494,22 +495,21 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     F[1] = Di
 
     # force and moment coefficients
-    rho = 1.0  # cancels out from normalization
-    Vinf = fs.Vinf
-    q = 0.5*rho*Vinf^2
+    qinf = 0.5*RHO*VINF^2
     Sref = ref.S
     bref = ref.b
     cref = ref.c
 
-    CF = F./(q*Sref)
-    CM = M./(q*Sref*[bref; cref; bref])
+    # normalize forces/moments
+    CF = F./(qinf*Sref)
+    CM = M./(qinf*Sref*[bref; cref; bref])
     
-    dCF = dF./(q*Sref)
-    dCM = dM./(q*Sref*[bref; cref; bref])
+    dCF = dF./(qinf*Sref)
+    dCM = dM./(qinf*Sref*[bref; cref; bref])
 
     # # normalize p, q, r    
-    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*Vinf/bref, dCF.q*2*Vinf/cref, dCF.r*2*Vinf/bref)
-    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*Vinf/bref, dCM.q*2*Vinf/cref, dCM.r*2*Vinf/bref)
+    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*VINF/bref, dCF.q*2*VINF/cref, dCF.r*2*VINF/bref)
+    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*VINF/bref, dCM.q*2*VINF/cref, dCM.r*2*VINF/bref)
 
     # rotate p, q, r, to stability axes
     dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*cos(fs.alpha) + dCF.r*sin(fs.alpha), dCF.q, -dCF.p*sin(fs.alpha) + dCF.r*cos(fs.alpha))
@@ -519,8 +519,11 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     ymid = [mid_point(p)[2] for p in panels]
     zmid = [mid_point(p)[3] for p in panels]
     chord = [p.chord for p in panels]
-    cl = Lp./(q*chord)
-    l = Lp/(q*cref)
+    cl = Lp./(qinf*chord)
+    l = Lp/(qinf*cref)
+    
+    # l = 2*Gamma.*Vmag./(VINF^2.*cref)
+    # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
     
     return CF, CM, ymid, zmid, l, cl, dCF, dCM
 end

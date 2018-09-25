@@ -271,3 +271,112 @@ Cl, Cm, Cn = CM
 @test CY == 0.0
 @test Cl == 0.0
 @test Cn == 0.0
+
+
+# # ---- Veldhius validation case ------
+# b = 0.64*2
+# AR = 5.33
+# λ = 1.0
+# Λ = 0.0
+# ϕ = 0.0
+# θr = 0
+# θt = 0
+# npanels = 50
+# duplicate = false
+# spacing = "uniform"
+
+# wing = VLM.simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
+
+
+# import Interpolations: interpolate, Gridded, Linear
+
+# """helper function"""
+# function interp1(xpt, ypt, x)
+#     intf = interpolate((xpt,), ypt, Gridded(Linear()))
+#     y = zeros(x)
+#     idx = (x .> xpt[1]) .& (x.< xpt[end])
+#     y[idx] = intf[x[idx]]
+#     return y
+# end
+
+# function votherprop(rpos)
+
+#     # rcenter = [0.0; 0.469*b/2; 0.0]
+#     rvec = abs(rpos[2] - 0.469*b/2)  # norm(rpos - rcenter)
+
+#     rprop = [0.017464, 0.03422, 0.050976, 0.067732, 0.084488, 0.101244, 0.118]
+#     uprop = [0.0, 1.94373, 3.02229, 7.02335, 9.02449, 8.85675, 0.0]/50.0
+#     vprop = [0.0, 1.97437, 2.35226, 4.07227, 4.35436, 3.69232, 0.0]/50.0
+
+#     cw = 1.0
+
+#     u = 2 * interp1(rprop, uprop, [rvec])[1]  # factor of 2 from far-field
+#     v = cw * interp1(rprop, vprop, [rvec])[1]
+
+#     if rpos[2] > 0.469*b/2
+#         v *= -1
+#     end
+
+#     unew = u*cos(alpha) - v*sin(alpha)
+#     vnew = u*sin(alpha) + v*cos(alpha)
+
+#     return [unew; 0.0; vnew]
+# end
+
+# alpha = 0.0*pi/180
+# beta = 0.0
+# Omega = [0.0; 0.0; 0.0]
+# fs = VLM.Freestream(alpha, beta, Omega, votherprop)
+
+# Sref = 0.30739212
+# cref = 0.24015
+# bref = b
+# rcg = [0.0, 0.0, 0.0]
+# ref = VLM.Reference(Sref, cref, bref, rcg)
+
+# symmetric = true
+# CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(wing, ref, fs, symmetric)
+
+# alpha = 8.0*pi/180
+# fs = VLM.Freestream(alpha, beta, Omega, votherprop)
+# CF, CM, ymid, zmid, l2, cl2, dCF, dCM = VLM.run(wing, ref, fs, symmetric)
+
+# # # total velocity in direction of Vinf
+# # Vinfeff = zeros(cl)
+# # for i = 1:length(ymid)
+# #     Vext = votherprop([0.0; ymid[i]; zmid[i]])
+# #     Vinfeff[i] = Vinf + Vext[1]*cos(alpha)*cos(beta) + Vext[2]*sin(beta) + Vext[3]*sin(alpha)*cos(beta)
+# # end
+
+# using PyPlot
+# # figure()
+# # plot(ymid, cl2)
+# # plot(ymid, cl3)
+# # gcf()
+
+# figure()
+# plot(ymid, l2)
+# plot(ymid, cl2)
+# ylim([0.0, 1])
+# gcf()
+
+# trapz(ymid/(b/2), cl2)
+
+
+# # figure()
+# # plot(ymid, cl*Vinf./Vinfeff)
+# # gcf()
+
+# # yvec = linspace(0, 0.64, 20)
+# # axial = zeros(20)
+# # swirl = zeros(20)
+# # for i = 1:20
+# #     V = votherprop([0.0; yvec[i]; 0.0])
+# #     axial[i] = V[1]
+# #     swirl[i] = V[2]
+# # end
+
+# # figure()
+# # plot(yvec, axial)
+# # plot(yvec, swirl)
+# # gcf()
