@@ -83,6 +83,7 @@ end
 
 # TODO: With Pkg3 I can make this a separate module within same repo so base VLM doesn't depending on plotting.
 function visualizegeometry(panels)
+
     for i = 1:length(panels)
         
         x = [panels[i].rl[1]; panels[i].rr[1]]
@@ -121,4 +122,29 @@ function visualizegeometry(panels)
     xlabel("x")
     ylabel("y")
     zlabel("z")
+end
+
+
+
+function visualizeoutline2d(panels)
+
+    for i = 1:length(panels)
+        
+        x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
+        y = [panels[i].rl[2]; panels[i].rr[2]]
+        plot(y, -x, color="k")
+        plot(-y, -x, color="k")
+        x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
+        y = [panels[i].rl[2]; panels[i].rr[2]]
+        plot(y, -x, color="k")
+        plot(-y, -x, color="k")        
+    end
+
+    x = [panels[end].rr[1] - 1.0/4*panels[end].chord; panels[end].rr[1] + 3.0/4*panels[end].chord]
+    y = [panels[end].rr[2]; panels[end].rr[2]]
+    plot(y, -x, color="k")
+    plot(-y, -x, color="k")
+    
+    axis("equal")
+    axis("off")
 end
