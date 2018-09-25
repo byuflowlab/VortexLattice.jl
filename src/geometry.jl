@@ -143,8 +143,34 @@ function visualizeoutline2d(panels)
     x = [panels[end].rr[1] - 1.0/4*panels[end].chord; panels[end].rr[1] + 3.0/4*panels[end].chord]
     y = [panels[end].rr[2]; panels[end].rr[2]]
     plot(y, -x, color="k")
-    plot(-y, -x, color="k")
+    p, = plot(-y, -x, color="k")
     
     axis("equal")
     axis("off")
+
+    return p
+end
+
+
+
+function twoview(panels)
+
+    p = visualizeoutline2d(panels)
+    xleft = panels[1].rl[1] + 3.0/4*panels[1].chord
+    xright = panels[end].rr[1] + 3.0/4*panels[end].chord
+    xmax = max(xleft, xright)
+    xoffset = xmax + panels[1].chord
+    
+    p2 = p
+    for i = 1:length(panels)
+        
+        y = [panels[i].rl[2]; panels[i].rr[2]]
+        z = [panels[i].rl[3]; panels[i].rr[3]]
+        
+        plot(y, z - xoffset, color="r")
+        p2, = plot(-y, z - xoffset, color="r")
+    end
+
+    legend([p, p2], ["top view", "back view"])
+    
 end
