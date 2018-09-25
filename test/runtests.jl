@@ -264,7 +264,7 @@ CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(vehicle, ref, fs, symmetric)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 @test isapprox(CL, 0.60563, atol=.01*abs(CL))
-# @test isapprox(CD, 0.01049, atol=.01*abs(CD))  # TODO: not passing
+@test isapprox(CD, 0.01049, atol=.01*abs(CD)) 
 # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
 @test CY == 0.0
 @test Cl == 0.0
