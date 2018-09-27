@@ -352,8 +352,8 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         dFb += dFbi
         dMb += cross(rmid - ref.rcg, dFbi)
     
-        # force per unit length in spanwise-direction
-        Fpvec[:, i] = Fbi/Delta_s[2]  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
+        # force per unit length along wing (y and z)
+        Fpvec[:, i] = Fbi/sqrt(Delta_s[2]^2 + Delta_s[3]^2)  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
     end
 
 
@@ -490,7 +490,6 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
     Gamma, dGamma = circulation(panels, ref, fs, symmetric)
     F, M, Vmag, Fp, dF, dM = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
-    Lp = Fp[3, :]
 
     # trefftz plane analysis for drag
     Di = dic(panels, Gamma, symmetric)
@@ -521,8 +520,9 @@ function run(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
     ymid = [mid_point(p)[2] for p in panels]
     zmid = [mid_point(p)[3] for p in panels]
     chord = [p.chord for p in panels]
-    cl = Lp./(qinf*chord)
-    l = Lp/(qinf*cref)
+    Np = sqrt.(Fp[2, :].^2 + Fp[3, :].^2)  # normal force to panel
+    cl = Np./(qinf*chord)  # so it's not exactly cl for nonplanar wings
+    l = Np/(qinf*cref)
 
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
