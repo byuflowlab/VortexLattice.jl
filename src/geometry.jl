@@ -1,14 +1,16 @@
 using PyPlot
 
+export linearsections
+
 function linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing)
 
     # initialize
     nsections = length(xle) - 1  # number of segments on lifting surface
     nptotal = sum(npanels)  # total number of panels
     if duplicate
-        panels = Array{Panel}(2*nptotal)  # twice the number of panels
+        panels = Array{Panel}(undef, 2*nptotal)  # twice the number of panels
     else
-        panels = Array{Panel}(nptotal)
+        panels = Array{Panel}(undef, nptotal)
     end
     start = 0
 
@@ -16,20 +18,20 @@ function linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing
 
         # create basic geometry
         if spacing == "uniform"
-            eta = linspace(0, 1, npanels[i]+1)
+            eta = range(0, 1, length=npanels[i]+1)
         elseif spacing == "cosine"
-            eta = cos.(linspace(pi/2, 0, npanels[i]+1))
+            eta = cos.(range(pi/2, 0, length=npanels[i]+1))
         end
 
         # midpoints
         etabar = 0.5*(eta[1:end-1] + eta[2:end])
         
         # linearly interpolate
-        xvec = (1 - eta)*(xle[i] + chord[i]/4.0) + eta*(xle[i+1] + chord[i+1]/4.0)
-        yvec = (1 - eta)*yle[i] + eta*yle[i+1]
-        zvec = (1 - eta)*zle[i] + eta*zle[i+1]
-        cvec = (1 - etabar)*chord[i] + etabar*chord[i+1]
-        tvec = (1 - etabar)*theta[i] + etabar*theta[i+1]
+        xvec = (1 .- eta)*(xle[i] + chord[i]/4.0) + eta*(xle[i+1] + chord[i+1]/4.0)
+        yvec = (1 .- eta)*yle[i] + eta*yle[i+1]
+        zvec = (1 .- eta)*zle[i] + eta*zle[i+1]
+        cvec = (1 .- etabar)*chord[i] + etabar*chord[i+1]
+        tvec = (1 .- etabar)*theta[i] + etabar*theta[i+1]
         
 
         # create panels

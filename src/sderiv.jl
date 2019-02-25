@@ -1,14 +1,20 @@
-struct SDeriv
-    alpha
-    beta
-    p
-    q
-    r
+
+import LinearAlgebra
+
+"""
+Define a type to hold the stability derivatives
+"""
+struct SDeriv{TF}
+    alpha::TF
+    beta::TF
+    p::TF
+    q::TF
+    r::TF
 end
 
-# import Base: +
 
 
+# overload functions using the SDeriv type
 SDeriv() = SDeriv(zeros(1), zeros(1), zeros(1), zeros(1), zeros(1)) 
 SDeriv(N) = SDeriv(zeros(N), zeros(N), zeros(N), zeros(N), zeros(N)) 
 SDeriv(M, N) = SDeriv(zeros(M, N), zeros(M, N), zeros(M, N), zeros(M, N), zeros(M, N)) 
@@ -17,10 +23,10 @@ Base.:*(x::Any, y::SDeriv) = SDeriv(x * y.alpha, x * y.beta, x * y.p, x * y.q, x
 Base.:*(x::SDeriv, y::Any) = SDeriv(x.alpha * y, x.beta * y, x.p * y, x.q * y, x.r * y)
 Base.:-(x::SDeriv) = SDeriv(-x.alpha, -x.beta, -x.p, -x.q, -x.r)
 Base.:/(x::SDeriv, y::Any) = SDeriv(x.alpha / y, x.beta / y, x.p / y, x.q / y, x.r / y)
-Base.broadcast(::typeof(Base.:/), x::SDeriv, y::Any) = SDeriv(x.alpha ./ y, x.beta ./ y, x.p ./ y, x.q ./ y, x.r ./ y)
-Base.dot(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(dot(x.alpha, y), dot(x.beta, y), dot(x.p, y), dot(x.q, y), dot(x.r, y))
-Base.cross(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(cross(x.alpha, y), cross(x.beta, y), cross(x.p, y), cross(x.q, y), cross(x.r, y))
-Base.cross(x::Array{T, 1}, y::SDeriv) where T<:Any = SDeriv(cross(x, y.alpha), cross(x, y.beta), cross(x, y.p), cross(x, y.q), cross(x, y.r))
+# Base.broadcast(::typeof(Base.:/), x::SDeriv, y::Any) = SDeriv(x.alpha ./ y, x.beta ./ y, x.p ./ y, x.q ./ y, x.r ./ y)
+LinearAlgebra.dot(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(dot(x.alpha, y), dot(x.beta, y), dot(x.p, y), dot(x.q, y), dot(x.r, y))
+LinearAlgebra.cross(x::SDeriv, y::Array{T, 1}) where T<:Any = SDeriv(cross(x.alpha, y), cross(x.beta, y), cross(x.p, y), cross(x.q, y), cross(x.r, y))
+LinearAlgebra.cross(x::Array{T, 1}, y::SDeriv) where T<:Any = SDeriv(cross(x, y.alpha), cross(x, y.beta), cross(x, y.p), cross(x, y.q), cross(x, y.r))
 Base.sum(x::SDeriv, n) = SDeriv(sum(x.alpha, n), sum(x.beta, n), sum(x.p, n), sum(x.q, n), sum(x.r, n))
 
 function Base.getindex(x::SDeriv, i)
@@ -50,4 +56,4 @@ function Base.setindex!(x::SDeriv, y::SDeriv, i, j)
     x.q[i, j] = y.q
     x.r[i, j] = y.r
 end
-Base.endof(x) = length(x.alpha)
+# Base.endof(x) = length(x.alpha)

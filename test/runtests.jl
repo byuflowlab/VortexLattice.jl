@@ -1,5 +1,6 @@
-using Base.Test
-import VLM
+using Test
+import VortexLatticeMethod
+const VLM = VortexLatticeMethod
 
 # tests using AVL 3.35
 
@@ -28,11 +29,13 @@ rcg = [0.50, 0.0, 0.0]
 ref = VLM.Reference(Sref, cref, bref, rcg)
 
 symmetric = true
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
+
 @test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00245, atol=1e-5)
+@test isapprox(CD, 0.00243, atol=1e-5)
+@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
 @test isapprox(Cm, -0.02252, atol=1e-4)
 @test CY == 0.0
 @test Cl == 0.0
@@ -45,27 +48,29 @@ duplicate = true
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing)
 
 symmetric = false
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
+
 @test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00245, atol=1e-5)
+@test isapprox(CD, 0.00243, atol=1e-5)
+@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
 @test isapprox(Cm, -0.02252, atol=1e-4)
 @test isapprox(CY, 0.0, atol=1e-16)
 @test isapprox(Cl, 0.0, atol=1e-16)
 @test isapprox(Cn, 0.0, atol=1e-16)
 
 
-CDa, CYa, CLa = dCF.alpha
-Cla, Cma, Cna = dCM.alpha
-CDb, CYb, CLb = dCF.beta
-Clb, Cmb, Cnb = dCM.beta
-CDp, CYp, CLp = dCF.p
-Clp, Cmp, Cnp = dCM.p
-CDq, CYq, CLq = dCF.q
-Clq, Cmq, Cnq = dCM.q
-CDr, CYr, CLr = dCF.r
-Clr, Cmr, Cnr = dCM.r
+CDa, CYa, CLa = outputs.dCF.alpha
+Cla, Cma, Cna = outputs.dCM.alpha
+CDb, CYb, CLb = outputs.dCF.beta
+Clb, Cmb, Cnb = outputs.dCM.beta
+CDp, CYp, CLp = outputs.dCF.p
+Clp, Cmp, Cnp = outputs.dCM.p
+CDq, CYq, CLq = outputs.dCF.q
+Clq, Cmq, Cnq = outputs.dCM.q
+CDr, CYr, CLr = outputs.dCF.r
+Clr, Cmr, Cnr = outputs.dCM.r
 
 @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
 @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
@@ -78,14 +83,17 @@ Clr, Cmr, Cnr = dCM.r
 @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
 # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
 
-# TODO: check sign of beta.
-
 # h = 1e-6
 # betap = beta + h
-# fsp = VLM.Freestream(Vinf, alpha, betap, Omega, vother)
-# CFp, CMp, _, _, _, _, _, _ = VLM.run(panels, ref, fsp, symmetric)
-# Clp, Cmp, Cnp = CMp
-# (Clp - Cl)/h
+# fsp = VLM.Freestream(alpha, betap, Omega, vother)
+# outputsp = VLM.solve(panels, ref, fsp, symmetric)
+# Clp, Cmp, Cnp = outputsp.CM
+
+# betam = beta - h
+# fsm = VLM.Freestream(alpha, betam, Omega, vother)
+# outputsm = VLM.solve(panels, ref, fsm, symmetric)
+# Clm, Cmm, Cnm = outputsm.CM
+# (Clp - Clm)/(2*h)
 
 # h = 1e-6
 # Omegap = Omega + [h; 0; 0]
@@ -143,11 +151,12 @@ panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spa
 alpha = 8.0*pi/180
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.80348, atol=2e-3)
-@test isapprox(CD, 0.02696, atol=2.1e-5)
+# TODO: check CD
+@test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5)
 @test isapprox(Cm, -0.07399, atol=2.5e-4)
 @test CY == 0.0
 @test Cl == 0.0
@@ -180,11 +189,12 @@ bref = 15.0
 rcg = [0.50, 0.0, 0.0]
 ref = VLM.Reference(Sref, cref, bref, rcg)
 
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.24787, atol=1e-3)
-@test isapprox(CD, 0.00245, atol=1e-5)
+# TODO: check CD
+@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
 @test isapprox(Cm, -0.02395, atol=2e-3)
 @test CY == 0.0
 @test Cl == 0.0
@@ -196,12 +206,13 @@ Cl, Cm, Cn = CM
 alpha = 20.0*pi/180  # nonphysical, just testing the numerics
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
-@test isapprox(CL, 1.70985, atol=.04*abs(CL))  # this error seems higher than I'd expect...
-@test isapprox(CD, 0.11502, atol=.001*abs(CD))
-@test isapprox(Cm, -0.45606, atol=.02*abs(Cm))
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
+@test isapprox(CL, 1.70985, atol=.02*abs(CL))
+# TODO: check CD
+@test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))
+@test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
 @test CY == 0.0
 @test Cl == 0.0
 @test Cn == 0.0
@@ -252,6 +263,11 @@ VLM.translate!(vtail, [4.0; 0.0; 0.0])
 
 vehicle = [wing; htail; vtail]
 
+using PyPlot
+figure()
+VLM.visualizegeometry(vehicle)
+
+
 
 alpha = 5.0*pi/180
 beta = 0.0
@@ -260,9 +276,9 @@ vother = nothing
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
 symmetric = true
-CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(vehicle, ref, fs, symmetric)
-CD, CY, CL = CF
-Cl, Cm, Cn = CM
+outputs = VLM.solve(vehicle, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.60563, atol=.01*abs(CL))
 @test isapprox(CD, 0.01049, atol=.01*abs(CD)) 
 # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
