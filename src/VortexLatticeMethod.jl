@@ -1,7 +1,12 @@
 #=
 Author: Andrew Ning
 
-Vortex lattice method
+Vortex Lattice Method
+
+- spanwise and chordwise panels
+- additional Trefftz plane analysis for induced drag
+- stability derivatives
+- general inflow
 
 =#
 
@@ -25,18 +30,19 @@ include("sderiv.jl")  # defines stability derivative type and some associated me
 Define one panel
 
 **Arguments**
-- `rl::Array{Float64}(3)`: vector position for the left side of the panel
-- `rr::Array{Float64}(3)`: vector position for the right side of the panel
-- `chord::Float64`: local chord length
+- `rl::Array{Float64}(3)`: vector position for the left side of the horseshoe vortex
+- `rr::Array{Float64}(3)`: vector position for the right side of the horseshoe vortex
+- `rcp::Array{Float64}(3)`: vector position for the control point
 - `theta::Float64`: twist angle (radians)
 """
 struct Panel{TF}
     rl::Array{TF}
     rr::Array{TF}
-    chord::TF
+    rcp::Array{TF}
     theta::TF
 end
 
+# chord::TF
 
 """
     Freestream(alpha, beta, Omega, vother)
@@ -95,7 +101,7 @@ struct Outputs{TF, TSD}
     zmid::Array{TF}
     cf::Array{TF}
     ds::Array{TF}
-    Vmag::Array{TF}
+    V::Array{TF}
     Gamma::Array{TF}
 end
 
@@ -130,15 +136,6 @@ function not_on_symmetry_plane(r1, r2)
 end
 
 
-# """
-#     not_on_symmetry_plane(p)
-
-# Checks whether the panel p is on the symmetry plane (y = 0)
-# """
-# function not_on_symmetry_plane(p::Panel)
-#     return not_on_symmetry_plane(p.rl, p.rr)
-# end
-
 
 """
     mid_point(p::Panel)
@@ -149,19 +146,6 @@ function mid_point(p::Panel)
     return 0.5*(p.rl + p.rr)
 end
 
-
-"""
-    control_point(p::Panel)
-
-Compute the positions of the control points for each panel
-"""
-function control_point(p::Panel)
-
-    rcp = mid_point(p)
-    rcp[1] += p.chord/2.0  # add to get to 3/4 chord point
-
-    return rcp
-end
 
 
 """
@@ -327,10 +311,9 @@ function aic(panels::Array{Panel, 1}, symmetric)
 
         # normal vector body axis
         nhati = normal_vector(panels[i])
-        rcpi = control_point(panels[i])
 
         for j = 1:N  # QC
-            Vij = vhat(rcpi, panels[j].rl, panels[j].rr, symmetric, include_bound)
+            Vij = vhat(panels[i].rcp, panels[j].rl, panels[j].rr, symmetric, include_bound)
             AIC[i, j] = dot(Vij, nhati)
         end
     end
@@ -402,7 +385,7 @@ function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
         nhat = normal_vector(panels[i])
 
         # external velocity
-        Vext, dVext = ext_velocity(fs, control_point(panels[i]), ref.rcg)
+        Vext, dVext = ext_velocity(fs, panels[i].rcp, ref.rcg)
 
         # right hand side vector
         b[i] = -dot(Vext, nhat)
@@ -549,8 +532,9 @@ function project_panels(panels::Array{Panel, 1}, fs::Freestream)
     for i = 1:N
         rl_wind = Rot*panels[i].rl
         rr_wind = Rot*panels[i].rr
+        rcp_wind = Rot*panels[i].rcp
 
-        newpanels[i] = Panel(rl_wind, rr_wind, panels[i].chord, panels[i].theta)
+        newpanels[i] = Panel(rl_wind, rr_wind, rcp_wind, panels[i].theta)
     end
 
     return newpanels
@@ -626,7 +610,7 @@ function Di_trefftz(panels::Array{Panel, 1}, fs::Freestream, Gamma, symmetric)
 
     for j = 1:N
         for i = 1:N
-            Di += Disub(panels[j], Gamma[j], panels[i], Gamma[i], symmetric)
+            Di += Disub(newpanels[j], Gamma[j], newpanels[i], Gamma[i], symmetric)
         end
     end
     
@@ -658,7 +642,7 @@ Run the vortex lattice method.
 function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
     Gamma, dGamma = circulation(panels, ref, fs, symmetric)
-    F, M, dF, dM, Fp, ds, Vmag = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
+    F, M, dF, dM, Fp, ds, Vvec = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
 
 
     # force and moment coefficients
@@ -678,16 +662,14 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     dCM[3] = dM[3]/(qinf*Sref*bref)
 
 
-    # # trefftz plane analysis for drag
+    # trefftz plane analysis for drag
     CDiff = Di_trefftz(panels, fs, Gamma, symmetric) / (qinf*Sref)  
 
     # # normalize p, q, r    
     dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*VINF/bref, dCF.q*2*VINF/cref, dCF.r*2*VINF/bref)
     dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*VINF/bref, dCM.q*2*VINF/cref, dCM.r*2*VINF/bref)
 
-    # rotate p, q, r, to stability axes
-    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*cos(fs.alpha) + dCF.r*sin(fs.alpha), dCF.q, -dCF.p*sin(fs.alpha) + dCF.r*cos(fs.alpha))
-    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*cos(fs.alpha) + dCM.r*sin(fs.alpha), dCM.q, -dCM.p*sin(fs.alpha) + dCM.r*cos(fs.alpha))
+    # rotate p, q, r, from wind to stability axes
 
     # lift and cl dist
     ymid = [mid_point(p)[2] for p in panels]
@@ -701,7 +683,7 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
     
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
-    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*Sref), ds, Vmag, Gamma)
+    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*Sref), ds, Vvec/VINF, Gamma/VINF)
 end
 
 

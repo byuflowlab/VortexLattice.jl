@@ -2,57 +2,173 @@ using PyPlot
 
 export linearsections
 
-function linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing)
 
-    # initialize
-    nsections = length(xle) - 1  # number of segments on lifting surface
-    nptotal = sum(npanels)  # total number of panels
-    if duplicate
-        panels = Array{Panel}(undef, 2*nptotal)  # twice the number of panels
-    else
-        panels = Array{Panel}(undef, nptotal)
+
+#=
+Panel order numbering:
+
+1 ------- 2
+|         |
+|         |
+3-------- 4
+
+=#
+
+
+"""linearly interpolate between two points, eta is fraction between 0 (rstart) and 1 (rend)"""
+function linearinterp(eta, rstart, rend)
+
+    return (1-eta)*rstart + eta*rend
+end
+
+
+"""define quarter chord and control points of one panel"""
+function makepanel(r1, r2, r3, r4, theta)
+
+    # quarter chord points
+    rl = linearinterp(0.25, r1, r3)
+    rr = linearinterp(0.25, r2, r4)
+
+    # control point
+    rmid1 = linearinterp(0.5, r1, r2)
+    rmid2 = linearinterp(0.5, r3, r4)
+    rcp = linearinterp(0.75, rmid1, rmid2)
+
+    return Panel(rl, rr, rcp, theta)
+
+end
+
+"""create 1D spacing (uniform, cosing, etc.)"""
+function createspacing(n, spacing)
+
+    if spacing == "u"  # uniform
+        eta = range(0, 1.0, length=n)
+    elseif spacing == "c"  # cosine
+        eta = cos.(range(pi/2, 0, length=n))
     end
-    start = 0
 
-    for i = 1:nsections
+    return eta
 
-        # create basic geometry
-        if spacing == "uniform"
-            eta = range(0, 1, length=npanels[i]+1)
-        elseif spacing == "cosine"
-            eta = cos.(range(pi/2, 0, length=npanels[i]+1))
-        end
+end
 
-        # midpoints
-        etabar = 0.5*(eta[1:end-1] + eta[2:end])
-        
-        # linearly interpolate
-        xvec = (1 .- eta)*(xle[i] + chord[i]/4.0) + eta*(xle[i+1] + chord[i+1]/4.0)
-        yvec = (1 .- eta)*yle[i] + eta*yle[i+1]
-        zvec = (1 .- eta)*zle[i] + eta*zle[i+1]
-        cvec = (1 .- etabar)*chord[i] + etabar*chord[i+1]
-        tvec = (1 .- etabar)*theta[i] + etabar*theta[i+1]
-        
 
-        # create panels
-        for j = 1:npanels[i]
-            rleft = [xvec[j]; yvec[j]; zvec[j]]
-            rright = [xvec[j+1]; yvec[j+1]; zvec[j+1]]
-            panels[start + j] = Panel(rleft, rright, cvec[j], tvec[j])
+"""discretize a linear segement of a wing"""
+function creategrid_onesegment(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, thetaL, thetaR)
+
+    # compute a grid
+    rpts = zeros(3, nc+1, ns+1)
+
+    etas = createspacing(ns+1, spacing_s)
+    etac = createspacing(nc+1, spacing_c)
+
+    for j = 1:ns+1
+        for i = 1:nc+1
+
+            rtop = linearinterp(etas[j], r1, r2)
+            rbot = linearinterp(etas[j], r3, r4)
             
-            if duplicate
-                rleft = [xvec[j+1]; -yvec[j+1]; zvec[j+1]]
-                rright = [xvec[j]; -yvec[j]; zvec[j]]
-                panels[nptotal + start + j] = Panel(rleft, rright, cvec[j], tvec[j])
-            end
+            rpts[:, i, j] = linearinterp(etac[i], rtop, rbot)
         end
+    end
 
-        # update starting index
-        start += npanels[i]
+    # compute twist angles (assumed constant chordwise) at each control point
+    etabar = 0.5*(etas[1:end-1] + etas[2:end])
+    thetas = (1 .- etabar)*thetaL + etabar*thetaR
+
+    # create the panels at each grid
+    panels = Array{Panel}(undef, ns*nc)
+
+    for j = 1:ns
+        for i = 1:nc
+            panels[(j-1)*nc + i] = makepanel(rpts[:, i, j], rpts[:, i, j+1], rpts[:, i+1, j], rpts[:, i+1, j+1], thetas[j])
+        end
     end
 
     return panels
 end
+
+
+function linearsections(xle, yle, zle, chord, theta, ns, spacing_s, nc, spacing_c, duplicate)
+
+    panels = Array{Panel}(undef, 0)
+
+    n = length(ns)
+    for i = 1:n
+        r1 = [xle[i]; yle[i]; zle[i]]
+        r2 = [xle[i+1]; yle[i+1]; zle[i+1]]
+        r3 = [xle[i] + chord[i]; yle[i]; zle[i]]
+        r4 = [xle[i+1] + chord[i+1]; yle[i+1]; zle[i+1]]
+
+        panels = [panels; creategrid_onesegment(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])]
+    end
+
+    if duplicate
+
+        for i = 1:n
+            r1 = [xle[i+1]; -yle[i+1]; zle[i+1]]
+            r2 = [xle[i]; -yle[i]; zle[i]]
+            r3 = [xle[i+1] + chord[i+1]; -yle[i+1]; zle[i+1]]
+            r4 = [xle[i] + chord[i]; -yle[i]; zle[i]]
+
+            panels = [panels; creategrid_onesegment(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])]
+        end
+
+    end
+
+    return panels
+end
+
+# function linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing)
+
+#     # initialize
+#     nsections = length(xle) - 1  # number of segments on lifting surface
+#     nptotal = sum(npanels)  # total number of panels
+#     if duplicate
+#         panels = Array{Panel}(undef, 2*nptotal)  # twice the number of panels
+#     else
+#         panels = Array{Panel}(undef, nptotal)
+#     end
+#     start = 0
+
+#     for i = 1:nsections
+
+#         # create basic geometry
+#         if spacing == "uniform"
+#             eta = range(0, 1, length=npanels[i]+1)
+#         elseif spacing == "cosine"
+#             eta = cos.(range(pi/2, 0, length=npanels[i]+1))
+#         end
+
+#         # midpoints
+#         etabar = 0.5*(eta[1:end-1] + eta[2:end])
+        
+#         # linearly interpolate
+#         xvec = (1 .- eta)*(xle[i] + chord[i]/4.0) + eta*(xle[i+1] + chord[i+1]/4.0)
+#         yvec = (1 .- eta)*yle[i] + eta*yle[i+1]
+#         zvec = (1 .- eta)*zle[i] + eta*zle[i+1]
+#         cvec = (1 .- etabar)*chord[i] + etabar*chord[i+1]
+#         tvec = (1 .- etabar)*theta[i] + etabar*theta[i+1]
+        
+
+#         # create panels
+#         for j = 1:npanels[i]
+#             rleft = [xvec[j]; yvec[j]; zvec[j]]
+#             rright = [xvec[j+1]; yvec[j+1]; zvec[j+1]]
+#             panels[start + j] = Panel(rleft, rright, cvec[j], tvec[j])
+            
+#             if duplicate
+#                 rleft = [xvec[j+1]; -yvec[j+1]; zvec[j+1]]
+#                 rright = [xvec[j]; -yvec[j]; zvec[j]]
+#                 panels[nptotal + start + j] = Panel(rleft, rright, cvec[j], tvec[j])
+#             end
+#         end
+
+#         # update starting index
+#         start += npanels[i]
+#     end
+
+#     return panels
+# end
 
 function translate!(panels, r)
 
@@ -61,6 +177,7 @@ function translate!(panels, r)
     for i = 1:npanels
         panels[i].rl[:] += r[:]
         panels[i].rr[:] += r[:]
+        panels[i].rcp[:] += r[:]
     end
 end
 
@@ -78,7 +195,7 @@ function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
     chord = [cr; ct]
     theta = [θr; θt]
 
-    return linearsections(xle, yle, zle, chord, theta, [npanels], duplicate, spacing)
+    return linearsections(xle, yle, zle, chord, theta, [npanels], spacing, [1], "uniform", duplicate)
 
 end
 
