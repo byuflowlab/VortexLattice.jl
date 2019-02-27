@@ -1,5 +1,3 @@
-using PyPlot
-
 export linearsections
 
 
@@ -22,32 +20,67 @@ function linearinterp(eta, rstart, rend)
 end
 
 
-"""define quarter chord and control points of one panel"""
-function makepanel(r1, r2, r3, r4, theta)
 
-    # quarter chord points
-    rl = linearinterp(0.25, r1, r3)
-    rr = linearinterp(0.25, r2, r4)
+# """define quarter chord and control points of one panel"""
+# function makepanel(r1, r2, r3, r4, theta, cpfrac)
 
-    # control point
-    rmid1 = linearinterp(0.5, r1, r2)
-    rmid2 = linearinterp(0.5, r3, r4)
-    rcp = linearinterp(0.75, rmid1, rmid2)
+#     # quarter chord points
+#     rl = linearinterp(0.25, r1, r3)
+#     rr = linearinterp(0.25, r2, r4)
 
-    return Panel(rl, rr, rcp, theta)
+#     # control point
+#     rmid1 = linearinterp(cpfrac, r1, r2)  # cpfrac = 0.5 for uniform spacing
+#     rmid2 = linearinterp(cpfrac, r3, r4)
+#     rcp = linearinterp(0.75, rmid1, rmid2)
+
+#     return Panel(rl, rr, rcp, theta)
+
+# end
+
+function spanwise_spacing(n, stype)
+
+    if stype == "u"  # uniform
+
+        eta = range(0, 1.0, length=n)
+        eta_mid = linearinterp(0.5, eta[1:end-1], eta[2:end])
+
+    elseif stype == "c"  # cosine
+
+        theta = range(0, pi, length=n)
+        eta = (1.0 .- cos.(theta))/2.0
+
+        # note that control points are also placed with cosine spacing as this improves accuracy tremendously
+        theta_mid = linearinterp(0.5, theta[1:end-1], theta[2:end])
+        eta_mid = (1.0 .- cos.(theta_mid))/2.0
+
+    else
+        error("invalid spacing type: ")
+    end
+
+    return eta, eta_mid
 
 end
 
-"""create 1D spacing (uniform, cosing, etc.)"""
-function createspacing(n, spacing)
 
-    if spacing == "u"  # uniform
+function chordwise_spacing(n, stype)
+
+    if stype == "u"  # uniform
+        
         eta = range(0, 1.0, length=n)
-    elseif spacing == "c"  # cosine
-        eta = cos.(range(pi/2, 0, length=n))
+        
+    elseif stype == "c"  # cosine
+
+        theta = range(0, pi, length=n)
+        eta = (1.0 .- cos.(theta))/2.0
+
+    else
+        error("invalid spacing type: ")
     end
 
-    return eta
+    eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
+    eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
+
+    return eta_qtr, eta_thrqtr
 
 end
 
@@ -55,34 +88,33 @@ end
 """discretize a linear segement of a wing"""
 function creategrid_onesegment(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, thetaL, thetaR)
 
-    # compute a grid
-    rpts = zeros(3, nc+1, ns+1)
 
-    etas = createspacing(ns+1, spacing_s)
-    etac = createspacing(nc+1, spacing_c)
+    etas, etabar = spanwise_spacing(ns+1, spacing_s)
+    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    for j = 1:ns+1
-        for i = 1:nc+1
+    panels = Vector{Panel}(undef, ns*nc)
+    for j = 1:ns
+        for i = 1:nc
 
             rtop = linearinterp(etas[j], r1, r2)
             rbot = linearinterp(etas[j], r3, r4)
+            rl = linearinterp(eta_qtr[i], rtop, rbot)
+
+            rtop = linearinterp(etas[j+1], r1, r2)
+            rbot = linearinterp(etas[j+1], r3, r4)
+            rr = linearinterp(eta_qtr[i], rtop, rbot)
+
+            rtop = linearinterp(etabar[j], r1, r2)
+            rbot = linearinterp(etabar[j], r3, r4)
+            rcp = linearinterp(eta_thrqtr[i], rtop, rbot)
+
+            theta = linearinterp(etabar[j], thetaL, thetaR)
+
+            panels[(j-1)*nc + i] = Panel(rl, rr, rcp, theta)
             
-            rpts[:, i, j] = linearinterp(etac[i], rtop, rbot)
         end
     end
 
-    # compute twist angles (assumed constant chordwise) at each control point
-    etabar = 0.5*(etas[1:end-1] + etas[2:end])
-    thetas = (1 .- etabar)*thetaL + etabar*thetaR
-
-    # create the panels at each grid
-    panels = Array{Panel}(undef, ns*nc)
-
-    for j = 1:ns
-        for i = 1:nc
-            panels[(j-1)*nc + i] = makepanel(rpts[:, i, j], rpts[:, i, j+1], rpts[:, i+1, j], rpts[:, i+1, j+1], thetas[j])
-        end
-    end
 
     return panels
 end
@@ -90,14 +122,14 @@ end
 
 function linearsections(xle, yle, zle, chord, theta, ns, spacing_s, nc, spacing_c, duplicate)
 
-    panels = Array{Panel}(undef, 0)
+    panels = Vector{Panel}(undef, 0)
 
     n = length(ns)
     for i = 1:n
         r1 = [xle[i]; yle[i]; zle[i]]
         r2 = [xle[i+1]; yle[i+1]; zle[i+1]]
-        r3 = [xle[i] + chord[i]; yle[i]; zle[i]]
-        r4 = [xle[i+1] + chord[i+1]; yle[i+1]; zle[i+1]]
+        r3 = r1 + [chord[i]; 0; 0]
+        r4 = r2 + [chord[i+1]; 0; 0]
 
         panels = [panels; creategrid_onesegment(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])]
     end
@@ -107,8 +139,8 @@ function linearsections(xle, yle, zle, chord, theta, ns, spacing_s, nc, spacing_
         for i = 1:n
             r1 = [xle[i+1]; -yle[i+1]; zle[i+1]]
             r2 = [xle[i]; -yle[i]; zle[i]]
-            r3 = [xle[i+1] + chord[i+1]; -yle[i+1]; zle[i+1]]
-            r4 = [xle[i] + chord[i]; -yle[i]; zle[i]]
+            r3 = r1 + [chord[i+1]; 0; 0] 
+            r4 = r2 + [chord[i]; 0; 0]
 
             panels = [panels; creategrid_onesegment(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])]
         end
@@ -195,101 +227,101 @@ function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
     chord = [cr; ct]
     theta = [θr; θt]
 
-    return linearsections(xle, yle, zle, chord, theta, [npanels], spacing, [1], "uniform", duplicate)
+    return linearsections(xle, yle, zle, chord, theta, [npanels], [spacing], [1], ["u"], duplicate)
 
 end
 
 
-# TODO: With Pkg3 I can make this a separate module within same repo so base VLM doesn't depending on plotting.
-function visualizegeometry(panels)
+# # TODO: With Pkg3 I can make this a separate module within same repo so base VLM doesn't depending on plotting.
+# function visualizegeometry(panels)
 
-    for i = 1:length(panels)
+#     for i = 1:length(panels)
         
-        x = [panels[i].rl[1]; panels[i].rr[1]]
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        z = [panels[i].rl[3]; panels[i].rr[3]]
-        plot3D(x, y, z, color="b")
-        plot3D(x, -y, z, color="b")
-        x = [panels[i].rl[1]; panels[i].rl[1] + 3.0/4*panels[i].chord]
-        y = [panels[i].rl[2]; panels[i].rl[2]]
-        z = [panels[i].rl[3]; panels[i].rl[3]]
-        plot3D(x, y, z, color="b")
-        plot3D(x, -y, z, color="b")
-        x = [panels[i].rr[1]; panels[i].rr[1] + 3.0/4*panels[i].chord]
-        y = [panels[i].rr[2]; panels[i].rr[2]]
-        z = [panels[i].rr[3]; panels[i].rr[3]]
-        plot3D(x, y, z, color="b")
-        plot3D(x, -y, z, color="b")
-        x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        z = [panels[i].rl[3]; panels[i].rr[3]]
-        plot3D(x, y, z, color="0.5")
-        plot3D(x, -y, z, color="0.5")
-        x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        z = [panels[i].rl[3]; panels[i].rr[3]]
-        plot3D(x, y, z, color="0.5")
-        plot3D(x, -y, z, color="0.5")
+#         x = [panels[i].rl[1]; panels[i].rr[1]]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         z = [panels[i].rl[3]; panels[i].rr[3]]
+#         plot3D(x, y, z, color="b")
+#         plot3D(x, -y, z, color="b")
+#         x = [panels[i].rl[1]; panels[i].rl[1] + 3.0/4*panels[i].chord]
+#         y = [panels[i].rl[2]; panels[i].rl[2]]
+#         z = [panels[i].rl[3]; panels[i].rl[3]]
+#         plot3D(x, y, z, color="b")
+#         plot3D(x, -y, z, color="b")
+#         x = [panels[i].rr[1]; panels[i].rr[1] + 3.0/4*panels[i].chord]
+#         y = [panels[i].rr[2]; panels[i].rr[2]]
+#         z = [panels[i].rr[3]; panels[i].rr[3]]
+#         plot3D(x, y, z, color="b")
+#         plot3D(x, -y, z, color="b")
+#         x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         z = [panels[i].rl[3]; panels[i].rr[3]]
+#         plot3D(x, y, z, color="0.5")
+#         plot3D(x, -y, z, color="0.5")
+#         x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         z = [panels[i].rl[3]; panels[i].rr[3]]
+#         plot3D(x, y, z, color="0.5")
+#         plot3D(x, -y, z, color="0.5")
 
         
-    end
+#     end
     
-    grid("off")
-    # gca()[:view_init](90.0, 0.0)
-    gca()[:view_init](20, -135)
-    axis("equal")
-    xlabel("x")
-    ylabel("y")
-    zlabel("z")
-end
+#     grid("off")
+#     # gca()[:view_init](90.0, 0.0)
+#     gca()[:view_init](20, -135)
+#     axis("equal")
+#     xlabel("x")
+#     ylabel("y")
+#     zlabel("z")
+# end
 
 
 
-function visualizeoutline2d(panels)
+# function visualizeoutline2d(panels)
 
-    for i = 1:length(panels)
+#     for i = 1:length(panels)
         
-        x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        plot(y, -x, color="k")
-        plot(-y, -x, color="k")
-        x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        plot(y, -x, color="k")
-        plot(-y, -x, color="k")        
-    end
+#         x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         plot(y, -x, color="k")
+#         plot(-y, -x, color="k")
+#         x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         plot(y, -x, color="k")
+#         plot(-y, -x, color="k")        
+#     end
 
-    x = [panels[end].rr[1] - 1.0/4*panels[end].chord; panels[end].rr[1] + 3.0/4*panels[end].chord]
-    y = [panels[end].rr[2]; panels[end].rr[2]]
-    plot(y, -x, color="k")
-    p, = plot(-y, -x, color="k")
+#     x = [panels[end].rr[1] - 1.0/4*panels[end].chord; panels[end].rr[1] + 3.0/4*panels[end].chord]
+#     y = [panels[end].rr[2]; panels[end].rr[2]]
+#     plot(y, -x, color="k")
+#     p, = plot(-y, -x, color="k")
     
-    axis("equal")
-    axis("off")
+#     axis("equal")
+#     axis("off")
 
-    return p
-end
+#     return p
+# end
 
 
 
-function twoview(panels)
+# function twoview(panels)
 
-    p = visualizeoutline2d(panels)
-    xleft = panels[1].rl[1] + 3.0/4*panels[1].chord
-    xright = panels[end].rr[1] + 3.0/4*panels[end].chord
-    xmax = max(xleft, xright)
-    xoffset = xmax + panels[1].chord
+#     p = visualizeoutline2d(panels)
+#     xleft = panels[1].rl[1] + 3.0/4*panels[1].chord
+#     xright = panels[end].rr[1] + 3.0/4*panels[end].chord
+#     xmax = max(xleft, xright)
+#     xoffset = xmax + panels[1].chord
     
-    p2 = p
-    for i = 1:length(panels)
+#     p2 = p
+#     for i = 1:length(panels)
         
-        y = [panels[i].rl[2]; panels[i].rr[2]]
-        z = [panels[i].rl[3]; panels[i].rr[3]]
+#         y = [panels[i].rl[2]; panels[i].rr[2]]
+#         z = [panels[i].rl[3]; panels[i].rr[3]]
         
-        plot(y, z - xoffset, color="r")
-        p2, = plot(-y, z - xoffset, color="r")
-    end
+#         plot(y, z - xoffset, color="r")
+#         p2, = plot(-y, z - xoffset, color="r")
+#     end
 
-    legend([p, p2], ["top view", "back view"])
+#     legend([p, p2], ["top view", "back view"])
     
-end
+# end

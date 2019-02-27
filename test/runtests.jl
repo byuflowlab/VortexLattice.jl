@@ -11,10 +11,9 @@ yle = [0.0; 7.5]
 zle = [0.0; 0.0]
 chord = [2.2; 1.8]
 theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [11]
+npanels = [12]
 spacing = ["u"]
 duplicate = false
-# panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, duplicate, spacing)
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
 
 alpha = 1.0*pi/180
@@ -119,10 +118,10 @@ Clr, Cmr, Cnr = outputs.dCM.r
 #  Neutral point  Xnp =   0.685096
 
 
-# ---- simple wing with chordwise panels -----
+# ---- simple wing with chordwise panels (run7) -----
 
 duplicate = false
-cpanels = [6]
+cpanels = [5]
 cspacing = ["u"]
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
 
@@ -134,7 +133,49 @@ Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.24454, atol=1e-3)
 @test isapprox(CD, 0.00247, atol=1e-5)
 @test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
-@test isapprox(Cm, -0.02091, atol=1e-4)
+@test isapprox(Cm, -0.02091, atol=2e-4)
+@test CY == 0.0
+@test Cl == 0.0
+@test Cn == 0.0
+
+
+# ----- simple wing with cosine spacing (run8) -----
+
+
+duplicate = false
+cpanels = [1]
+cspacing = ["u"]
+panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
+
+symmetric = true
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
+
+@test isapprox(CL, 0.23744, atol=0.01*CL)
+# @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
+# @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
+@test isapprox(Cm, -0.02165, atol=1e-4)
+@test CY == 0.0
+@test Cl == 0.0
+@test Cn == 0.0
+
+# ----- simple wing with cosine spacing chordwise and spanwise (run9) -----
+
+duplicate = false
+cpanels = [5]
+cspacing = ["c"]
+panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
+
+symmetric = true
+outputs = VLM.solve(panels, ref, fs, symmetric)
+CD, CY, CL = outputs.CF
+Cl, Cm, Cn = outputs.CM
+
+@test isapprox(CL, 0.23879, atol=0.01*CL) 
+# @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
+# @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
+@test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
 @test CY == 0.0
 @test Cl == 0.0
 @test Cn == 0.0
@@ -146,21 +187,6 @@ Cl, Cm, Cn = outputs.CM
 duplicate = false
 symmetric = true
 
-
-# TODO
-# # ---- run2 ------  simple wing with cosine spacing
-# spacing = "cosine"
-# panels = VLM.simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, symmetric, spacing)
-
-# CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(panels, ref, fs, symmetric)
-# CD, CY, CL = CF
-# Cl, Cm, Cn = CM
-# # @test isapprox(CL, 0.23744, atol=1e-3)  #  TODO: is this really correct in AVL?  Seems like a big leap?
-# # @test isapprox(CD, 0.00243, atol=1e-5)
-# # @test isapprox(Cm, -0.02165, atol=1e-4)
-# # @test CY == 0.0
-# # @test Cl == 0.0
-# # @test Cn == 0.0
 
 
 # ---- run3 ------  simple wing at higher angle of attack
