@@ -49,6 +49,7 @@ velocity-deficit.pdf
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*Manifest.toml
 
 # jupyter
 .ipynb_checkpoints

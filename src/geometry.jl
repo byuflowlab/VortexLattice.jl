@@ -39,7 +39,7 @@ function chordwise_spacing(n, stype)
     if stype == "u"  # uniform
 
         eta = range(0, 1.0, length=n)
-        
+
     elseif stype == "c"  # cosine
 
         theta = range(0, pi, length=n)
@@ -94,7 +94,7 @@ function creategrid_onesegment(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, the
             theta = linearinterp(etabar[j], thetaL, thetaR)
 
             panels[(j-1)*nc + i] = Panel(rl, rr, rcp, theta)
-            
+
         end
     end
 
@@ -122,7 +122,7 @@ function linearsections(xle, yle, zle, chord, theta, ns, spacing_s, nc, spacing_
         for i = 1:n
             r1 = [xle[i+1]; -yle[i+1]; zle[i+1]]
             r2 = [xle[i]; -yle[i]; zle[i]]
-            r3 = r1 + [chord[i+1]; 0; 0] 
+            r3 = r1 + [chord[i+1]; 0; 0]
             r4 = r2 + [chord[i]; 0; 0]
 
             panels = [panels; creategrid_onesegment(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])]
@@ -139,15 +139,13 @@ function translate!(panels, r)
     npanels = length(panels)
 
     for i = 1:npanels
-        panels[i].rl[:] += r[:]
-        panels[i].rr[:] += r[:]
-        panels[i].rcp[:] += r[:]
+        panels[i] = Panel(panels[i].rl + r, panels[i].rr + r, panels[i].rcp + r, panels[i].theta)
     end
 end
 
 
 function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
-    
+
     # geometry parsing
     S = b^2/AR
     cr = 2*S/(b*(1 + λ))
@@ -168,7 +166,7 @@ end
 # function visualizegeometry(panels)
 
 #     for i = 1:length(panels)
-        
+
 #         x = [panels[i].rl[1]; panels[i].rr[1]]
 #         y = [panels[i].rl[2]; panels[i].rr[2]]
 #         z = [panels[i].rl[3]; panels[i].rr[3]]
@@ -195,9 +193,9 @@ end
 #         plot3D(x, y, z, color="0.5")
 #         plot3D(x, -y, z, color="0.5")
 
-        
+
 #     end
-    
+
 #     grid("off")
 #     # gca()[:view_init](90.0, 0.0)
 #     gca()[:view_init](20, -135)
@@ -212,7 +210,7 @@ end
 # function visualizeoutline2d(panels)
 
 #     for i = 1:length(panels)
-        
+
 #         x = [panels[i].rl[1] - 1.0/4*panels[i].chord; panels[i].rr[1] - 1.0/4*panels[i].chord]
 #         y = [panels[i].rl[2]; panels[i].rr[2]]
 #         plot(y, -x, color="k")
@@ -220,14 +218,14 @@ end
 #         x = [panels[i].rl[1] + 3.0/4*panels[i].chord; panels[i].rr[1] + 3.0/4*panels[i].chord]
 #         y = [panels[i].rl[2]; panels[i].rr[2]]
 #         plot(y, -x, color="k")
-#         plot(-y, -x, color="k")        
+#         plot(-y, -x, color="k")
 #     end
 
 #     x = [panels[end].rr[1] - 1.0/4*panels[end].chord; panels[end].rr[1] + 3.0/4*panels[end].chord]
 #     y = [panels[end].rr[2]; panels[end].rr[2]]
 #     plot(y, -x, color="k")
 #     p, = plot(-y, -x, color="k")
-    
+
 #     axis("equal")
 #     axis("off")
 
@@ -243,17 +241,17 @@ end
 #     xright = panels[end].rr[1] + 3.0/4*panels[end].chord
 #     xmax = max(xleft, xright)
 #     xoffset = xmax + panels[1].chord
-    
+
 #     p2 = p
 #     for i = 1:length(panels)
-        
+
 #         y = [panels[i].rl[2]; panels[i].rr[2]]
 #         z = [panels[i].rl[3]; panels[i].rr[3]]
-        
+
 #         plot(y, z - xoffset, color="r")
 #         p2, = plot(-y, z - xoffset, color="r")
 #     end
 
 #     legend([p, p2], ["top view", "back view"])
-    
+
 # end

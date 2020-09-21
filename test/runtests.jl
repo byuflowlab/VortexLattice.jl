@@ -29,7 +29,7 @@ rcg = [0.50, 0.0, 0.0]
 ref = VLM.Reference(Sref, cref, bref, rcg)
 
 symmetric = true
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -48,7 +48,7 @@ duplicate = true
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
 
 symmetric = false
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -61,37 +61,37 @@ Cl, Cm, Cn = outputs.CM
 @test isapprox(Cn, 0.0, atol=1e-16)
 
 
-CDa, CYa, CLa = outputs.dCF.alpha
-Cla, Cma, Cna = outputs.dCM.alpha
-CDb, CYb, CLb = outputs.dCF.beta
-Clb, Cmb, Cnb = outputs.dCM.beta
-CDp, CYp, CLp = outputs.dCF.p
-Clp, Cmp, Cnp = outputs.dCM.p
-CDq, CYq, CLq = outputs.dCF.q
-Clq, Cmq, Cnq = outputs.dCM.q
-CDr, CYr, CLr = outputs.dCF.r
-Clr, Cmr, Cnr = outputs.dCM.r
-
-@test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
-@test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
-@test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
-# @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+# CDa, CYa, CLa = outputs.dCF.alpha
+# Cla, Cma, Cna = outputs.dCM.alpha
+# CDb, CYb, CLb = outputs.dCF.beta
+# Clb, Cmb, Cnb = outputs.dCM.beta
+# CDp, CYp, CLp = outputs.dCF.p
+# Clp, Cmp, Cnp = outputs.dCM.p
+# CDq, CYq, CLq = outputs.dCF.q
+# Clq, Cmq, Cnq = outputs.dCM.q
+# CDr, CYr, CLr = outputs.dCF.r
+# Clr, Cmr, Cnr = outputs.dCM.r
+#
+# @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+# @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+# @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+# @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+# # @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+# @test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+# # @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+# @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+# @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+# # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
 
 # h = 1e-6
 # betap = beta + h
 # fsp = VLM.Freestream(alpha, betap, Omega, vother)
-# outputsp = VLM.solve(panels, ref, fsp, symmetric)
+# outputsp = VLM.vlm(panels, ref, fsp, symmetric)
 # Cl_p, Cm_p, Cn_p = outputsp.CM
 
 # betam = beta - h
 # fsm = VLM.Freestream(alpha, betam, Omega, vother)
-# outputsm = VLM.solve(panels, ref, fsm, symmetric)
+# outputsm = VLM.vlm(panels, ref, fsm, symmetric)
 # Cl_m, Cm_m, Cn_m = outputsm.CM
 # println(Clb)
 # println((Cl_p - Cl_m)/(2*h))
@@ -126,7 +126,7 @@ cspacing = ["u"]
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -148,7 +148,7 @@ cspacing = ["u"]
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -168,11 +168,11 @@ cspacing = ["c"]
 panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
-@test isapprox(CL, 0.23879, atol=0.01*CL) 
+@test isapprox(CL, 0.23879, atol=0.01*CL)
 # @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
 # @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
 @test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
@@ -197,7 +197,7 @@ panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], 
 alpha = 8.0*pi/180
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.80348, atol=2e-3)
@@ -235,7 +235,7 @@ bref = 15.0
 rcg = [0.50, 0.0, 0.0]
 ref = VLM.Reference(Sref, cref, bref, rcg)
 
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.24787, atol=1e-3)
@@ -252,7 +252,7 @@ Cl, Cm, Cn = outputs.CM
 alpha = 20.0*pi/180  # nonphysical, just testing the numerics
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
-outputs = VLM.solve(panels, ref, fs, symmetric)
+outputs = VLM.vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 1.70985, atol=.02*abs(CL))
@@ -316,11 +316,11 @@ vother = nothing
 fs = VLM.Freestream(alpha, beta, Omega, vother)
 
 symmetric = true
-outputs = VLM.solve(vehicle, ref, fs, symmetric)
+outputs = VLM.vlm(vehicle, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.60563, atol=.01*abs(CL))
-@test isapprox(CD, 0.01049, atol=.01*abs(CD)) 
+@test isapprox(CD, 0.01049, atol=.01*abs(CD))
 # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
 @test CY == 0.0
 @test Cl == 0.0
