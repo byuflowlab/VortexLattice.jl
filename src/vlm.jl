@@ -27,72 +27,18 @@ Base.eltype(::Type{Panel{TF}}) where TF = TF
 Base.eltype(::Panel{TF}) where TF = TF
 
 """
-    surface_panels(grid::AbstractArray{3,TF})
-
-Constructs a set of vortex lattice panels given a grid with dimensions (3, i, j).
-The i-direction is assumed to be in the streamwise direction.  The resulting
-vector of panels can be reshaped to correspond to the original grid with
-`reshape(panels, ni-1, nj-1)`.
-"""
-function surface_panels(grid::AbstractArray{TF, 3}) where TF
-
-    ni = size(grid, 2)
-    nj = size(grid, 3)
-    N = (ni-1)*(nj-1)
-
-    # initialize output
-    panels = Vector{Panel{TF}}(undef, N)
-
-    # populate each panel
-    ipanel = 0
-    for j = 2:nj
-        for i = 2:ni
-            # left vortex point at 1/4 chord
-            rlx = 0.75*grid[1, i-1, j-1] + 0.25*grid[1, i, j-1]
-            rly = 0.75*grid[2, i-1, j-1] + 0.25*grid[2, i, j-1]
-            rlz = 0.75*grid[3, i-1, j-1] + 0.25*grid[3, i, j-1]
-            rl = SVector(rlx, rly, rlz)
-            # right vortex point at 1/4 chord
-            rrx = 0.75*grid[1, i-1, j] + 0.25*grid[1, i, j]
-            rry = 0.75*grid[2, i-1, j] + 0.25*grid[2, i, j]
-            rrz = 0.75*grid[3, i-1, j] + 0.25*grid[3, i, j]
-            rr = SVector(rrx, rry, rrz)
-            # control point at 3/4 chord
-            rcpx = 0.25*(0.5*grid[1, i-1, j-1] + 0.5*grid[1, i-1, j]) +
-                0.75*(0.5*grid[1, i, j-1] + 0.5*grid[1, i, j])
-            rcpy = 0.25*(0.5*grid[2, i-1, j-1] + 0.5*grid[2, i-1, j]) +
-                0.75*(0.5*grid[2, i, j-1] + 0.5*grid[2, i, j])
-            rcpz = 0.25*(0.5*grid[3, i-1, j-1] + 0.5*grid[3, i-1, j]) +
-                0.75*(0.5*grid[3, i, j-1] + 0.5*grid[3, i, j])
-            rcp = SVector(rcpx, rcpy, rcpz)
-            # twist angle derived from the geometry at control point
-            dx = (0.5*grid[1, i, j-1] + 0.5*grid[1, i, j]) -
-                (0.5*grid[1, i-1, j-1] + 0.5*grid[1, i-1, j])
-            dz = (0.5*grid[3, i-1, j-1] + 0.5*grid[3, i-1, j]) -
-                (0.5*grid[3, i, j-1] + 0.5*grid[3, i, j])
-            theta = dz/dx
-            # add panel to array
-            ipanel += 1
-            panels[ipanel] = Panel{TF}(rl, rr, rcp, theta)
-        end
-    end
-
-    return panels
-end
-
-"""
     midpoint(panel)
 
 Compute the bound vortex midpoint of `panel`
 """
-midpoint(panel) = (panel.rl + panel.rr)/2
+@inline midpoint(panel) = (panel.rl + panel.rr)/2
 
 """
     normal(panel)
 
 Compute the normal vector of `panel`
 """
-function normal(panel)
+@inline function normal(panel)
 
     delta = panel.rr - panel.rl
     dy = delta[2]
@@ -112,7 +58,7 @@ end
 
 Compute the normal vector for `panel` when projected onto the Trefftz plane (including magnitude)
 """
-function trefftz_plane_normal(panel)
+@inline function trefftz_plane_normal(panel)
 
     # includes magnitude
     delta = panel.rr - panel.rl
@@ -122,6 +68,27 @@ function trefftz_plane_normal(panel)
     nhat = SVector(0.0, -dz, dy)
 
     return nhat
+end
+
+"""
+    translate!(panels, r)
+
+Translates the panels contained in `panels` the distance specified by vector `r`
+"""
+function translate!(panels, r)
+
+    TF = eltype(eltype(panels))
+
+    npanels = length(panels)
+    for i = 1:npanels
+        rl = panels[i].rl + r
+        rr = panels[i].rr + r
+        rcp = panels[i].rcp + r
+        theta = panels[i].theta
+        panels[i] = Panel{TF}(rl, rr, rcp, theta)
+    end
+
+    return panels
 end
 
 # -------------------------------
@@ -160,7 +127,7 @@ Base.eltype(::Freestream{TF, TV}) where {TF,TV} = TF
 
 Construct a rotation matrix from the body axis to the wind axis
 """
-function body_to_wind(fs::Freestream)
+@inline function body_to_wind(fs::Freestream)
 
     alpha = fs.alpha
     beta = fs.beta
@@ -252,6 +219,34 @@ end
 Base.eltype(::Type{Outputs{TF}}) where TF = TF
 Base.eltype(::Outputs{TF}) where TF = TF
 
+"""
+    StabilityDerivatives
+
+Holds stability derivatives
+
+# Fields:
+ - `alpha`: angle of attack
+ - `beta`: sideslip
+ - `p`: roll rate
+ - `q`: pitch rate
+ - `r`: yaw rate
+"""
+struct StabilityDerivatives{TF}
+    alpha::TF
+    beta::TF
+    p::TF
+    q::TF
+    r::TF
+end
+
+function StabilityDerivatives(alpha, beta, p, q, r)
+    TF = promote_type(typeof(alpha), typeof(beta), typeof(p), typeof(q), typeof(r))
+    return StabilityDerivatives{TF}(alpha, beta, p, q, r)
+end
+
+Base.eltype(::Type{StabilityDerivatives{TF}}) where TF = TF
+Base.eltype(::StabilityDerivatives{TF}) where TF = TF
+
 # ----------- Convenience Methods ---------------
 
 """
@@ -259,14 +254,14 @@ Base.eltype(::Outputs{TF}) where TF = TF
 
 Flip sign of y-component of vector `r` (used for symmetry)
 """
-flipy(r) = SVector{3}(r[1], -r[2], r[3])
+@inline flipy(r) = SVector{3}(r[1], -r[2], r[3])
 
 """
     not_on_symmetry_plane(r1, r2, tol=eps())
 
 Test whether points `r1` and `r2` are on the symmetry plane (y = 0)
 """
-function not_on_symmetry_plane(r1, r2, tol=eps())
+@inline function not_on_symmetry_plane(r1, r2, tol=eps())
     return !(isapprox(r1[2], 0.0, atol=tol) && isapprox(r2[2], 0.0, atol=tol))
 end
 
@@ -279,7 +274,7 @@ Compute the induced velocity (per unit circulation) for two vortices trailing in
 the +x direction, at a control point located at `r1` relative to the start of the
 left trailing vortex and `r2` relative to the start of the right trailing vortex.
 """
-function trailing_induced_velocity(r1, r2)
+@inline function trailing_induced_velocity(r1, r2)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
@@ -301,7 +296,7 @@ trailing in the +x direction, at a control point located at `r1` relative to the
 start of the left trailing vortex and `r2` relative to the start of the right
 trailing vortex.
 """
-function horseshoe_induced_velocity(r1, r2)
+@inline function horseshoe_induced_velocity(r1, r2)
 
     # contribution from trailing vortices
     Vhat = trailing_induced_velocity(r1, r2)
@@ -324,7 +319,7 @@ Compute the induced velocity (per unit circulation) for a horseshoe vortex, with
 trailing vortices in the +x direction.  The velocity is computed at point `rcp`
 from a panel defined by position `rl` and `rr`.
 """
-function induced_velocity(rcp, rl, rr, symmetric, include_bound)
+@inline function induced_velocity(rcp, rl, rr, symmetric, include_bound)
 
     if include_bound
         vfunc = horseshoe_induced_velocity
@@ -357,11 +352,13 @@ end
 
 Construct the aerodynamic influence coefficient matrix
 """
-function influence_coefficients(panels, symmetric)
+@inline function influence_coefficients(panels, symmetric)
 
     N = length(panels)
     TF = eltype(eltype(panels))
     AIC = Matrix{TF}(undef, N, N)
+
+    influence_coefficients!(AIC, panels, symmetric)
 
     return influence_coefficients!(AIC, panels, symmetric)
 end
@@ -371,7 +368,7 @@ end
 
 Pre-allocated version of `influence_coefficients`
 """
-function influence_coefficients!(AIC, panels, symmetric)
+@inline function influence_coefficients!(AIC, panels, symmetric)
 
     bound_vortices = true
 
@@ -400,7 +397,7 @@ end
 
 Compute the external velocity at location `r`
 """
-function external_velocity(freestream, r, rcg)
+@inline function external_velocity(freestream, r, rcg)
 
     # Freestream velocity in body coordinate
     ca, sa = cos(freestream.alpha), sin(freestream.alpha)
@@ -425,10 +422,10 @@ end
 Compute the normal component of the external velocity along the geometry.
 This forms the right hand side of the circulation linear system solve.
 """
-function normal_velocity(panels, reference, freestream)
+@inline function normal_velocity(panels, reference, freestream)
 
     N = length(panels)
-    TF = eltype(eltype(panels))
+    TF = promote_type(eltype(eltype(panels)), eltype(reference), eltype(freestream))
     b = Vector{TF}(undef, N)
 
     return normal_velocity!(b, panels, reference, freestream)
@@ -439,7 +436,7 @@ end
 
 Non-allocating version of `normal_velocity`
 """
-function normal_velocity!(b, panels, reference, freestream)
+@inline function normal_velocity!(b, panels, reference, freestream)
 
     N = length(panels)
 
@@ -467,7 +464,7 @@ end
 
 Solve for the circulation distribution.
 """
-function circulation(panels, reference, freestream, symmetric)
+@inline function circulation(panels, reference, freestream, symmetric)
     AIC = influence_coefficients(panels, symmetric)
     b = normal_velocity(panels, reference, freestream)
     return AIC\b
@@ -478,7 +475,7 @@ end
 
 Pre-allocated version of `circulation`
 """
-function circulation!(Γ, AIC, b, panels, reference, freestream, symmetric)
+@inline function circulation!(Γ, AIC, b, panels, reference, freestream, symmetric)
     AIC = influence_coefficients!(AIC, panels, symmetric)
     b = vn!(b, panels, reference, freestream)
     return ldiv!(Γ, factorize(AIC), b)
@@ -492,17 +489,10 @@ end
 Computes the forces and moments acting on the aircraft given the circulation
 distribution `Γ`
 """
-function forces_moments(panels, reference, freestream, Γ, symmetric)
+@inline function forces_moments(panels, reference, freestream, Γ, symmetric)
 
     N = length(panels)
     TF = promote_type(eltype(eltype(panels)), eltype(reference), eltype(freestream))
-
-    # initialize body outputs
-    Fb = @SVector zeros(TF, 3)  # forces
-    Mb = @SVector zeros(TF, 3)  # moments
-
-    # initialize panel outputs
-    paneloutputs = Vector{PanelOutputs{TF}}(undef, N)
 
     # reference quantities
     qinf = 0.5*RHO*VINF^2
@@ -513,20 +503,26 @@ function forces_moments(panels, reference, freestream, Γ, symmetric)
     # rotation vector from body to wind frame
     Rot = body_to_wind(freestream)
 
+    # initialize body outputs
+    Fb = @SVector zeros(TF, 3)  # forces
+    Mb = @SVector zeros(TF, 3)  # moments
+
+    # initialize panel outputs
+    paneloutputs = Vector{PanelOutputs{TF}}(undef, N)
+
     for i = 1:N # control points
 
         # compute induced velocity at quarter-chord midpoints (rather than at control points)
+        Vind = @SVector zeros(3)
         rmid = midpoint(panels[i])
-
-        Vindi = @SVector zeros(3)
         for j = 1:N  # vortices
             Vij = induced_velocity(rmid, panels[j].rl, panels[j].rr, symmetric, i != j)  # include bound vortices if i != j
-            Vindi += Vij*Γ[j]
+            Vind += Vij*Γ[j]
         end
 
         # add external velocity
         Vext = external_velocity(freestream, rmid, reference.rcg)
-        Vi = Vindi + Vext
+        Vi = Vind + Vext
 
         # forces and moments
         Δs = panels[i].rr - panels[i].rl
@@ -571,14 +567,14 @@ end
 
 Project panels onto Trefftz plane (rotate into wind coordinate system)
 """
-project_panels(panels, freestream) = project_panels!(deepcopy(panels), freestream)
+@inline project_panels(panels, freestream) = project_panels!(deepcopy(panels), freestream)
 
 """
     project_panels!(panels, freestream)
 
 Non-allocating version of `project_panels`. Overwrites `panels`.
 """
-function project_panels!(panels, freestream)
+@inline function project_panels!(panels, freestream)
 
     Rot = body_to_wind(freestream)
 
@@ -600,7 +596,7 @@ end
 
 Induced drag from vortex `j` induced on panel `i`
 """
-function vortex_induced_drag(rj, Γj, ri, Γi, nhat_i)
+@inline function vortex_induced_drag(rj, Γj, ri, Γi, nhat_i)
 
     rij = ri - rj
     rij = SVector(0.0, rij[2], rij[3])  # 2D plane (no x-component)
@@ -618,7 +614,7 @@ end
 
 Induced drag from `panel_j` induced on `panel_i`
 """
-function panel_induced_drag(panel_j, Γj, panel_i, Γi, symmetric)
+@inline function panel_induced_drag(panel_j, Γj, panel_i, Γi, symmetric)
 
     nhat_i = trefftz_plane_normal(panel_i)
     ri = midpoint(panel_i)
@@ -642,7 +638,7 @@ end
 
 Compute induced drag using the Trefftz plane (far field method).
 """
-function trefftz_induced_drag(panels, reference, freestream, Γ, symmetric)
+@inline function trefftz_induced_drag(panels, reference, freestream, Γ, symmetric)
 
     return trefftz_induced_drag!(copy(panels), reference, freestream, Γ, symmetric)
 end
@@ -653,7 +649,7 @@ end
 Pre-allocated version of trefftz_induced_drag!.  Overwrites `panels` with the
 panels in the Trefftz plane.
 """
-function trefftz_induced_drag!(panels, reference, freestream, Γ, symmetric)
+@inline function trefftz_induced_drag!(panels, reference, freestream, Γ, symmetric)
 
     # rotate panels into wind coordinate system
     project_panels!(panels, freestream)
@@ -704,4 +700,41 @@ function vlm(panels, reference, freestream, symmetric)
     CDiff, trefftz_panels = trefftz_induced_drag(panels, reference, freestream, Γ, symmetric)
 
     return Outputs(CF, CM, CDiff, paneloutputs)
+end
+
+function stability_analysis(panels, reference, freestream, symmetric)
+
+    # make sure panels is of concrete type
+    TF = promote_type(eltype.(panels)...)
+    panels = Vector{Panel{TF}}(panels)
+
+    x = vcat(freestream.alpha, freestream.beta, freestream.Omega)
+
+    f = function(x)
+        freestream = Freestream(x[1], x[2], SVector(x[3], x[4], x[5]))
+        Γ = circulation(panels, reference, freestream, symmetric)
+        CF, CM, _ = forces_moments(panels, reference, freestream, Γ, symmetric)
+        return vcat(CF, CM)
+    end
+
+    dfdx = ForwardDiff.jacobian(f, x)
+
+    iCF = SVector(1,2,3)
+    CF_α = dfdx[iCF,1]
+    CF_β = dfdx[iCF,2]
+    CF_p = dfdx[iCF,3]*2*VINF/reference.b
+    CF_q = dfdx[iCF,4]*2*VINF/reference.c
+    CF_r = dfdx[iCF,5]*2*VINF/reference.b
+    dCF = StabilityDerivatives(CF_α, CF_β, CF_p, CF_q, CF_r)
+
+    iCM = SVector(4,5,6)
+    CM_α = dfdx[iCM,1]
+    CM_β = dfdx[iCM,2]
+    CM_p = dfdx[iCM,3]*2*VINF/reference.b
+    CM_q = dfdx[iCM,4]*2*VINF/reference.c
+    CM_r = dfdx[iCM,5]*2*VINF/reference.b
+    dCM = StabilityDerivatives(CM_α, CM_β, CM_p, CM_q, CM_r)
+
+    return dCF, dCM
+
 end

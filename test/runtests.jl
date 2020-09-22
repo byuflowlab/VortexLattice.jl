@@ -1,5 +1,5 @@
 using Test
-import VortexLatticeMethod
+using VortexLatticeMethod
 const VLM = VortexLatticeMethod
 
 # tests using AVL 3.35
@@ -12,24 +12,24 @@ zle = [0.0; 0.0]
 chord = [2.2; 1.8]
 theta = [2.0*pi/180; 2.0*pi/180]
 npanels = [12]
-spacing = ["u"]
+spacing = [Uniform()]
 duplicate = false
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 vother = nothing
-fs = VLM.Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega, vother)
 
 Sref = 30.0
 cref = 2.0
 bref = 15.0
 rcg = [0.50, 0.0, 0.0]
-ref = VLM.Reference(Sref, cref, bref, rcg)
+ref = Reference(Sref, cref, bref, rcg)
 
 symmetric = true
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -45,10 +45,10 @@ Cl, Cm, Cn = outputs.CM
 
 # ---- simple wing without symmetry -----
 duplicate = true
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
 symmetric = false
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -60,28 +60,28 @@ Cl, Cm, Cn = outputs.CM
 @test isapprox(Cl, 0.0, atol=1e-16)
 @test isapprox(Cn, 0.0, atol=1e-16)
 
+dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
+CDa, CYa, CLa = dCF.alpha
+Cla, Cma, Cna = dCM.alpha
+CDb, CYb, CLb = dCF.beta
+Clb, Cmb, Cnb = dCM.beta
+CDp, CYp, CLp = dCF.p
+Clp, Cmp, Cnp = dCM.p
+CDq, CYq, CLq = dCF.q
+Clq, Cmq, Cnq = dCM.q
+CDr, CYr, CLr = dCF.r
+Clr, Cmr, Cnr = dCM.r
 
-# CDa, CYa, CLa = outputs.dCF.alpha
-# Cla, Cma, Cna = outputs.dCM.alpha
-# CDb, CYb, CLb = outputs.dCF.beta
-# Clb, Cmb, Cnb = outputs.dCM.beta
-# CDp, CYp, CLp = outputs.dCF.p
-# Clp, Cmp, Cnp = outputs.dCM.p
-# CDq, CYq, CLq = outputs.dCF.q
-# Clq, Cmq, Cnq = outputs.dCM.q
-# CDr, CYr, CLr = outputs.dCF.r
-# Clr, Cmr, Cnr = outputs.dCM.r
-#
-# @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
-# @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
-# @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-# @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# # @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
-# @test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
-# # @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
-# @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-# @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+@test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+@test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+# @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+@test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+# @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+# @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
 
 # h = 1e-6
 # betap = beta + h
@@ -122,11 +122,11 @@ Cl, Cm, Cn = outputs.CM
 
 duplicate = false
 cpanels = [5]
-cspacing = ["u"]
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
+cspacing = [Uniform()]
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -144,11 +144,11 @@ Cl, Cm, Cn = outputs.CM
 
 duplicate = false
 cpanels = [1]
-cspacing = ["u"]
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
+cspacing = [Uniform()]
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -164,11 +164,11 @@ Cl, Cm, Cn = outputs.CM
 
 duplicate = false
 cpanels = [5]
-cspacing = ["c"]
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, ["c"], cpanels, cspacing, duplicate)
+cspacing = [Cosine()]
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
 
 symmetric = true
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 
@@ -191,13 +191,13 @@ symmetric = true
 
 # ---- run3 ------  simple wing at higher angle of attack
 
-spacing = ["u"]
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+spacing = [Uniform()]
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
 alpha = 8.0*pi/180
-fs = VLM.Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega, vother)
 
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.80348, atol=2e-3)
@@ -219,23 +219,23 @@ zle = [0.0; 3.0]
 chord = [2.2; 1.8]
 theta = [2.0*pi/180; 2.0*pi/180]
 npanels = [11]
-spacing = ["u"]
+spacing = [Uniform()]
 duplicate = false
-panels = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 vother = nothing
-fs = VLM.Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega, vother)
 
 Sref = 30.0
 cref = 2.0
 bref = 15.0
 rcg = [0.50, 0.0, 0.0]
-ref = VLM.Reference(Sref, cref, bref, rcg)
+ref = Reference(Sref, cref, bref, rcg)
 
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.24787, atol=1e-3)
@@ -250,9 +250,9 @@ Cl, Cm, Cn = outputs.CM
 # ------ run5 -----  simple wing with dihedral, high angle of attack.
 
 alpha = 20.0*pi/180  # nonphysical, just testing the numerics
-fs = VLM.Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega, vother)
 
-outputs = VLM.vlm(panels, ref, fs, symmetric)
+outputs = vlm(panels, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 1.70985, atol=.02*abs(CL))
@@ -270,7 +270,7 @@ Sref = 9.0
 cref = 0.9
 bref = 10.0
 rcg = [0.5, 0.0, 0.0]
-ref = VLM.Reference(Sref, cref, bref, rcg)
+ref = Reference(Sref, cref, bref, rcg)
 
 
 xle = [0.0; 0.2]
@@ -279,9 +279,9 @@ zle = [0.0; 1.0]
 chord = [1.0; 0.6]
 theta = [2.0*pi/180; 2.0*pi/180]
 npanels = [11]
-spacing = ["u"]
+spacing = [Uniform()]
 duplicate = false
-wing = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+wing = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
 xle = [0.0; 0.14]
 yle = [0.0; 1.25]
@@ -289,9 +289,9 @@ zle = [0.0; 0.0]
 chord = [0.7; 0.42]
 theta = [0.0; 0.0]
 npanels = [5]
-spacing = ["u"]
+spacing = [Uniform()]
 duplicate = false
-htail = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
+htail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 VLM.translate!(htail, [4.0; 0.0; 0.0])
 
 xle = [0.0; 0.14]
@@ -300,10 +300,10 @@ zle = [0.0; 1.0]
 chord = [0.7; 0.42]
 theta = [0.0; 0.0]
 npanels = [4]
-spacing = ["u"]
+spacing = [Uniform()]
 duplicate = false
-vtail = VLM.linearsections(xle, yle, zle, chord, theta, npanels, spacing, [1], ["u"], duplicate)
-VLM.translate!(vtail, [4.0; 0.0; 0.0])
+vtail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
+translate!(vtail, [4.0; 0.0; 0.0])
 
 
 vehicle = [wing; htail; vtail]
@@ -313,10 +313,10 @@ alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 vother = nothing
-fs = VLM.Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega, vother)
 
 symmetric = true
-outputs = VLM.vlm(vehicle, ref, fs, symmetric)
+outputs = vlm(vehicle, ref, fs, symmetric)
 CD, CY, CL = outputs.CF
 Cl, Cm, Cn = outputs.CM
 @test isapprox(CL, 0.60563, atol=.01*abs(CL))

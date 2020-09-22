@@ -12,20 +12,21 @@ Vortex Lattice Method
 
 module VortexLatticeMethod
 
-using StaticArrays, LinearAlgebra
+using ForwardDiff, StaticArrays, LinearAlgebra
 
+# core functionality
 export Panel, Freestream, Reference, Outputs
-export vlm
+export vlm, stability_analysis
 
-# normalized (so they don't matter, but are included just for clarity in the algorithms)
+# geometry convenience functions
+export Uniform, Cosine
+export create_grid, linear_sections, simple_wing, translate!
+
+# included just for clarity in the algorithms
 const RHO = 1.0
 const VINF = 1.0
 
-include("vlm.jl")
-include("geometry.jl")  # defines some convenience functions for generating geometry
-include("sderiv.jl")  # defines stability derivative type and some associated methods
-
-
-
+include("vlm.jl") # core functionality of this package
+include("geometry.jl")  # convenience functions for generating panels
 
 end # module
