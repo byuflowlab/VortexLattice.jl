@@ -1,7 +1,17 @@
-export linearsections
-
 abstract type AbstractSpacing end
+
+"""
+    Uniform()
+
+Uniform discretization scheme
+"""
 struct Uniform <: AbstractSpacing end
+
+"""
+    Cosine()
+
+Cosine-spaced discretization scheme
+"""
 struct Cosine <: AbstractSpacing end
 
 """
@@ -12,12 +22,11 @@ between 0 (rstart) and 1 (rend)
 """
 linearinterp(eta, rstart, rend) = (1-eta)*rstart + eta*rend
 
-
 """
     spanwise_spacing(n, spacing_type::AbstractSpacing)
 
 Distribute `n` panel endpoints and `n-1` panel midpoints on the interval between
-0 and 1 according to the discretization strategy in `spacing_type`
+0 and 1 according to the discretization strategy in `spacing_type`.
 """
 function spanwise_spacing(n, ::Uniform)
 
@@ -39,81 +48,296 @@ function spanwise_spacing(n, ::Cosine)
 end
 
 """
-    spanwise_spacing(n, spacing_type::AbstractSpacing; xc_cp=0.75)
+    spanwise_spacing(n, spacing_type::AbstractSpacing)
 
-Distribute `n-1` vortex x-locations and `n-1` control point x-locations on the
+Distribute `n-1` vortex and `n-1` control point chordwise locations on the
 interval between 0 and 1 according to the discretization strategy in `spacing_type`.
-The control point location can be customized by setting `xc_cp` to either a scalar
-or a vector of length `n-1`
 """
-function chordwise_spacing(n, ::Uniform; xc_cp=0.75)
+chordwise_spacing
 
-    xc_v = 0.25
+# uniform
+function chordwise_spacing(n, ::Uniform)
 
     eta = range(0, 1.0, length=n)
 
-    eta_qtr = linearinterp(xc_v, eta[1:end-1], eta[2:end])
-    eta_thrqtr = linearinterp(xc_cp, eta[1:end-1], eta[2:end])
+    eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
+    eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
     return eta_qtr, eta_thrqtr
 end
 
-function chordwise_spacing(n, ::Cosine; xc_cp=0.75)
-
-    xc_v = 0.25
+# cosine
+function chordwise_spacing(n, ::Cosine)
 
     theta = range(0, pi, length=n)
     eta = (1.0 .- cos.(theta))/2.0
 
-    eta_qtr = linearinterp(xc_v, eta[1:end-1], eta[2:end])
-    eta_thrqtr = linearinterp(xc_cp, eta[1:end-1], eta[2:end])
+    eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
+    eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
     return eta_qtr, eta_thrqtr
 end
 
 """
-    create_grid(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, thetaL, thetaR)
+    grid_to_horseshoe_vortices(xyz, theta)
 
-Discretizes a linear wing segment into `ns` spanwise panels and `nc` chordwise
-panels according to the spanwise discretization scheme `spacing_s` and chordwise
-discretization scheme `spacing_c`.  The points `r1`, `r2`, `r3`, `r4` are defined
-as depicted:
+Construct a set of horseshoe vortex panels given a pre-existing set of panels defined
+by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
+direction and `j` corresponds to the spanwise direction.  The bound vortex for
+each panel will be placed at the 1/4 chord and the control point will be placed at
+the 3/4 chord.
 
-1 ------- 2
-|         |
-|         |
-3-------- 4
+Each chordwise strip must have the same y and z-coordinates (i.e. the airfoil geometry
+cannot be cambered or twisted).  Local angle of attack at each spanwise increment
+is specified with the input vector `theta` which has length `size(xyz, 3)`.
 
-The command `reshape(panels, nc, ns)` may be used to reshape the output to match
-the shape of the original grid.
+The resulting vector of panels can be reshaped to correspond to the original
+grid with `reshape(panels, ni-1, nj-1)`.
 """
-function create_grid(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, thetaL, thetaR)
+function grid_to_horseshoe_vortices(xyz, theta)
 
-    TF = promote_type(eltype(r1), eltype(r2), eltype(r3), eltype(r4),
-        eltype(thetaL), eltype(thetaR))
+    TF = promote_type(eltype(xyz), eltype(theta))
 
+    nc = size(grid, 2)-1
+    ns = size(grid, 3)-1
+    N = nc*ns
+
+    # initialize output
+    panels = Vector{Horseshoe{TF}}(undef, N)
+
+    # populate each panel
+    for j = 1:ns
+
+        # angle
+        th = linearinterp(theta[j], theta[j+1])
+
+        for i = 1:nc
+
+            # grid corners
+            r1 = SVector(grid[1,i,j], grid[2,i,j], grid[3,i,j]) # top left
+            r2 = SVector(grid[1,i,j+1], grid[2,i,j+1], grid[3,i,j+1]) # top right
+            r3 = SVector(grid[1,i+1,j], grid[2,i+1,j], grid[3,i+1,j]) # bottom left
+            r4 = SVector(grid[1,i+1,j+1], grid[2,i+1,j+1], grid[3,i+1,j+1]) # bottom right
+
+            # left side of bound vortex
+            rl = linearinterp(0.25, r1, r3)
+
+            # right side of bound vortex
+            rr = linearinterp(0.25, r2, r4)
+
+            # control point
+            rtop = linearinterp(0.5, r1, r2)
+            rbot = linearinterp(0.5, r3, r4)
+            rcp = linearinterp(0.75, rl, rr)
+
+            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
+
+        end
+    end
+
+    return panels
+end
+
+
+"""
+    grid_to_vortex_rings(xyz)
+
+Construct a set of vortex ring panels given a pre-existing set of panels defined
+by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
+direction and `j` corresponds to the spanwise direction.  The start of each ring
+vortex will be placed at the 1/4 chord and the control point will be placed at
+the 3/4 chord of each panel.
+
+The resulting vector of panels can be reshaped to correspond to the original
+grid with `reshape(panels, ni-1, nj-1)`.
+"""
+function grid_to_vortex_rings(xyz)
+
+    TF = eltype(xyz)
+
+    nc = size(grid, 2)-1
+    ns = size(grid, 3)-1
+    N = nc*ns
+
+    # initialize output
+    panels = Vector{Ring{TF}}(undef, N)
+
+    # populate each panel
+    for j = 1:ns
+
+        r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
+        r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
+        r3n = SVector(grid[1,2,j], grid[2,2,j], grid[3,2,j]) # bottom left
+        r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
+
+        for i = 1:nc-1
+
+            # grid corners of current panel
+            r1 = r1n # top left
+            r2 = r2n # top right
+            r3 = r3n # bottom left
+            r4 = r4n # bottom right
+
+            # grid corners of next panel
+            r1n = r3 # top left
+            r2n = r4 # top right
+            r3n = SVector(grid[1,i+2,j], grid[2,i+2,j], grid[3,i+2,j]) # bottom left
+            r4n = SVector(grid[1,i+2,j+1], grid[2,i+2,j+1], grid[3,i+2,j+1]) # bottom right
+
+            # top left corner of ring vortex
+            rtl = linearinterp(0.25, r1, r3)
+
+            # top right corner of ring vortex
+            rtr = linearinterp(0.25, r2, r4)
+
+            # bottom left corner of ring vortex
+            rbl = linearinterp(0.25, r1n, r3n)
+
+            # bottom right corner of ring vortex
+            rbr = linearinterp(0.25, r2n, r4n)
+
+            # control point
+            rtop = linearinterp(0.5, r1, r2)
+            rbot = linearinterp(0.5, r3, r4)
+            rcp = linearinterp(0.75, rl, rr)
+
+            # surface normal
+            normal = cross(rcp - rtl, rcp - rtr)
+            normal ./= norm(normal)
+
+            # panel on trailing edge?
+            trailing = false
+
+            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+        end
+
+        # grid corners of current panel
+        r1 = r1n # top left
+        r2 = r2n # top right
+        r3 = r3n # bottom left
+        r4 = r4n # bottom right
+
+        # top left corner of ring vortex
+        rtl = linearinterp(0.25, r1, r3)
+
+        # top right corner of ring vortex
+        rtr = linearinterp(0.25, r2, r4)
+
+        # bottom left corner of ring vortex
+        rbl = r3
+
+        # bottom right corner of ring vortex
+        rbr = r4
+
+        # control point
+        rtop = linearinterp(0.5, r1, r2)
+        rbot = linearinterp(0.5, r3, r4)
+        rcp = linearinterp(0.75, rl, rr)
+
+        # panel on trailing edge?
+        trailing = true
+
+        # surface normal
+        normal = cross(rcp - rtl, rcp - rtr)
+        normal ./= norm(normal)
+
+        panels[(j-1)*nc + nc] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+
+    end
+
+    return panels
+end
+
+"""
+    interpolate_grid(xyz, eta, interp; dir=1 )
+
+Interpolates the grid `xyz` along direction `dir`
+
+# Arguments
+ - `xyz`: Grid of size (3, ni, nj)
+ - `eta`: New (normalized) coordinates in direction `dir` (0 <= eta <= 1)
+ - `interp`: Interpolation method of form `ypt = f(x,y,xpt)`
+ - `dir`: Direction in which to interpolate `xyz` (`i=1`, `j=2`)
+"""
+function interpolate_grid(xyz, eta, interp; dir=1)
+
+    dim = dir + 1
+
+    ni = size(xyz, dim)
+
+    xyz = mapslices(xyz; dims=[1,i]) do xyz_i
+
+        # get distance between each grid location
+        ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
+
+        # create interpolation vector
+        t = cumsum(ds)
+
+        # normalize interpolation vector
+        t /= t[end]
+
+        # interpolate x, y, and z
+        x = interp(t, xyz_i[1,:], eta)
+        y = interp(t, xyz_i[2,:], eta)
+        z = interp(t, xyz_i[3,:], eta)
+
+        vcat(x',y',z')
+    end
+
+    return xyz
+end
+
+"""
+    grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
+        interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+
+Discretize a grid into `ns` spanwise and `nc` chordwise horseshoe vortex panels
+according to the spanwise discretization scheme `spacing_s` and chordwise
+discretization scheme `spacing_c`.
+
+Each chordwise strip must have the same y and z-coordinates (i.e. the airfoil geometry
+cannot be cambered or twisted).  Local angle of attack at each spanwise increment
+is specified with the input vector `theta` which has length `size(xyz, 3)`.
+
+The resulting vector of panels can be reshaped to correspond to the original
+grid with `reshape(panels, ni-1, nj-1)`.
+"""
+function grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
+    interp_s=(x,y,xpt)->LinearInterpolation(x,y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x,y)(xpt))
+
+    TF = promote_type(eltype(xyz), eltype(theta))
+
+    N = nc*ns
+
+    # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    panels = Vector{Panel{TF}}(undef, ns*nc)
+    # interpolate grid first along `i` then along `j`
+    xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c)
+    xyz_bound = interpolate_grid(xyz_bound, etas, interp_s)
+
+    xyz_cp = interpolate_grid(xyz, eta_thrqtr, interp_c)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
+
+    # interpolate local angle of attack to new locations
+    ds = [norm(xyz[:,1,j] - xyz[:,1,max(1,j-1)]) for j = 1:size(xyz,3)]
+    t = cumsum(dc)
+    t /= t[end]
+    theta = interp_s(t, theta, etabar)
+
+    # initialize output
+    panels = Vector{Horseshoe{TF}}(undef, N)
+
+    # populate each panel
     for j = 1:ns
         for i = 1:nc
-            rtop = linearinterp(etas[j], r1, r2)
-            rbot = linearinterp(etas[j], r3, r4)
-            rl = linearinterp(eta_qtr[i], rtop, rbot)
+            rl = SVector(xyz_bound[1,i,j], xyz_bound[2,i,j], xyz_bound[3,i,j])
+            rr = SVector(xyz_bound[1,i,j+1], xyz_bound[2,i,j+1], xyz_bound[3,i,j+1])
+            rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
+            th = theta[j]
 
-            rtop = linearinterp(etas[j+1], r1, r2)
-            rbot = linearinterp(etas[j+1], r3, r4)
-            rr = linearinterp(eta_qtr[i], rtop, rbot)
-
-            rtop = linearinterp(etabar[j], r1, r2)
-            rbot = linearinterp(etabar[j], r3, r4)
-            rcp = linearinterp(eta_thrqtr[i], rtop, rbot)
-
-            theta = linearinterp(etabar[j], thetaL, thetaR)
-
-            panels[(j-1)*nc + i] = Panel(rl, rr, rcp, theta)
-
+            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
         end
     end
 
@@ -121,165 +345,279 @@ function create_grid(r1, r2, r3, r4, ns, spacing_s, nc, spacing_c, thetaL, theta
 end
 
 """
-    linear_sections(xle, yle, zle, chord, theta, ns, spacing_s,
-    nc, spacing_c, mirror)
+    grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
+        interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
-Discretizes a wing into multiple linear sections.  Each linear section is defined
-using `create_grid`.
+Discretize a grid into `ns` spanwise and `nc` chordwise vortex ring panels
+according to the spanwise discretization scheme `spacing_s` and chordwise
+discretization scheme `spacing_c`.
 
-# Arguments:
- - `xle`: x-coordinate of the leading edge of each station
- - `yle`: y-coordinate of the leading edge of each station
- - `zle`: z-coordinate of the leading edge of each station
- - `chord`: chord length of each station
- - `theta`: angle of attack of each station
- - `ns`: number of spanwise panels in each section
- - `spacing_s`: spanwise discretization scheme for each section
- - `nc`: number of chordwise panels in each section
- - `spacing_c`: chordwise discretization scheme for each section
- - `mirror`: flag indicating whether the geometry should be mirrored across the y-axis
+# Arguments
+ - `xyz`: grid of dimensions (3, i, j) where where `i` corresponds to the
+    chordwise direction and `j` corresponds to the spanwise direction.
+ - `ns`: number of spanwise panels
+ - `nc`: number of chordwise panels
+ - `spacing_s`: spanwise discretization scheme
+ - `spacing_c`: chordwise discretization scheme
+ - `interp_s`: spanwise interpolation function
+ - `interp_c`: chordwise interpolation function
+
+The resulting vector of panels can be reshaped into a grid format with
+`reshape(panels, nc, ns)`.
 """
-function linear_sections(xle, yle, zle, chord, theta, ns, spacing_s,
-    nc, spacing_c, mirror)
+function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
+    interp_s=(x)->linearinterp(x, 0, 1), interp_c=(x)->linearinterp(x, 0, 1))
+
+    TF = eltype(xyz)
+
+    N = nc*ns
+
+    # get spanwise and chordwise spacing
+    etas, etabar = spanwise_spacing(ns+1, spacing_s)
+    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
+
+    # add trailing edge to grid
+    push!(eta_qtr, 1.0)
+
+    # interpolate grid first along `i` then along `j`
+    xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c)
+    xyz_bound = interpolate_grid(xyz_bound, etas, interp_s)
+
+    xyz_cp = interpolate_grid(xyz, eta_thrqtr, interp_c)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
+
+    # initialize output
+    panels = Vector{Ring{TF}}(undef, N)
+
+    # populate each panel
+    for j = 1:ns
+        for i = 1:nc
+            rtl = SVector(xyz_bound[1,i,j], xyz_bound[2,i,j], xyz_bound[3,i,j])
+            rtr = SVector(xyz_bound[1,i,j+1], xyz_bound[2,i,j+1], xyz_bound[3,i,j+1])
+            rbl = SVector(xyz_bound[1,i+1,j], xyz_bound[2,i+1,j], xyz_bound[3,i+1,j])
+            rbr = SVector(xyz_bound[1,i+1,j+1], xyz_bound[2,i+1,j+1], xyz_bound[3,i+1,j+1])
+            rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
+
+            normal = cross(rcp - rtl, rcp - rtr)
+            normal ./= norm(normal)
+
+            trailing = i == nc
+
+            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+        end
+    end
+
+    return panels
+end
+
+"""
+    wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
+        spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+
+Discretize a wing into `ns` spanwise and `nc` chordwise horseshoe vortex panels
+according to the spanwise discretization scheme `spacing_s` and chordwise
+discretization scheme `spacing_c`.
+
+# Arguments
+ - `xle`: leading edge x-coordinate of each station
+ - `yle`: leading edge y-coordinate of each station
+ - `zle`: leading edge z-coordinate of each station
+ - `chord`: chord length of each station
+ - `theta`: local angle of attack of each station
+ - `dihedral`: dihedral of each station
+ - `ns`: number of spanwise panels
+ - `nc`: number of chordwise panels
+ - `spacing_s`: spanwise discretization scheme
+ - `spacing_c`: chordwise discretization scheme
+ - `interp_s`: interpolation function between spanwise stations
+
+The resulting vector of panels can be reshaped into a grid format with
+`reshape(panels, ni-1, nj-1)`.
+"""
+function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
+    spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta))
 
-    N = (1+mirror)*sum(nc)*sum(ns)
+    N = (1+mirror)*nc*ns
 
-    panels = Vector{Panel{TF}}(undef, N)
-    ipanel = 0
+    # get spanwise and chordwise spacing
+    etas, etabar = spanwise_spacing(ns+1, spacing_s)
+    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    n = length(ns)
-    for i = 1:n
-        r1 = SVector(xle[i], yle[i], zle[i])
-        r2 = SVector(xle[i+1], yle[i+1], zle[i+1])
-        r3 = r1 + SVector(chord[i], 0, 0)
-        r4 = r2 + SVector(chord[i+1], 0, 0)
+    # check input dimensions
+    n = length(chord)
+    @assert length(xle) == length(yle) == length(zle) == length(chord) == length(theta)
 
-        panels[ipanel+1:ipanel+nc[i]*ns[i]] = create_grid(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])
-        ipanel += nc[i]*ns[i]
-    end
+    # construct interpolation vector
+    ds = [sqrt(( xle[j] - xle[max(1,j-1)])^2 +
+               ( yle[j] - yle[max(1, j-1)])^2 +
+               ( zle[j] - zle[max(1, j-1)])^2 ) for j = 1:n]
+    t = cumsum(ds)
+    t /= t[end]
 
-    if mirror
+    # interpolate properties to new stations
+    xle_v = interp_s(t, xle, etas)
+    yle_v = interp_s(t, yle, etas)
+    zle_v = interp_s(t, zle, etas)
 
-        for i = 1:n
-            r1 = SVector(xle[i+1], -yle[i+1], zle[i+1])
-            r2 = SVector(xle[i], -yle[i], zle[i])
-            r3 = r1 + SVector(chord[i+1], 0, 0)
-            r4 = r2 + SVector(chord[i], 0, 0)
+    xle_cp = interp_s(t, xle, etabar)
+    yle_cp = interp_s(t, yle, etabar)
+    zle_cp = interp_s(t, zle, etabar)
 
-            panels[ipanel+1:ipanel+nc[i]*ns[i]] = create_grid(r1, r2, r3, r4, ns[i], spacing_s[i], nc[i], spacing_c[i], theta[i], theta[i+1])
-            ipanel += nc[i]*ns[i]
+    chord_v = interp_s(t, chord, etas)
+    chord_cp = interp_s(t, chord, etabar)
+
+    theta = interp_s(t, theta, etabar)
+
+    # initialize output
+    panels = Vector{Horseshoe{TF}}(undef, N)
+
+    # populate each panel
+    for j = 1:ns
+        for i = 1:nc
+            rl = SVector(xle_v[j] + eta_qtr[i]*chord_v[j], yle_v[j], zle_v[j])
+            rr = SVector(xle_v[j+1] + eta_qtr[i]*chord_v[j+1], yle_v[j+1], zle_v[j+1])
+            rcp = SVector(xle_cp[j]+eta_thrqtr[i]*chord_cp[j], yle_cp[j], zle_cp[j])
+            th = theta[j]
+            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
         end
-
     end
 
     return panels
 end
 
 """
-    simple_wing(b, AR, λ, Λ, ϕ, θr, θt, npanels, mirror, spacing)
+    wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc, mirror;
+        spacing_s=Cosine(), spacing_c=Uniform(), interp_s = (x)->linearinterp(x, 0, 1))
 
-Defines a simple linear wing section with one chordwise panel
+Discretize a wing into `ns` spanwise and `nc` chordwise vortex ring panels
+according to the spanwise discretization scheme `spacing_s` and chordwise
+discretization scheme `spacing_c`.
 
-# Arguments:
- - `b`: span length
- - `AR`: aspect ratio
- - `λ`: taper ratio
- - `Λ`: sweep (radians)
- - `ϕ`: dihedral (radians)
- - `θr`: root twist
- - `θt`: tip twist
- - `mirror`: flag indicating whether the geometry should be mirrored across the y-axis
- - `spacing`: spanwise discretization scheme
-"""
-function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
+# Arguments
+ - `xle`: leading edge x-coordinate of each station
+ - `yle`: leading edge y-coordinate of each station
+ - `zle`: leading edge z-coordinate of each station
+ - `chord`: chord length of each station
+ - `theta`: local angle of attack of each station
+ - `dihedral`: dihedral of each station
+ - `fc`: camber line function y=f(x) (for a normalized airfoil) at each station
+ - `ns`: number of spanwise panels
+ - `nc`: number of chordwise panels
+ - `spacing_s`: spanwise discretization scheme
+ - `spacing_c`: chordwise discretization scheme
+ - `interp_s`: interpolation function between spanwise stations
 
-    # geometry parsing
-    S = b^2/AR
-    cr = 2*S/(b*(1 + λ))
-    ct = cr*λ
-
-    xle = [0.0; cr/4.0 + b/2.0*tan(Λ) - ct/4.0]
-    yle = [0.0; b/2*cos(ϕ)]
-    zle = [0.0; b/2*sin(ϕ)]
-    chord = [cr; ct]
-    theta = [θr; θt]
-
-    return linearsections(xle, yle, zle, chord, theta, [npanels], [spacing], [1], ["u"], duplicate)
-
-end
-
-"""
-    surface_panels(grid::AbstractArray{3,TF}; cp_xc=0.75, cp_yb=0.5)
-
-Constructs a set of vortex lattice panels given a grid with dimensions (3, i, j).
-The i-direction is assumed to be in the chordwise/streamwise direction.  The resulting
-vector of panels can be reshaped to correspond to the original grid with
+The resulting vector of panels can be reshaped into a grid format with
 `reshape(panels, ni-1, nj-1)`.
-
-# Arguments:
- - `grid`: Grid of shape (3, i, j) containing the corners of each panel
- - `cp_xc`: The normalized chordwise location of each control point provided as
-        either a single value or as a matrix of size (ni-1, nj-1)
- - `cp_yb`: The normalized spanwise location of each control point provided as
-        either a single value or as a matrix of size (ni-1, nj-1).
- - `twist`: (optional) the twist of each section specified as a matrix of size
-        (ni-1, nj-1).  By default the twist will be estimated from the geometry.
 """
-function surface_panels(grid::AbstractArray{TF, 3}; cp_xc=0.75, cp_yb=0.5,
-    twist=nothing) where TF
+function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc, mirror;
+    spacing_s=Cosine(), spacing_c=Uniform(), interp_s = (x)->linearinterp(x, 0, 1))
 
-    ni = size(grid, 2)
-    nj = size(grid, 3)
-    N = (ni-1)*(nj-1)
+    TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(dihedral))
 
-    # process optional arguments
-    if cp_xc <: Number
-        cp_xc = fill(cp_xc, ni, nj)
+    N = (1+mirror)*nc*ns
+
+    # get spanwise and chordwise spacing
+    etas, etabar = spanwise_spacing(ns+1, spacing_s)
+    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
+
+    # add trailing edge to grid
+    push!(eta_qtr, 1.0)
+
+    # check input dimensions
+    n = length(fc)
+    @assert length(xle) == length(yle) == length(zle) == length(chord) == length(theta) == length(dihedral) == n
+
+    # get bound vortex chordwise locations
+    xyz_v = Array{TF, 3}(undef, 3, nc+1, n)
+    for j = 1:n
+        # rotation matrix for dihedral
+        Rd = @SMatrix [cd 0 -sd; 0 1 0; sd 0 cd]
+
+        # rotation matrix for angle of attack
+        Rt = @SMatrix [1 0 0; 0 ct st; 0 -st ct]
+
+        for i = 1:nc+1
+            # normalized chordwise location
+            xc = eta_qtr[i]
+
+            # airfoil camber line function
+            f = fc[j]
+
+            # location on airfoil
+            r = SVector(xc, f(xc), 0)
+
+            # scale by chord length
+            r *= chord[j]
+
+            # apply dihedral
+            r = Rd * r
+
+            # apply angle of attack
+            r = Rt * r
+
+            # store final location
+            xyz_v[:,i,j] = r
+        end
     end
-    if cp_yb <: Number
-        cp_yb = fill(cp_yb, ni, nj)
+
+    # get control point chordwise locations
+    xyz_cp = Array{TF, 3}(undef, 3, nc, n)
+    for j = 1:n
+        # rotation matrix for dihedral
+        Rd = @SMatrix [cd 0 -sd; 0 1 0; sd 0 cd]
+
+        # rotation matrix for angle of attack
+        Rt = @SMatrix [1 0 0; 0 ct st; 0 -st ct]
+
+        for i = 1:nc
+            # normalized chordwise location
+            xc = eta_thrqtr[i]
+
+            # airfoil camber line function
+            f = fc[j]
+
+            # location on airfoil
+            r = SVector(xc, f(xc), 0)
+
+            # scale by chord length
+            r *= chord[j]
+
+            # apply dihedral
+            r = Rd * r
+
+            # apply angle of attack
+            r = Rt * r
+
+            # store final location
+            xyz_cp[:,i,j] = r
+        end
     end
+
+    # now interpolate the grid to match the specified spanwise spacing
+    xyz_v = interpolate_grid(xyz_v, etas, interp_s)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
 
     # initialize output
-    panels = Vector{Panel{TF}}(undef, N)
+    panels = Vector{Ring{TF}}(undef, N)
 
     # populate each panel
-    ipanel = 0
-    for j = 2:nj
-        for i = 2:ni
-            # left vortex point at 1/4 chord
-            rlx = (1-0.25)*grid[1, i-1, j-1] + 0.25*grid[1, i, j-1]
-            rly = (1-0.25)*grid[2, i-1, j-1] + 0.25*grid[2, i, j-1]
-            rlz = (1-0.25)*grid[3, i-1, j-1] + 0.25*grid[3, i, j-1]
-            rl = SVector(rlx, rly, rlz)
-            # right vortex point at 1/4 chord
-            rrx = (1-0.25)*grid[1, i-1, j] + 0.25*grid[1, i, j]
-            rry = (1-0.25)*grid[2, i-1, j] + 0.25*grid[2, i, j]
-            rrz = (1-0.25)*grid[3, i-1, j] + 0.25*grid[3, i, j]
-            rr = SVector(rrx, rry, rrz)
-            # control point at 3/4 chord
-            rcpx = (1-cp_xc[i,j])*((1-cp_yb[i,j])*grid[1, i-1, j-1] + cp_yb[i,j]*grid[1, i-1, j]) +
-                cp_xc[i,j]*((1-cp_yb[i,j])*grid[1, i, j-1] + cp_yb[i,j]*grid[1, i, j])
-            rcpy = (1-cp_xc[i,j])*((1-cp_yb[i,j])*grid[2, i-1, j-1] + cp_yb[i,j]*grid[2, i-1, j]) +
-                cp_xc[i,j]*((1-cp_yb[i,j])*grid[2, i, j-1] + cp_yb[i,j]*grid[2, i, j])
-            rcpz = (1-cp_xc[i,j])*((1-cp_yb[i,j])*grid[3, i-1, j-1] + cp_yb[i,j]*grid[3, i-1, j]) +
-                cp_xc[i,j]*((1-cp_yb[i,j])*grid[3, i, j-1] + 0.5*grid[3, i, j])
-            rcp = SVector(rcpx, rcpy, rcpz)
-            # twist angle derived from the geometry at control point
-            if isnothing(twist)
-                dx = ((1-cp_yb[i,j])*grid[1, i, j-1] + cp_yb[i,j]*grid[1, i, j]) -
-                    ((1-cp_yb[i,j])*grid[1, i-1, j-1] + cp_yb[i,j]*grid[1, i-1, j])
-                dz = ((1-cp_yb[i,j])*grid[3, i-1, j-1] + cp_yb[i,j]*grid[3, i-1, j]) -
-                    ((1-cp_yb[i,j])*grid[3, i, j-1] + cp_yb[i,j]*grid[3, i, j])
-                theta = dz/dx
-            else
-                theta = twist[i,j]
-            end
-            # add panel to array
-            ipanel += 1
-            panels[ipanel] = Panel{TF}(rl, rr, rcp, theta)
+    for j = 1:ns
+        for i = 1:nc
+            rtl = SVector(xyz_bound[1,i,j], xyz_bound[2,i,j], xyz_bound[3,i,j])
+            rtr = SVector(xyz_bound[1,i,j+1], xyz_bound[2,i,j+1], xyz_bound[3,i,j+1])
+            rbl = SVector(xyz_bound[1,i+1,j], xyz_bound[2,i+1,j], xyz_bound[3,i+1,j])
+            rbr = SVector(xyz_bound[1,i+1,j+1], xyz_bound[2,i+1,j+1], xyz_bound[3,i+1,j+1])
+            rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
+
+            normal = cross(rcp - rtl, rcp - rtr)
+            normal ./= norm(normal)
+
+            trailing = i == nc
+
+            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
         end
     end
 

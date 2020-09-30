@@ -1,45 +1,42 @@
 using Test
 using VortexLatticeMethod
-const VLM = VortexLatticeMethod
 
-# tests using AVL 3.35
+@testset "tests against AVL 3.35 -- simple wing" begin
 
-# ---- run1 ------  simple wing
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180; 2.0*pi/180]
+    ns = 12
+    nc = 1
+    mirror = false
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror)
 
-xle = [0.0; 0.4]
-yle = [0.0; 7.5]
-zle = [0.0; 0.0]
-chord = [2.2; 1.8]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [12]
-spacing = [Uniform()]
-duplicate = false
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
 
-alpha = 1.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rcg = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
 
-Sref = 30.0
-cref = 2.0
-bref = 15.0
-rcg = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
 
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00243, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02252, atol=1e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
 
 # -----------------------------
 

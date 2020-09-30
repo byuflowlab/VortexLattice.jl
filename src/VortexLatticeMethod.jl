@@ -1,32 +1,38 @@
-#=
-Author: Andrew Ning
-
-Vortex Lattice Method
-
-- spanwise and chordwise panels
-- additional Trefftz plane analysis for induced drag
-- stability derivatives
-- general inflow
-
-=#
-
 module VortexLatticeMethod
 
-using ForwardDiff, StaticArrays, LinearAlgebra
+using LinearAlgebra
+using StaticArrays
+using Interpolations
+using ForwardDiff
 
-# core functionality
-export Panel, Freestream, Reference, Outputs
-export vlm, stability_analysis
-
-# geometry convenience functions
-export Uniform, Cosine
-export create_grid, linear_sections, simple_wing, translate!
-
-# included just for clarity in the algorithms
+# values for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
 const VINF = 1.0
+const QINF = 0.5*RHO*VINF^2
 
-include("vlm.jl") # core functionality of this package
-include("geometry.jl")  # convenience functions for generating panels
+include("panel.jl")
+export AbstractPanel, Horseshoe, Ring
+
+include("geometry.jl")
+export Uniform, Cosine
+export grid_to_horseshoe_vortices, grid_to_vortex_rings
+export wing_to_horseshoe_vortices, wing_to_vortex_rings
+
+include("reference.jl")
+export Reference
+
+include("freestream.jl")
+export Freestream
+
+include("circulation.jl")
+export influence_coefficients, influence_coefficients!
+export normal_velocity, normal_velocity!
+export circulation, circulation!
+
+include("forces.jl")
+export forces_moments, trefftz_induced_drag, vlm
+
+include("stability.jl")
+export StabilityDerivatives, stability_analysis
 
 end # module
