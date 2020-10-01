@@ -202,8 +202,8 @@ function grid_to_vortex_rings(xyz)
             rcp = linearinterp(0.75, rl, rr)
 
             # surface normal
-            normal = cross(rcp - rtl, rcp - rtr)
-            normal ./= norm(normal)
+            normal = cross(rcp - rtr, rcp - rtl)
+            normal /= norm(normal)
 
             # panel on trailing edge?
             trailing = false
@@ -238,8 +238,8 @@ function grid_to_vortex_rings(xyz)
         trailing = true
 
         # surface normal
-        normal = cross(rcp - rtl, rcp - rtr)
-        normal ./= norm(normal)
+        normal = cross(rcp - rtr, rcp - rtl)
+        normal /= norm(normal)
 
         panels[(j-1)*nc + nc] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
 
@@ -265,7 +265,7 @@ function interpolate_grid(xyz, eta, interp; dir=1)
 
     ni = size(xyz, dim)
 
-    xyz = mapslices(xyz; dims=[1,i]) do xyz_i
+    xyz = mapslices(xyz; dims=[1,dim]) do xyz_i
 
         # get distance between each grid location
         ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
@@ -377,7 +377,7 @@ function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
     # add trailing edge to grid
-    push!(eta_qtr, 1.0)
+    vcat(eta_qtr, 1.0)
 
     # interpolate grid first along `i` then along `j`
     xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c)
@@ -398,8 +398,8 @@ function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform
             rbr = SVector(xyz_bound[1,i+1,j+1], xyz_bound[2,i+1,j+1], xyz_bound[3,i+1,j+1])
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
 
-            normal = cross(rcp - rtl, rcp - rtr)
-            normal ./= norm(normal)
+            normal = cross(rcp - rtr, rcp - rtl)
+            normal /= norm(normal)
 
             trailing = i == nc
 
@@ -424,7 +424,6 @@ discretization scheme `spacing_c`.
  - `zle`: leading edge z-coordinate of each station
  - `chord`: chord length of each station
  - `theta`: local angle of attack of each station
- - `dihedral`: dihedral of each station
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
  - `spacing_s`: spanwise discretization scheme
@@ -450,7 +449,7 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
     @assert length(xle) == length(yle) == length(zle) == length(chord) == length(theta)
 
     # construct interpolation vector
-    ds = [sqrt(( xle[j] - xle[max(1,j-1)])^2 +
+    ds = [sqrt(( xle[j] - xle[max(1, j-1)])^2 +
                ( yle[j] - yle[max(1, j-1)])^2 +
                ( zle[j] - zle[max(1, j-1)])^2 ) for j = 1:n]
     t = cumsum(ds)
@@ -488,8 +487,8 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
 end
 
 """
-    wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc, mirror;
-        spacing_s=Cosine(), spacing_c=Uniform(), interp_s = (x)->linearinterp(x, 0, 1))
+    wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
+        spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise vortex ring panels
 according to the spanwise discretization scheme `spacing_s` and chordwise
@@ -500,22 +499,24 @@ discretization scheme `spacing_c`.
  - `yle`: leading edge y-coordinate of each station
  - `zle`: leading edge z-coordinate of each station
  - `chord`: chord length of each station
- - `theta`: local angle of attack of each station
- - `dihedral`: dihedral of each station
+ - `theta`: local angle of attack at each station
  - `fc`: camber line function y=f(x) (for a normalized airfoil) at each station
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
- - `spacing_s`: spanwise discretization scheme
- - `spacing_c`: chordwise discretization scheme
- - `interp_s`: interpolation function between spanwise stations
+ - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
+ - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
+ - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
+ - `apply_twist`: indicates whether twist should be applied to the geometry in
+        addition to the normal vector, defaults to `true`
 
 The resulting vector of panels can be reshaped into a grid format with
 `reshape(panels, ni-1, nj-1)`.
 """
-function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc, mirror;
-    spacing_s=Cosine(), spacing_c=Uniform(), interp_s = (x)->linearinterp(x, 0, 1))
+function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
+    spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
+    apply_twist=true)
 
-    TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(dihedral))
+    TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta))
 
     N = (1+mirror)*nc*ns
 
@@ -524,39 +525,40 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc,
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
     # add trailing edge to grid
-    push!(eta_qtr, 1.0)
+    eta_qtr = vcat(eta_qtr, 1.0)
 
     # check input dimensions
     n = length(fc)
-    @assert length(xle) == length(yle) == length(zle) == length(chord) == length(theta) == length(dihedral) == n
+    @assert length(xle) == length(yle) == length(zle) == length(chord) == length(theta) == n
 
     # get bound vortex chordwise locations
     xyz_v = Array{TF, 3}(undef, 3, nc+1, n)
     for j = 1:n
-        # rotation matrix for dihedral
-        Rd = @SMatrix [cd 0 -sd; 0 1 0; sd 0 cd]
-
         # rotation matrix for angle of attack
-        Rt = @SMatrix [1 0 0; 0 ct st; 0 -st ct]
+        ct, st = cos(theta[j]), sin(theta[j])
+        Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
+
+        # location of leading edge
+        rle = SVector(xle[j], yle[j], zle[j])
 
         for i = 1:nc+1
             # normalized chordwise location
             xc = eta_qtr[i]
-
-            # airfoil camber line function
-            f = fc[j]
+            yc = fc[j](xc)
 
             # location on airfoil
-            r = SVector(xc, f(xc), 0)
+            r = SVector(xc, yc, 0)
 
             # scale by chord length
             r *= chord[j]
 
-            # apply dihedral
-            r = Rd * r
+            # apply twist (unless otherwise specified)
+            if apply_twist
+                r = Rt * r
+            end
 
-            # apply angle of attack
-            r = Rt * r
+            # add leading edge offset
+            r += rle
 
             # store final location
             xyz_v[:,i,j] = r
@@ -566,30 +568,31 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc,
     # get control point chordwise locations
     xyz_cp = Array{TF, 3}(undef, 3, nc, n)
     for j = 1:n
-        # rotation matrix for dihedral
-        Rd = @SMatrix [cd 0 -sd; 0 1 0; sd 0 cd]
-
         # rotation matrix for angle of attack
-        Rt = @SMatrix [1 0 0; 0 ct st; 0 -st ct]
+        ct, st = cos(theta[j]), sin(theta[j])
+        Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
+
+        # location of leading edge
+        rle = SVector(xle[j], yle[j], zle[j])
 
         for i = 1:nc
             # normalized chordwise location
             xc = eta_thrqtr[i]
-
-            # airfoil camber line function
-            f = fc[j]
+            yc = fc[j](xc)
 
             # location on airfoil
-            r = SVector(xc, f(xc), 0)
+            r = SVector(xc, yc, 0)
 
             # scale by chord length
             r *= chord[j]
 
-            # apply dihedral
-            r = Rd * r
+            # apply twist (unless otherwise specified)
+            if apply_twist
+                r = Rt * r
+            end
 
-            # apply angle of attack
-            r = Rt * r
+            # add leading edge offset
+            r += rle
 
             # store final location
             xyz_cp[:,i,j] = r
@@ -597,8 +600,17 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc,
     end
 
     # now interpolate the grid to match the specified spanwise spacing
-    xyz_v = interpolate_grid(xyz_v, etas, interp_s)
-    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
+    xyz_v = interpolate_grid(xyz_v, etas, interp_s; dir=2)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; dir=2)
+
+    # interpolate twist to new spanwise stations if not included in the geometry
+    if !apply_twist
+        ds = [sqrt(( xle[j] - xle[max(1, j-1)])^2 +
+                   ( yle[j] - yle[max(1, j-1)])^2 +
+                   ( zle[j] - zle[max(1, j-1)])^2 ) for j = 1:n]
+        t = cumsum(ds)/sum(ds)
+        theta = interp_s(t, theta, etabar)
+    end
 
     # initialize output
     panels = Vector{Ring{TF}}(undef, N)
@@ -606,14 +618,22 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc,
     # populate each panel
     for j = 1:ns
         for i = 1:nc
-            rtl = SVector(xyz_bound[1,i,j], xyz_bound[2,i,j], xyz_bound[3,i,j])
-            rtr = SVector(xyz_bound[1,i,j+1], xyz_bound[2,i,j+1], xyz_bound[3,i,j+1])
-            rbl = SVector(xyz_bound[1,i+1,j], xyz_bound[2,i+1,j], xyz_bound[3,i+1,j])
-            rbr = SVector(xyz_bound[1,i+1,j+1], xyz_bound[2,i+1,j+1], xyz_bound[3,i+1,j+1])
+            rtl = SVector(xyz_v[1,i,j], xyz_v[2,i,j], xyz_v[3,i,j])
+            rtr = SVector(xyz_v[1,i,j+1], xyz_v[2,i,j+1], xyz_v[3,i,j+1])
+            rbl = SVector(xyz_v[1,i+1,j], xyz_v[2,i+1,j], xyz_v[3,i+1,j])
+            rbr = SVector(xyz_v[1,i+1,j+1], xyz_v[2,i+1,j+1], xyz_v[3,i+1,j+1])
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
 
-            normal = cross(rcp - rtl, rcp - rtr)
-            normal ./= norm(normal)
+            # estimate normal vector from control point and top bound vortex
+            normal = cross(rcp - rtr, rcp - rtl)
+            normal /= norm(normal)
+
+            # add twist to normal vector if it wasn't included in the geometry
+            if !apply_twist
+                ct, st = cos(theta[j]), sin(theta[j])
+                Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
+                normal = Rt*normal
+            end
 
             trailing = i == nc
 

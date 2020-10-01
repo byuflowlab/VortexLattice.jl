@@ -30,6 +30,7 @@ export normal_velocity, normal_velocity!
 export circulation, circulation!
 
 include("forces.jl")
+export Outputs
 export forces_moments, trefftz_induced_drag, vlm
 
 include("stability.jl")

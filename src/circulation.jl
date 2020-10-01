@@ -115,19 +115,3 @@ Pre-allocated version of `circulation`
 
     return ldiv!(Γ, factorize(AIC), b)
 end
-
-# ------------ run method --------------------
-
-"""
-    vlm(panels, reference, freestream, symmetric)
-
-Runs the vortex lattice method.
-"""
-function vlm(panels, reference, freestream, symmetric)
-
-    Γ = circulation(panels, reference, freestream, symmetric)
-    CF, CM, paneloutputs = forces_moments(panels, reference, freestream, Γ, symmetric)
-    CDiff, trefftz_panels = trefftz_induced_drag(panels, reference, freestream, Γ, symmetric)
-
-    return Outputs(CF, CM, CDiff, paneloutputs)
-end

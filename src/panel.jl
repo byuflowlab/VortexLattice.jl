@@ -117,6 +117,17 @@ midpoint
 @inline midpoint(panel::Ring) = (panel.rtl + panel.rtr)/2
 
 """
+    panel_width(panel::AbstractPanel)
+
+Return the panel width
+"""
+panel_width
+
+@inline panel_width(panel::Horseshoe) = panel.rr - panel.rl
+
+@inline panel_width(panel::Ring) = panel.rtr - panel.rtl
+
+"""
     normal(panel::AbstractPanel)
 
 Compute the normal vector of `panel`
@@ -158,7 +169,15 @@ trefftz_plane_normal
     return nhat
 end
 
-@inline trefftz_plane_normal(panel::Ring, xhat) = cross(xhat, cross(panel.normal, xhat))
+@inline function trefftz_plane_normal(panel::Ring)
+    delta = panel.rbr - panel.rbl
+    dy = delta[2]
+    dz = delta[3]
+
+    nhat = SVector(0, -dz, dy)
+
+    return nhat
+end
 
 """
     translate(panel::AbstractPanel, r)
@@ -223,7 +242,7 @@ induced_velocity
 
 end
 
-@inline function induced_velocity(rcp, panel::Ring, symmetric, xhat, include_top=true,
+@inline function induced_velocity(rcp, panel::Ring, symmetric, xhat=SVector(1,0,0), include_top=true,
     include_bottom=true)
 
     # position of control point relative to top of vortex ring
@@ -257,7 +276,7 @@ end
     end
 
     # add contribution from other side (if applicable)
-    if symmetric && not_on_symmetry_plane(rl, rr)
+    if symmetric && not_on_symmetry_plane(panel.rtl, panel.rtr)
         # flip sign for y, but now left is right and right is left.
         r11 = rcp - flipy(panel.rtr) # top left
         r12 = rcp - flipy(panel.rtl) # top right

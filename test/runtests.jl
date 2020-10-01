@@ -1,7 +1,9 @@
 using Test
 using VortexLatticeMethod
 
-@testset "tests against AVL 3.35 -- simple wing" begin
+@testset "Simple Wing - Horseshoe Vortices" begin
+
+    # test against AVL 3.35
 
     xle = [0.0, 0.4]
     yle = [0.0, 7.5]
@@ -10,8 +12,11 @@ using VortexLatticeMethod
     theta = [2.0*pi/180; 2.0*pi/180]
     ns = 12
     nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
     mirror = false
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror)
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
+        spacing_s, spacing_c)
 
     alpha = 1.0*pi/180
     beta = 0.0
@@ -26,7 +31,15 @@ using VortexLatticeMethod
     ref = Reference(Sref, cref, bref, rcg)
 
     symmetric = true
-    outputs = vlm(panels, ref, fs, symmetric)
+
+    Γ = circulation(panels, ref, fs, symmetric)
+
+    CF, CM, paneloutputs = forces_moments(panels, ref, fs, Γ, symmetric)
+
+    CDiff, trefftz_panels = trefftz_induced_drag(panels, ref, fs, Γ, symmetric)
+
+    outputs = Outputs(CF, CM, CDiff, paneloutputs)
+
     CD, CY, CL = outputs.CF
     Cl, Cm, Cn = outputs.CM
 
@@ -37,6 +50,59 @@ using VortexLatticeMethod
     @test CY == 0.0
     @test Cl == 0.0
     @test Cn == 0.0
+end
+
+@testset "Simple Wing - Vortex Rings" begin
+
+    # test against AVL 3.35
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180; 2.0*pi/180]
+    ns = 12
+    nc = 1
+    fc = fill(x->0, 2)
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
+        spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rcg = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
+
+    symmetric = true
+
+    Γ = circulation(panels, ref, fs, symmetric)
+
+    CF, CM, paneloutputs = forces_moments(panels, ref, fs, Γ, symmetric)
+
+    CDiff, trefftz_panels = trefftz_induced_drag(panels, ref, fs, Γ, symmetric)
+
+    outputs = Outputs(CF, CM, CDiff, paneloutputs)
+
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+end
 
 # -----------------------------
 

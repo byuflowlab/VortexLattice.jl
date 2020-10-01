@@ -94,8 +94,8 @@ distribution `Γ`
                 Vij = induced_velocity(rmid, panels[j], symmetric, i != j)
             elseif eltype(panels) <: Ring # ring vortex
 
-                # include upper bound if i != j
-                # include lower bound if i+1 != j || panels[j].trailing
+                # include top bound vortex if i != j
+                # include bottom bound vortex if i+1 != j || panels[j].trailing
                 # note that we assume panels are grouped into chordwise strips
                 # that are ordered from leading edge to trailing edge
                 # e.g.
@@ -103,12 +103,11 @@ distribution `Γ`
                 #     2 5 8 11   and   2 11 8 5   are both valid
                 #     3 6 9 12         3 12 9 6
 
-                include_upper = i != j
-                include_lower = i+1 != j || panels[j].trailing
+                include_top = i != j
+                include_bottom = i+1 != j || panels[j].trailing
 
-                Vij = ring_induced_velocity(rmid, panels[j].rtl, panels[j].rtr,
-                    panels[j].rbl, panels[j].rbr, symmetric, panels[j].trailing,
-                    include_upper, include_lower, xhat)
+                Vij = induced_velocity(rmid, panels[j], symmetric, xhat,
+                    include_top, include_bottom)
             end
 
             Vind += Vij*Γ[j]
@@ -119,7 +118,7 @@ distribution `Γ`
         Vi = Vind + Vext
 
         # forces and moments
-        Δs = panels[i].rr - panels[i].rl
+        Δs = panel_width(panels[i])
         Fbi = RHO*Γ[i]*cross(Vi, Δs)
         Mbi = cross(rmid - reference.rcg, Fbi)
 
@@ -215,7 +214,7 @@ Induced drag from vortex `j` induced on panel `i`
 @inline function vortex_induced_drag(rj, Γj, ri, Γi, nhat_ds_i, xhat=SVector(1, 0, 0))
 
     rij = ri - rj
-    rij -= dot(xhat, rij)  # 2D plane (no xhat-component)
+    rij -= dot(xhat, rij)*xhat  # 2D plane (no xhat-component)
     Vthetai = cross(Γj*xhat, rij) / (2*pi*norm(rij)^2)
     Vn = -dot(Vthetai, nhat_ds_i)
 
@@ -253,7 +252,7 @@ end
 
 @inline function panel_induced_drag(panel_j::Ring, Γj, panel_i::Ring, Γi, symmetric, xhat)
 
-    nhat_i = trefftz_plane_normal(panel_i, xhat)
+    nhat_i = trefftz_plane_normal(panel_i)
     ri = midpoint(panel_i)
 
     rl_j = panel_j.rbl
@@ -281,7 +280,7 @@ Compute induced drag using the Trefftz plane (far field method).
 end
 
 """
-    trefftz_induced_drag!(panels, freestream, Γ, symmetric)
+    trefftz_induced_drag!(panels, reference, freestream, Γ, symmetric)
 
 Pre-allocated version of trefftz_induced_drag!.  Overwrites `panels` with the
 panels in the Trefftz plane.
@@ -313,7 +312,7 @@ trefftz_induced_drag!
     return CDi, panels
 end
 
-@inline function trefftz_induced_drag!(panels::AbstractVector{<:Ring}, reference, freestream, Γ, symmetric, xhat)
+@inline function trefftz_induced_drag!(panels::AbstractVector{<:Ring}, reference, freestream, Γ, symmetric, xhat=SVector(1,0,0))
 
     # rotate panels into wind coordinate system
     project_panels!(panels, freestream)
@@ -323,8 +322,8 @@ end
 
     Di = zero(TF)
     for j = 1:N
-        for i = 1:N
-            if panels[j].trailing
+        if panels[j].trailing
+            for i = 1:N
                 Di += panel_induced_drag(panels[j], Γ[j], panels[i], Γ[i], symmetric, xhat)
             end
         end
@@ -338,4 +337,18 @@ end
     CDi = Di / (QINF*reference.S)
 
     return CDi, panels
+end
+
+"""
+    vlm(panels, reference, freestream, symmetric)
+
+Runs the vortex lattice method.
+"""
+function vlm(panels, reference, freestream, symmetric)
+
+    Γ = circulation(panels, reference, freestream, symmetric)
+    CF, CM, paneloutputs = forces_moments(panels, reference, freestream, Γ, symmetric)
+    CDiff, trefftz_panels = trefftz_induced_drag(panels, reference, freestream, Γ, symmetric)
+
+    return Outputs(CF, CM, CDiff, paneloutputs)
 end
