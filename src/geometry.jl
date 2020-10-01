@@ -79,7 +79,46 @@ function chordwise_spacing(n, ::Cosine)
 end
 
 """
-    grid_to_horseshoe_vortices(xyz, theta)
+    interpolate_grid(xyz, eta, interp; dir=1 )
+
+Interpolates the grid `xyz` along direction `dir`
+
+# Arguments
+ - `xyz`: Grid of size (3, ni, nj)
+ - `eta`: New (normalized) coordinates in direction `dir` (0 <= eta <= 1)
+ - `interp`: Interpolation method of form `ypt = f(x,y,xpt)`
+ - `dir`: Direction in which to interpolate `xyz` (`i=1`, `j=2`)
+"""
+function interpolate_grid(xyz, eta, interp; dir=1)
+
+    dim = dir + 1
+
+    ni = size(xyz, dim)
+
+    xyz = mapslices(xyz; dims=[1,dim]) do xyz_i
+
+        # get distance between each grid location
+        ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
+
+        # create interpolation vector
+        t = cumsum(ds)
+
+        # normalize interpolation vector
+        t /= t[end]
+
+        # interpolate x, y, and z
+        x = interp(t, xyz_i[1,:], eta)
+        y = interp(t, xyz_i[2,:], eta)
+        z = interp(t, xyz_i[3,:], eta)
+
+        vcat(x',y',z')
+    end
+
+    return xyz
+end
+
+"""
+    grid_to_horseshoe_vortices(xyz, theta; mirror=false)
 
 Construct a set of horseshoe vortex panels given a pre-existing set of panels defined
 by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
@@ -91,16 +130,24 @@ Each chordwise strip must have the same y and z-coordinates (i.e. the airfoil ge
 cannot be cambered or twisted).  Local angle of attack at each spanwise increment
 is specified with the input vector `theta` which has length `size(xyz, 3)`.
 
+The optional argument `mirror` may be used to mirror the geometry across the
+y-axis.
+
 The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`.
+grid with `reshape(panels, ni-1, nj-1)`  (`reshape(panels, nc, 2*ns)` if the
+geometry is mirrored).
 """
-function grid_to_horseshoe_vortices(xyz, theta)
+function grid_to_horseshoe_vortices(xyz, theta; mirror=false)
 
     TF = promote_type(eltype(xyz), eltype(theta))
 
     nc = size(grid, 2)-1
     ns = size(grid, 3)-1
-    N = nc*ns
+    N = (1+mirror)*nc*ns
+
+    # check which side we're working with
+    right_side = sum(xyz[2,:,:]) > 0
+    left_side = !right_side
 
     # initialize output
     panels = Vector{Horseshoe{TF}}(undef, N)
@@ -109,7 +156,7 @@ function grid_to_horseshoe_vortices(xyz, theta)
     for j = 1:ns
 
         # angle
-        th = linearinterp(theta[j], theta[j+1])
+        th = linearinterp(0.5, theta[j], theta[j+1])
 
         for i = 1:nc
 
@@ -128,10 +175,21 @@ function grid_to_horseshoe_vortices(xyz, theta)
             # control point
             rtop = linearinterp(0.5, r1, r2)
             rbot = linearinterp(0.5, r3, r4)
-            rcp = linearinterp(0.75, rl, rr)
+            rcp = linearinterp(0.75, rtop, rbot)
 
-            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Horseshoe{TF}(rl, rr, rcp, th)
+        end
+    end
 
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
         end
     end
 
@@ -140,7 +198,7 @@ end
 
 
 """
-    grid_to_vortex_rings(xyz)
+    grid_to_vortex_rings(xyz; mirror=false)
 
 Construct a set of vortex ring panels given a pre-existing set of panels defined
 by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
@@ -149,21 +207,29 @@ vortex will be placed at the 1/4 chord and the control point will be placed at
 the 3/4 chord of each panel.
 
 The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`.
+grid with `reshape(panels, ni-1, nj-1)`.  (`reshape(panels, ni-1, 2*(nj-1))` if
+the geometry is mirrored).
 """
-function grid_to_vortex_rings(xyz)
+function grid_to_vortex_rings(xyz; mirror=false)
 
     TF = eltype(xyz)
 
     nc = size(grid, 2)-1
     ns = size(grid, 3)-1
-    N = nc*ns
+    N = (1+mirror)*nc*ns
+
+    # check which side we're working with
+    right_side = sum(xyz[2,:,:]) > 0
+    left_side = !right_side
 
     # initialize output
     panels = Vector{Ring{TF}}(undef, N)
 
     # populate each panel
     for j = 1:ns
+
+        # angle
+        th = linearinterp(0.5, theta[j], theta[j+1])
 
         r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
         r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
@@ -208,7 +274,8 @@ function grid_to_vortex_rings(xyz)
             # panel on trailing edge?
             trailing = false
 
-            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
         end
 
         # grid corners of current panel
@@ -241,51 +308,25 @@ function grid_to_vortex_rings(xyz)
         normal = cross(rcp - rtr, rcp - rtl)
         normal /= norm(normal)
 
-        panels[(j-1)*nc + nc] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+        ipanel = mirror*right_side*nc*ns + (j-1)*nc + nc
+        panels[ipanel] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
 
+    end
+
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
+        end
     end
 
     return panels
 end
 
-"""
-    interpolate_grid(xyz, eta, interp; dir=1 )
-
-Interpolates the grid `xyz` along direction `dir`
-
-# Arguments
- - `xyz`: Grid of size (3, ni, nj)
- - `eta`: New (normalized) coordinates in direction `dir` (0 <= eta <= 1)
- - `interp`: Interpolation method of form `ypt = f(x,y,xpt)`
- - `dir`: Direction in which to interpolate `xyz` (`i=1`, `j=2`)
-"""
-function interpolate_grid(xyz, eta, interp; dir=1)
-
-    dim = dir + 1
-
-    ni = size(xyz, dim)
-
-    xyz = mapslices(xyz; dims=[1,dim]) do xyz_i
-
-        # get distance between each grid location
-        ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
-
-        # create interpolation vector
-        t = cumsum(ds)
-
-        # normalize interpolation vector
-        t /= t[end]
-
-        # interpolate x, y, and z
-        x = interp(t, xyz_i[1,:], eta)
-        y = interp(t, xyz_i[2,:], eta)
-        z = interp(t, xyz_i[3,:], eta)
-
-        vcat(x',y',z')
-    end
-
-    return xyz
-end
 
 """
     grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
@@ -300,10 +341,12 @@ cannot be cambered or twisted).  Local angle of attack at each spanwise incremen
 is specified with the input vector `theta` which has length `size(xyz, 3)`.
 
 The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`.
+grid with `reshape(panels, ni-1, nj-1)` (`reshape(panels, ni-1, 2*(nj-1))` if
+the geometry is mirrored).
 """
-function grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
-    interp_s=(x,y,xpt)->LinearInterpolation(x,y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x,y)(xpt))
+function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=Cosine(),
+    spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x,y)(xpt),
+    interp_c=(x,y,xpt)->LinearInterpolation(x,y)(xpt))
 
     TF = promote_type(eltype(xyz), eltype(theta))
 
@@ -319,6 +362,10 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spac
 
     xyz_cp = interpolate_grid(xyz, eta_thrqtr, interp_c)
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
+
+    # check which side we're working with
+    right_side = sum(xyz[2,:,:]) > 0
+    left_side = !right_side
 
     # interpolate local angle of attack to new locations
     ds = [norm(xyz[:,1,j] - xyz[:,1,max(1,j-1)]) for j = 1:size(xyz,3)]
@@ -337,7 +384,19 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spac
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             th = theta[j]
 
-            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Horseshoe{TF}(rl, rr, rcp, th)
+        end
+    end
+
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
         end
     end
 
@@ -345,8 +404,9 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spac
 end
 
 """
-    grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
-        interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
+        interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
+        interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a grid into `ns` spanwise and `nc` chordwise vortex ring panels
 according to the spanwise discretization scheme `spacing_s` and chordwise
@@ -357,16 +417,18 @@ discretization scheme `spacing_c`.
     chordwise direction and `j` corresponds to the spanwise direction.
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
- - `spacing_s`: spanwise discretization scheme
- - `spacing_c`: chordwise discretization scheme
- - `interp_s`: spanwise interpolation function
- - `interp_c`: chordwise interpolation function
+ - `mirror`:  mirror the geometry across the y-axis? defaults to `false`.
+ - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
+ - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
+ - `interp_s`: spanwise interpolation function, defaults to linear interpolation
+ - `interp_c`: chordwise interpolation function, defaults to linear interpolation
 
 The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, nc, ns)`.
+`reshape(panels, nc, ns)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
-function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
-    interp_s=(x)->linearinterp(x, 0, 1), interp_c=(x)->linearinterp(x, 0, 1))
+function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
+    spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
+    interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = eltype(xyz)
 
@@ -386,6 +448,10 @@ function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform
     xyz_cp = interpolate_grid(xyz, eta_thrqtr, interp_c)
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s)
 
+    # check which side we're working with
+    right_side = sum(xyz[2,:,:]) > 0
+    left_side = !right_side
+
     # initialize output
     panels = Vector{Ring{TF}}(undef, N)
 
@@ -403,7 +469,19 @@ function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform
 
             trailing = i == nc
 
-            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+        end
+    end
+
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
         end
     end
 
@@ -411,7 +489,7 @@ function grid_to_vortex_rings(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform
 end
 
 """
-    wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
+    wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc; mirror = false,
         spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise horseshoe vortex panels
@@ -426,14 +504,15 @@ discretization scheme `spacing_c`.
  - `theta`: local angle of attack of each station
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
- - `spacing_s`: spanwise discretization scheme
- - `spacing_c`: chordwise discretization scheme
- - `interp_s`: interpolation function between spanwise stations
+ - `mirror`:  mirror the geometry across the y-axis?, defaults to `false`
+ - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
+ - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
+ - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
 
 The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, ni-1, nj-1)`.
+`reshape(panels, nc, ns)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
-function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
+function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc; mirror = false,
     spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta))
@@ -472,14 +551,29 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
     # initialize output
     panels = Vector{Horseshoe{TF}}(undef, N)
 
-    # populate each panel
+    # check which side we're working with
+    right_side = sum(yle) > 0
+    left_side = !right_side
+
     for j = 1:ns
         for i = 1:nc
             rl = SVector(xle_v[j] + eta_qtr[i]*chord_v[j], yle_v[j], zle_v[j])
             rr = SVector(xle_v[j+1] + eta_qtr[i]*chord_v[j+1], yle_v[j+1], zle_v[j+1])
             rcp = SVector(xle_cp[j]+eta_thrqtr[i]*chord_cp[j], yle_cp[j], zle_cp[j])
             th = theta[j]
-            panels[(j-1)*nc + i] = Horseshoe{TF}(rl, rr, rcp, th)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Horseshoe{TF}(rl, rr, rcp, th)
+        end
+    end
+
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
         end
     end
 
@@ -487,7 +581,7 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
 end
 
 """
-    wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
+    wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=false,
         spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise vortex ring panels
@@ -503,6 +597,7 @@ discretization scheme `spacing_c`.
  - `fc`: camber line function y=f(x) (for a normalized airfoil) at each station
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
+ - `mirror`:  mirror the geometry across the y-axis?, defaults to `false`
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
@@ -510,9 +605,9 @@ discretization scheme `spacing_c`.
         addition to the normal vector, defaults to `true`
 
 The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, ni-1, nj-1)`.
+`reshape(panels, ni-1, nj-1)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
-function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
+function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=false,
     spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
     apply_twist=true)
 
@@ -615,6 +710,10 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
     # initialize output
     panels = Vector{Ring{TF}}(undef, N)
 
+    # check which side we're working with
+    right_side = sum(yle) > 0
+    left_side = !right_side
+
     # populate each panel
     for j = 1:ns
         for i = 1:nc
@@ -637,7 +736,19 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
 
             trailing = i == nc
 
-            panels[(j-1)*nc + i] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
+            panels[ipanel] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+        end
+    end
+
+    # other side
+    if mirror
+        for j = 1:ns
+            for i = 1:nc
+                ipanel1 = right_side*nc*ns + (j-1)*nc + i
+                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
+                panels[ipanel2] = reflect_y(panels[ipanel1])
+            end
         end
     end
 

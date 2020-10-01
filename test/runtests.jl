@@ -1,7 +1,7 @@
 using Test
 using VortexLatticeMethod
 
-@testset "Simple Wing - Horseshoe Vortices" begin
+@testset "Simple Wing" begin
 
     # test against AVL 3.35
 
@@ -10,19 +10,11 @@ using VortexLatticeMethod
     zle = [0.0, 0.0]
     chord = [2.2, 1.8]
     theta = [2.0*pi/180; 2.0*pi/180]
+    fc = fill(x->0, 2)
     ns = 12
     nc = 1
     spacing_s = Uniform()
     spacing_c = Uniform()
-    mirror = false
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc, mirror;
-        spacing_s, spacing_c)
-
-    alpha = 1.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
 
     Sref = 30.0
     cref = 2.0
@@ -30,29 +22,94 @@ using VortexLatticeMethod
     rcg = [0.50, 0.0, 0.0]
     ref = Reference(Sref, cref, bref, rcg)
 
-    symmetric = true
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
 
-    Γ = circulation(panels, ref, fs, symmetric)
+    @testset begin "Symmetric - Horseshoe Vortices"
+        # Simple Wing - Symmetric - Horseshoe Vortices
+        mirror = false
+        panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    CF, CM, paneloutputs = forces_moments(panels, ref, fs, Γ, symmetric)
+        symmetric = true
+        outputs = vlm(panels, ref, fs, symmetric)
+        CD, CY, CL = outputs.CF
+        Cl, Cm, Cn = outputs.CM
 
-    CDiff, trefftz_panels = trefftz_induced_drag(panels, ref, fs, Γ, symmetric)
+        @test isapprox(CL, 0.24324, atol=1e-3)
+        @test isapprox(CD, 0.00243, atol=1e-5)
+        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+        @test isapprox(Cm, -0.02252, atol=1e-4)
+        @test isapprox(CY, 0.0, atol=1e-16)
+        @test isapprox(Cl, 0.0, atol=1e-16)
+        @test isapprox(Cn, 0.0, atol=1e-16)
+    end
 
-    outputs = Outputs(CF, CM, CDiff, paneloutputs)
+    @testset begin "Mirrored - Horseshoe Vortices"
+        # Simple Wing - Mirrored - Horseshoe Vortices
+        mirror = true
+        panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+            mirror=mirror, spacing_s, spacing_c)
 
-    CD, CY, CL = outputs.CF
-    Cl, Cm, Cn = outputs.CM
+        symmetric = false
+        outputs = vlm(panels, ref, fs, symmetric)
+        CD, CY, CL = outputs.CF
+        Cl, Cm, Cn = outputs.CM
 
-    @test isapprox(CL, 0.24324, atol=1e-3)
-    @test isapprox(CD, 0.00243, atol=1e-5)
-    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-    @test isapprox(Cm, -0.02252, atol=1e-4)
-    @test CY == 0.0
-    @test Cl == 0.0
-    @test Cn == 0.0
+        @test isapprox(CL, 0.24324, atol=1e-3)
+        @test isapprox(CD, 0.00243, atol=1e-5)
+        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+        @test isapprox(Cm, -0.02252, atol=1e-4)
+        @test isapprox(CY, 0.0, atol=1e-16)
+        @test isapprox(Cl, 0.0, atol=1e-16)
+        @test isapprox(Cn, 0.0, atol=1e-16)
+    end
+
+    # Simple Wing - Symmetric - Vortex Rings
+    @testset begin "Symmetric - Vortex Rings"
+        mirror = false
+        panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
+            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
+
+        symmetric = true
+        outputs = vlm(panels, ref, fs, symmetric)
+        CD, CY, CL = outputs.CF
+        Cl, Cm, Cn = outputs.CM
+
+        @test isapprox(CL, 0.24324, atol=1e-3)
+        @test isapprox(CD, 0.00243, atol=1e-5)
+        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+        @test isapprox(Cm, -0.02252, atol=1e-4)
+        @test isapprox(CY, 0.0, atol=1e-16)
+        @test isapprox(Cl, 0.0, atol=1e-16)
+        @test isapprox(Cn, 0.0, atol=1e-16)
+    end
+
+    # Simple Wing - Mirrored - Vortex Rings
+    @testset begin "Mirrored - Vortex Rings"
+        mirror = true
+        panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
+            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
+
+        symmetric = false
+        outputs = vlm(panels, ref, fs, symmetric)
+        CD, CY, CL = outputs.CF
+        Cl, Cm, Cn = outputs.CM
+
+        @test isapprox(CL, 0.24324, atol=1e-3)
+        @test isapprox(CD, 0.00243, atol=1e-5)
+        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+        @test isapprox(Cm, -0.02252, atol=1e-4)
+        @test isapprox(CY, 0.0, atol=1e-16)
+        @test isapprox(Cl, 0.0, atol=1e-16)
+        @test isapprox(Cn, 0.0, atol=1e-16)
+    end
 end
 
-@testset "Simple Wing - Vortex Rings" begin
+@testset "Simple Wing - Symmetric - Vortex Rings" begin
 
     # test against AVL 3.35
 
@@ -67,8 +124,8 @@ end
     spacing_s = Uniform()
     spacing_c = Uniform()
     mirror = false
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc, mirror;
-        spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
 
     alpha = 1.0*pi/180
     beta = 0.0
@@ -84,14 +141,18 @@ end
 
     symmetric = true
 
-    Γ = circulation(panels, ref, fs, symmetric)
 
-    CF, CM, paneloutputs = forces_moments(panels, ref, fs, Γ, symmetric)
+end
 
-    CDiff, trefftz_panels = trefftz_induced_drag(panels, ref, fs, Γ, symmetric)
+# -----------------------------
 
-    outputs = Outputs(CF, CM, CDiff, paneloutputs)
+# ---- simple wing without symmetry -----
+@testset "Simple Wing - Mirrored - Horseshoe Vortices"
+    duplicate = true
+    panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
 
+    symmetric = false
+    outputs = vlm(panels, ref, fs, symmetric)
     CD, CY, CL = outputs.CF
     Cl, Cm, Cn = outputs.CM
 
@@ -99,52 +160,33 @@ end
     @test isapprox(CD, 0.00243, atol=1e-5)
     @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
     @test isapprox(Cm, -0.02252, atol=1e-4)
-    @test CY == 0.0
-    @test Cl == 0.0
-    @test Cn == 0.0
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
+    CDa, CYa, CLa = dCF.alpha
+    Cla, Cma, Cna = dCM.alpha
+    CDb, CYb, CLb = dCF.beta
+    Clb, Cmb, Cnb = dCM.beta
+    CDp, CYp, CLp = dCF.p
+    Clp, Cmp, Cnp = dCM.p
+    CDq, CYq, CLq = dCF.q
+    Clq, Cmq, Cnq = dCM.q
+    CDr, CYr, CLr = dCF.r
+    Clr, Cmr, Cnr = dCM.r
+
+    @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+    @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+    @test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+    # @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
 end
-
-# -----------------------------
-
-# ---- simple wing without symmetry -----
-duplicate = true
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-symmetric = false
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00243, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02252, atol=1e-4)
-@test isapprox(CY, 0.0, atol=1e-16)
-@test isapprox(Cl, 0.0, atol=1e-16)
-@test isapprox(Cn, 0.0, atol=1e-16)
-
-dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
-CDa, CYa, CLa = dCF.alpha
-Cla, Cma, Cna = dCM.alpha
-CDb, CYb, CLb = dCF.beta
-Clb, Cmb, Cnb = dCM.beta
-CDp, CYp, CLp = dCF.p
-Clp, Cmp, Cnp = dCM.p
-CDq, CYq, CLq = dCF.q
-Clq, Cmq, Cnq = dCM.q
-CDr, CYr, CLr = dCF.r
-Clr, Cmr, Cnr = dCM.r
-
-@test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
-@test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
-@test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
-# @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
 
 # h = 1e-6
 # betap = beta + h

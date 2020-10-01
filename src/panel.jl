@@ -186,25 +186,62 @@ Return a copy of `panel` translated the distance specified by vector `r`
 """
 translate
 
-function translate(panel::Horseshoe, r)
+@inline function translate(panel::Horseshoe, r)
 
-    rl = panels[i].rl + r
-    rr = panels[i].rr + r
-    rcp = panels[i].rcp + r
-    theta = panels[i].theta
+    rl = panel.rl + r
+    rr = panel.rr + r
+    rcp = panel.rcp + r
+    theta = panel.theta
 
     return Horseshoe(rl, rr, rcp, theta)
 end
 
-function translate(panel::Ring, r)
+@inline function translate(panel::Ring, r)
 
-    rtl = panels.rtl + r
-    rtr = panels.rtr + r
-    rbl = panels.rbl + r
-    rbr = panels.rbr + r
-    rcp = panels.rcp + r
-    normal = panels.normal
-    trailing = panels.trailing
+    rtl = panel.rtl + r
+    rtr = panel.rtr + r
+    rbl = panel.rbl + r
+    rbr = panel.rbr + r
+    rcp = panel.rcp + r
+    normal = panel.normal
+    trailing = panel.trailing
+
+    return Ring(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+end
+
+"""
+    reflect_y(r)
+
+Reflects a vector across the y-axis
+"""
+@inline reflect_y(r) = SVector(r[1], -r[2], r[3])
+
+"""
+    reflect_y(panel::AbstractPanel)
+
+Reflects a panel across the y-axis.
+"""
+reflect_y
+
+function reflect_y(panel::Horseshoe)
+
+    rl = reflect_y(panel.rl)
+    rr = reflect_y(panel.rr)
+    rcp = reflect_y(panel.rcp)
+    theta = panel.theta
+
+    return Horseshoe(rl, rr, rcp, theta)
+end
+
+function reflect_y(panel::Ring)
+
+    rtl = reflect_y(panel.rtl)
+    rtr = reflect_y(panel.rtr)
+    rbl = reflect_y(panel.rbl)
+    rbr = reflect_y(panel.rbr)
+    rcp = reflect_y(panel.rcp)
+    normal = reflect_y(panel.normal)
+    trailing = panel.trailing
 
     return Ring(rtl, rtr, rbl, rbr, rcp, normal, trailing)
 end
