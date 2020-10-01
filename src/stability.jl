@@ -30,10 +30,6 @@ Base.eltype(::StabilityDerivatives{TF}) where TF = TF
 
 function stability_analysis(panels, reference, freestream, symmetric)
 
-    # make sure panels is of concrete type
-    TF = promote_type(eltype.(panels)...)
-    panels = Vector{Panel{TF}}(panels)
-
     x = vcat(freestream.alpha, freestream.beta, freestream.Omega)
 
     f = function(x)

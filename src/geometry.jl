@@ -134,16 +134,16 @@ The optional argument `mirror` may be used to mirror the geometry across the
 y-axis.
 
 The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`  (`reshape(panels, nc, 2*ns)` if the
+grid with `reshape(panels, ni-1, nj-1)`  (`reshape(panels, ni-1, 2*(nj-1))` if the
 geometry is mirrored).
 """
 function grid_to_horseshoe_vortices(xyz, theta; mirror=false)
 
     TF = promote_type(eltype(xyz), eltype(theta))
 
-    nc = size(grid, 2)-1
-    ns = size(grid, 3)-1
-    N = (1+mirror)*nc*ns
+    nc = size(grid, 2)-1 # number of chordwise panels
+    ns = size(grid, 3)-1 # number of spanwise panels
+    N = (1+mirror)*nc*ns # total number of panels
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
@@ -196,7 +196,6 @@ function grid_to_horseshoe_vortices(xyz, theta; mirror=false)
     return panels
 end
 
-
 """
     grid_to_vortex_rings(xyz; mirror=false)
 
@@ -214,9 +213,9 @@ function grid_to_vortex_rings(xyz; mirror=false)
 
     TF = eltype(xyz)
 
-    nc = size(grid, 2)-1
-    ns = size(grid, 3)-1
-    N = (1+mirror)*nc*ns
+    nc = size(grid, 2)-1 # number of chordwise panels
+    ns = size(grid, 3)-1 # number of spanwise panels
+    N = (1+mirror)*nc*ns # total number of panels
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
@@ -227,9 +226,6 @@ function grid_to_vortex_rings(xyz; mirror=false)
 
     # populate each panel
     for j = 1:ns
-
-        # angle
-        th = linearinterp(0.5, theta[j], theta[j+1])
 
         r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
         r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
@@ -271,7 +267,7 @@ function grid_to_vortex_rings(xyz; mirror=false)
             normal = cross(rcp - rtr, rcp - rtl)
             normal /= norm(normal)
 
-            # panel on trailing edge?
+            # not a trailing edge panel (no shed wake)
             trailing = false
 
             ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
@@ -301,7 +297,7 @@ function grid_to_vortex_rings(xyz; mirror=false)
         rbot = linearinterp(0.5, r3, r4)
         rcp = linearinterp(0.75, rl, rr)
 
-        # panel on trailing edge?
+        # trailing edge panel (wake is shed from this panel)
         trailing = true
 
         # surface normal
@@ -310,7 +306,6 @@ function grid_to_vortex_rings(xyz; mirror=false)
 
         ipanel = mirror*right_side*nc*ns + (j-1)*nc + nc
         panels[ipanel] = Ring{TF}(rtl, rtr, rbl, rbr, rcp, normal, trailing)
-
     end
 
     # other side
@@ -327,7 +322,6 @@ function grid_to_vortex_rings(xyz; mirror=false)
     return panels
 end
 
-
 """
     grid_to_horseshoe_vortices(xyz, theta, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
         interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
@@ -341,7 +335,7 @@ cannot be cambered or twisted).  Local angle of attack at each spanwise incremen
 is specified with the input vector `theta` which has length `size(xyz, 3)`.
 
 The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)` (`reshape(panels, ni-1, 2*(nj-1))` if
+grid with `reshape(panels, nc, ns)` (`reshape(panels, nc, 2*ns)` if
 the geometry is mirrored).
 """
 function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=Cosine(),
@@ -350,7 +344,7 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
 
     TF = promote_type(eltype(xyz), eltype(theta))
 
-    N = nc*ns
+    N = (1+mirror)*nc*ns # total number of panels
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -432,7 +426,7 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
 
     TF = eltype(xyz)
 
-    N = nc*ns
+    N = (1+mirror)*nc*ns # number of panels
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -517,7 +511,7 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc; mirror 
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta))
 
-    N = (1+mirror)*nc*ns
+    N = (1+mirror)*nc*ns # number of panels
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -594,6 +588,7 @@ discretization scheme `spacing_c`.
  - `zle`: leading edge z-coordinate of each station
  - `chord`: chord length of each station
  - `theta`: local angle of attack at each station
+ - `dihedral`: dihedral angle at each station
  - `fc`: camber line function y=f(x) (for a normalized airfoil) at each station
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
@@ -601,19 +596,21 @@ discretization scheme `spacing_c`.
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
- - `apply_twist`: indicates whether twist should be applied to the geometry in
-        addition to the normal vector, defaults to `true`
+ - `twist_geometry`: indicates whether twist should be applied to the geometry
+        rather than just to the normal vector, defaults to `true`
 
 The resulting vector of panels can be reshaped into a grid format with
 `reshape(panels, ni-1, nj-1)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
-function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=false,
+function wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc; mirror=false,
     spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
-    apply_twist=true)
+    twist_geometry=true)
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta))
 
     N = (1+mirror)*nc*ns
+
+    twist_normal = !twist_geometry
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -629,6 +626,10 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
     # get bound vortex chordwise locations
     xyz_v = Array{TF, 3}(undef, 3, nc+1, n)
     for j = 1:n
+        # rotation matrix for dihedral
+        cd, sd = cos(dihedral[j]), sin(dihedral[j])
+        Rd = @SMatrix [1 0 0; 0 cd -sd; 0 sd cd]
+
         # rotation matrix for angle of attack
         ct, st = cos(theta[j]), sin(theta[j])
         Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
@@ -648,9 +649,12 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
             r *= chord[j]
 
             # apply twist (unless otherwise specified)
-            if apply_twist
+            if twist_geometry
                 r = Rt * r
             end
+
+            # apply dihedral
+            r = Rd * r
 
             # add leading edge offset
             r += rle
@@ -663,6 +667,10 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
     # get control point chordwise locations
     xyz_cp = Array{TF, 3}(undef, 3, nc, n)
     for j = 1:n
+        # rotation matrix for dihedral
+        cd, sd = cos(dihedral[j]), sin(dihedral[j])
+        Rd = @SMatrix [1 0 0; 0 cd -sd; 0 sd cd]
+
         # rotation matrix for angle of attack
         ct, st = cos(theta[j]), sin(theta[j])
         Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
@@ -682,9 +690,12 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
             r *= chord[j]
 
             # apply twist (unless otherwise specified)
-            if apply_twist
+            if twist_geometry
                 r = Rt * r
             end
+
+            # apply dihedral
+            r = Rd * r
 
             # add leading edge offset
             r += rle
@@ -698,8 +709,8 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
     xyz_v = interpolate_grid(xyz_v, etas, interp_s; dir=2)
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; dir=2)
 
-    # interpolate twist to new spanwise stations if not included in the geometry
-    if !apply_twist
+    # interpolate twist to new spanwise stations
+    if twist_normal
         ds = [sqrt(( xle[j] - xle[max(1, j-1)])^2 +
                    ( yle[j] - yle[max(1, j-1)])^2 +
                    ( zle[j] - zle[max(1, j-1)])^2 ) for j = 1:n]
@@ -728,7 +739,7 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc; mirror=fa
             normal /= norm(normal)
 
             # add twist to normal vector if it wasn't included in the geometry
-            if !apply_twist
+            if twist_normal
                 ct, st = cos(theta[j]), sin(theta[j])
                 Rt = @SMatrix [ct 0 st; 0 1 0; -st 0 ct]
                 normal = Rt*normal

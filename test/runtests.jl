@@ -9,7 +9,8 @@ using VortexLatticeMethod
     yle = [0.0, 7.5]
     zle = [0.0, 0.0]
     chord = [2.2, 1.8]
-    theta = [2.0*pi/180; 2.0*pi/180]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    dihedral = [0.0, 0.0]
     fc = fill(x->0, 2)
     ns = 12
     nc = 1
@@ -28,128 +29,28 @@ using VortexLatticeMethod
     vother = nothing
     fs = Freestream(alpha, beta, Omega, vother)
 
-    @testset begin "Symmetric - Horseshoe Vortices"
-        # Simple Wing - Symmetric - Horseshoe Vortices
-        mirror = false
-        panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
-            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
-
-        symmetric = true
-        outputs = vlm(panels, ref, fs, symmetric)
-        CD, CY, CL = outputs.CF
-        Cl, Cm, Cn = outputs.CM
-
-        @test isapprox(CL, 0.24324, atol=1e-3)
-        @test isapprox(CD, 0.00243, atol=1e-5)
-        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-        @test isapprox(Cm, -0.02252, atol=1e-4)
-        @test isapprox(CY, 0.0, atol=1e-16)
-        @test isapprox(Cl, 0.0, atol=1e-16)
-        @test isapprox(Cn, 0.0, atol=1e-16)
-    end
-
-    @testset begin "Mirrored - Horseshoe Vortices"
-        # Simple Wing - Mirrored - Horseshoe Vortices
-        mirror = true
-        panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
-            mirror=mirror, spacing_s, spacing_c)
-
-        symmetric = false
-        outputs = vlm(panels, ref, fs, symmetric)
-        CD, CY, CL = outputs.CF
-        Cl, Cm, Cn = outputs.CM
-
-        @test isapprox(CL, 0.24324, atol=1e-3)
-        @test isapprox(CD, 0.00243, atol=1e-5)
-        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-        @test isapprox(Cm, -0.02252, atol=1e-4)
-        @test isapprox(CY, 0.0, atol=1e-16)
-        @test isapprox(Cl, 0.0, atol=1e-16)
-        @test isapprox(Cn, 0.0, atol=1e-16)
-    end
-
-    # Simple Wing - Symmetric - Vortex Rings
-    @testset begin "Symmetric - Vortex Rings"
-        mirror = false
-        panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
-            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
-
-        symmetric = true
-        outputs = vlm(panels, ref, fs, symmetric)
-        CD, CY, CL = outputs.CF
-        Cl, Cm, Cn = outputs.CM
-
-        @test isapprox(CL, 0.24324, atol=1e-3)
-        @test isapprox(CD, 0.00243, atol=1e-5)
-        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-        @test isapprox(Cm, -0.02252, atol=1e-4)
-        @test isapprox(CY, 0.0, atol=1e-16)
-        @test isapprox(Cl, 0.0, atol=1e-16)
-        @test isapprox(Cn, 0.0, atol=1e-16)
-    end
-
-    # Simple Wing - Mirrored - Vortex Rings
-    @testset begin "Mirrored - Vortex Rings"
-        mirror = true
-        panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
-            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
-
-        symmetric = false
-        outputs = vlm(panels, ref, fs, symmetric)
-        CD, CY, CL = outputs.CF
-        Cl, Cm, Cn = outputs.CM
-
-        @test isapprox(CL, 0.24324, atol=1e-3)
-        @test isapprox(CD, 0.00243, atol=1e-5)
-        @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-        @test isapprox(Cm, -0.02252, atol=1e-4)
-        @test isapprox(CY, 0.0, atol=1e-16)
-        @test isapprox(Cl, 0.0, atol=1e-16)
-        @test isapprox(Cn, 0.0, atol=1e-16)
-    end
-end
-
-@testset "Simple Wing - Symmetric - Vortex Rings" begin
-
-    # test against AVL 3.35
-
-    xle = [0.0, 0.4]
-    yle = [0.0, 7.5]
-    zle = [0.0, 0.0]
-    chord = [2.2, 1.8]
-    theta = [2.0*pi/180; 2.0*pi/180]
-    ns = 12
-    nc = 1
-    fc = fill(x->0, 2)
-    spacing_s = Uniform()
-    spacing_c = Uniform()
+    # Simple Wing - Symmetric - Horseshoe Vortices
     mirror = false
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, fc, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, apply_twist=false)
-
-    alpha = 1.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
-
-    Sref = 30.0
-    cref = 2.0
-    bref = 15.0
-    rcg = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rcg)
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
 
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
 
-end
-
-# -----------------------------
-
-# ---- simple wing without symmetry -----
-@testset "Simple Wing - Mirrored - Horseshoe Vortices"
-    duplicate = true
-    panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
+    # Simple Wing - Mirrored - Horseshoe Vortices
+    mirror = true
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s, spacing_c)
 
     symmetric = false
     outputs = vlm(panels, ref, fs, symmetric)
@@ -164,6 +65,84 @@ end
     @test isapprox(Cl, 0.0, atol=1e-16)
     @test isapprox(Cn, 0.0, atol=1e-16)
 
+    # Simple Wing - Symmetric - Vortex Rings - Untwisted Geometry
+    mirror = false
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Mirrored - Vortex Rings - Untwisted Geometry
+    mirror = true
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = false
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Symmetric - Vortex Rings - Twisted Geometry
+    mirror = false
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-4)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Mirrored - Vortex Rings - Twisted Geometry
+    mirror = true
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = false
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-4)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Mirrored - Horseshoe Vorticies - Stability Analysis
+    mirror = true
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = false
     dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha
@@ -186,250 +165,736 @@ end
     @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
     @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
     # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+
+    # Simple Wing - Mirrored - Vortex Rings - Untwisted Geometry - Stability Analysis
+    mirror = true
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = false
+    dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
+    CDa, CYa, CLa = dCF.alpha
+    Cla, Cma, Cna = dCM.alpha
+    CDb, CYb, CLb = dCF.beta
+    Clb, Cmb, Cnb = dCM.beta
+    CDp, CYp, CLp = dCF.p
+    Clp, Cmp, Cnp = dCM.p
+    CDq, CYq, CLq = dCF.q
+    Clq, Cmq, Cnq = dCM.q
+    CDr, CYr, CLr = dCF.r
+    Clr, Cmr, Cnr = dCM.r
+
+    @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+    @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+    @test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+    # @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+
+    # Simple Wing - Mirrored - Vortex Rings - Twisted Geometry - Stability Analysis
+    mirror = true
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = false
+    dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
+    CDa, CYa, CLa = dCF.alpha
+    Cla, Cma, Cna = dCM.alpha
+    CDb, CYb, CLb = dCF.beta
+    Clb, Cmb, Cnb = dCM.beta
+    CDp, CYp, CLp = dCF.p
+    Clp, Cmp, Cnp = dCM.p
+    CDq, CYq, CLq = dCF.q
+    Clq, Cmq, Cnq = dCM.q
+    CDr, CYr, CLr = dCF.r
+    Clr, Cmr, Cnr = dCM.r
+
+    @test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
+    @test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
+    @test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
+    # @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
+    @test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
+    @test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
+    # @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
+
+    # -----------------------------
+
+    # h = 1e-6
+    # betap = beta + h
+    # fsp = VLM.Freestream(alpha, betap, Omega, vother)
+    # outputsp = VLM.vlm(panels, ref, fsp, symmetric)
+    # Cl_p, Cm_p, Cn_p = outputsp.CM
+
+    # betam = beta - h
+    # fsm = VLM.Freestream(alpha, betam, Omega, vother)
+    # outputsm = VLM.vlm(panels, ref, fsm, symmetric)
+    # Cl_m, Cm_m, Cn_m = outputsm.CM
+    # println(Clb)
+    # println((Cl_p - Cl_m)/(2*h))
+
+
+    # Stability-axis derivatives...
+
+    #                              alpha                beta
+    #                   ----------------    ----------------
+    #  z' force CL |    CLa =   4.638090    CLb =   0.000000
+    #  y  force CY |    CYa =   0.000000    CYb =  -0.000007
+    #  x' mom.  Cl'|    Cla =   0.000000    Clb =  -0.025749
+    #  y  mom.  Cm |    Cma =  -0.429247    Cmb =  -0.000000
+    #  z' mom.  Cn'|    Cna =  -0.000000    Cnb =   0.000466
+
+    #                      roll rate  p'      pitch rate  q'        yaw rate  r'
+    #                   ----------------    ----------------    ----------------
+    #  z' force CL |    CLp =  -0.000000    CLq =   5.549788    CLr =   0.000000
+    #  y  force CY |    CYp =   0.047000    CYq =  -0.000000    CYr =  -0.000745
+    #  x' mom.  Cl'|    Clp =  -0.518725    Clq =   0.000000    Clr =   0.064243
+    #  y  mom.  Cm |    Cmp =   0.000000    Cmq =  -0.517095    Cmr =  -0.000000
+    #  z' mom.  Cn'|    Cnp =  -0.019846    Cnq =  -0.000000    Cnr =  -0.000898
+
+    #  Neutral point  Xnp =   0.685096
+
+    # -----------------------------
+
+    # Simple Wing - Symmetric - Horseshoe Vorticies - Chordwise Panels
+    mirror = false
+    nc = 5
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=2e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Symmetric - Vortex Rings - Untwisted Geometry - Chordwise Panels
+    mirror = false
+    nc = 5
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=2e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Symmetric - Vortex Rings - Twisted Geometry - Chordwise Panels
+    mirror = false
+    nc = 5
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=2e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # Simple Wing - Horseshoe Vortices - Spanwise Cosine Spacing
+    mirror = false
+    nc = 1
+    spacing_s = Cosine()
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23744, atol=0.01*CL)
+    # @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
+    # @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.02165, atol=1e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Untwisted Geometry - Spanwise Cosine Spacing
+    mirror = false
+    nc = 1
+    spacing_s = Cosine()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23744, atol=0.01*CL)
+    # @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
+    # @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.02165, atol=1e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Twisted Geometry - Spanwise Cosine Spacing
+    mirror = false
+    nc = 1
+    spacing_s = Cosine()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23744, atol=0.01*CL)
+    # @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
+    # @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.02165, atol=1e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Spanwise and Chordwise Cosine Spacing
+
+    mirror = false
+    nc = 5
+    spacing_s = Cosine()
+    spacing_c = Cosine()
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23879, atol=0.01*CL)
+    # @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
+    # @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Untwisted Geometry - Spanwise and Chordwise Cosine Spacing
+    mirror = false
+    nc = 5
+    spacing_c = Cosine()
+    spacing_s = Cosine()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23879, atol=0.01*CL)
+    # @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
+    # @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Twisted Geometry - Spanwise and Chordwise Cosine Spacing
+    mirror = false
+    nc = 5
+    spacing_c = Cosine()
+    spacing_s = Cosine()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.23879, atol=0.01*CL)
+    # @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
+    # @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
+    @test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Higher Angle of Attack
+
+    mirror = false
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    alpha = 8.0*pi/180
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.80348, atol=2e-3)
+    @test isapprox(CD, 0.02651, atol=2e-5)
+    @test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5)
+    @test isapprox(Cm, -0.07399, atol=2.5e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Untwisted Geometry - Higher Angle of Attack
+    mirror = false
+    nc = 1
+    spacing_c = Uniform()
+    spacing_s = Uniform()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    alpha = 8.0*pi/180
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.80348, atol=2e-3)
+    @test isapprox(CD, 0.02651, atol=2e-5)
+    @test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5) #TODO: fix this
+    @test isapprox(Cm, -0.07399, atol=2.5e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Twisted Geometry - Higher Angle of Attack
+    mirror = false
+    nc = 1
+    spacing_c = Uniform()
+    spacing_s = Uniform()
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    alpha = 8.0*pi/180
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(panels, ref, fs, symmetric)
+
+    # outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+
+    @test isapprox(CL, 0.80348, atol=2e-3)
+    @test isapprox(CD, 0.02651, atol=2e-5)
+    @test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5)
+    @test isapprox(Cm, -0.07399, atol=2.5e-4)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Dihedral
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 3.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    dihedral = fill(atan(zle[2]-zle[1], yle[2]-yle[1]), 2)
+    ns = 11
+    spacing = Uniform()
+    mirror = false
+
+    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rcg = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.24787, atol=1e-3)
+    @test isapprox(CD, 0.00246, atol=1e-5)
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02395, atol=2e-3)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Dihedral - High Angle of Attack
+    alpha = 20.0*pi/180  # nonphysical, just testing the numerics
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 1.70985, atol=.02*abs(CL))
+    @test isapprox(CD, 0.12904, atol=.01*abs(CD))
+    # @test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))  # TODO: AVL doesn't project wake (drag-free).  So I actually think what is predicted in this code is more accurate than the AVL value.
+    @test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Untwisted Geometry - Dihedral
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.24787, atol=1e-3) # TODO: fix me
+    @test isapprox(CD, 0.00246, atol=1e-5) # TODO: fix me
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02395, atol=2e-3)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Dihedral - High Angle of Attack
+    alpha = 20.0*pi/180  # nonphysical, just testing the numerics
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 1.70985, atol=.02*abs(CL))
+    @test isapprox(CD, 0.12904, atol=.01*abs(CD))
+    # @test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))  # TODO: AVL doesn't project wake (drag-free).  So I actually think what is predicted in this code is more accurate than the AVL value.
+    @test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Vortex Rings - Twisted Geometry - Dihedral
+    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.24787, atol=1e-3) # TODO: fix me
+    @test isapprox(CD, 0.00246, atol=1e-5) # TODO: fix me
+    @test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02395, atol=2e-3)
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+    # Simple Wing - Horseshoe Vortices - Dihedral - High Angle of Attack
+    alpha = 20.0*pi/180  # nonphysical, just testing the numerics
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    outputs = vlm(panels, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 1.70985, atol=.02*abs(CL))
+    @test isapprox(CD, 0.12904, atol=.01*abs(CD))
+    # @test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))  # TODO: AVL doesn't project wake (drag-free).  So I actually think what is predicted in this code is more accurate than the AVL value.
+    @test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
 end
-
-# h = 1e-6
-# betap = beta + h
-# fsp = VLM.Freestream(alpha, betap, Omega, vother)
-# outputsp = VLM.vlm(panels, ref, fsp, symmetric)
-# Cl_p, Cm_p, Cn_p = outputsp.CM
-
-# betam = beta - h
-# fsm = VLM.Freestream(alpha, betam, Omega, vother)
-# outputsm = VLM.vlm(panels, ref, fsm, symmetric)
-# Cl_m, Cm_m, Cn_m = outputsm.CM
-# println(Clb)
-# println((Cl_p - Cl_m)/(2*h))
-
-
-# Stability-axis derivatives...
-
-#                              alpha                beta
-#                   ----------------    ----------------
-#  z' force CL |    CLa =   4.638090    CLb =   0.000000
-#  y  force CY |    CYa =   0.000000    CYb =  -0.000007
-#  x' mom.  Cl'|    Cla =   0.000000    Clb =  -0.025749
-#  y  mom.  Cm |    Cma =  -0.429247    Cmb =  -0.000000
-#  z' mom.  Cn'|    Cna =  -0.000000    Cnb =   0.000466
-
-#                      roll rate  p'      pitch rate  q'        yaw rate  r'
-#                   ----------------    ----------------    ----------------
-#  z' force CL |    CLp =  -0.000000    CLq =   5.549788    CLr =   0.000000
-#  y  force CY |    CYp =   0.047000    CYq =  -0.000000    CYr =  -0.000745
-#  x' mom.  Cl'|    Clp =  -0.518725    Clq =   0.000000    Clr =   0.064243
-#  y  mom.  Cm |    Cmp =   0.000000    Cmq =  -0.517095    Cmr =  -0.000000
-#  z' mom.  Cn'|    Cnp =  -0.019846    Cnq =  -0.000000    Cnr =  -0.000898
-
-#  Neutral point  Xnp =   0.685096
-
-
-# ---- simple wing with chordwise panels (run7) -----
-
-duplicate = false
-cpanels = [5]
-cspacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24454, atol=1e-3)
-@test isapprox(CD, 0.00247, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
-@test isapprox(Cm, -0.02091, atol=2e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# ----- simple wing with cosine spacing (run8) -----
-
-
-duplicate = false
-cpanels = [1]
-cspacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.23744, atol=0.01*CL)
-# @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
-# @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
-@test isapprox(Cm, -0.02165, atol=1e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-# ----- simple wing with cosine spacing chordwise and spanwise (run9) -----
-
-duplicate = false
-cpanels = [5]
-cspacing = [Cosine()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.23879, atol=0.01*CL)
-# @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
-# @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
-@test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# -------------------------
-
-# reset
-duplicate = false
-symmetric = true
-
-
-
-# ---- run3 ------  simple wing at higher angle of attack
-
-spacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-alpha = 8.0*pi/180
-fs = Freestream(alpha, beta, Omega, vother)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.80348, atol=2e-3)
-@test isapprox(CD, 0.02651, atol=2e-5)
-@test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5)
-@test isapprox(Cm, -0.07399, atol=2.5e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-# -----------------------------
-
-
-# ------ run4 -----  simple wing with dihedral
-
-xle = [0.0; 0.4]
-yle = [0.0; 7.5]
-zle = [0.0; 3.0]
-chord = [2.2; 1.8]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [11]
-spacing = [Uniform()]
-duplicate = false
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-alpha = 1.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
-
-Sref = 30.0
-cref = 2.0
-bref = 15.0
-rcg = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.24787, atol=1e-3)
-@test isapprox(CD, 0.00246, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02395, atol=2e-3)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# ------ run5 -----  simple wing with dihedral, high angle of attack.
-
-alpha = 20.0*pi/180  # nonphysical, just testing the numerics
-fs = Freestream(alpha, beta, Omega, vother)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 1.70985, atol=.02*abs(CL))
-@test isapprox(CD, 0.12904, atol=.01*abs(CD))
-# @test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))  # TODO: AVL doesn't project wake (drag-free).  So I actually think what is predicted in this code is more accurate than the AVL value.
-@test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
 
 # ------ run 6 ------ wing/tail
 
-Sref = 9.0
-cref = 0.9
-bref = 10.0
-rcg = [0.5, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
+@testset "Wing/Tail - Horseshoe Vortices"
 
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rcg = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
 
-xle = [0.0; 0.2]
-yle = [0.0; 5.0]
-zle = [0.0; 1.0]
-chord = [1.0; 0.6]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [11]
-spacing = [Uniform()]
-duplicate = false
-wing = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    dihedral = fill(atan(zle[2]-zle[1], yle[2]-yle[1]), 2)
+    ns = 11
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
 
-xle = [0.0; 0.14]
-yle = [0.0; 1.25]
-zle = [0.0; 0.0]
-chord = [0.7; 0.42]
-theta = [0.0; 0.0]
-npanels = [5]
-spacing = [Uniform()]
-duplicate = false
-htail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-VLM.translate!(htail, [4.0; 0.0; 0.0])
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-xle = [0.0; 0.14]
-yle = [0.0; 0.0]
-zle = [0.0; 1.0]
-chord = [0.7; 0.42]
-theta = [0.0; 0.0]
-npanels = [4]
-spacing = [Uniform()]
-duplicate = false
-vtail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-translate!(vtail, [4.0; 0.0; 0.0])
+    xle = [0.0, 0.14]
+    yle = [0.0, 1.25]
+    zle = [0.0, 0.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    ns = 5
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
 
+    htail = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-vehicle = [wing; htail; vtail]
+    translate!(htail, [4.0, 0.0, 0.0])
 
+    xle = [0.0, 0.14]
+    yle = [0.0, 0.0]
+    zle = [0.0, 1.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    ns = 4
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    vtail = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-alpha = 5.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+    translate!(vtail, [4.0, 0.0, 0.0])
 
-symmetric = true
-outputs = vlm(vehicle, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.60563, atol=.01*abs(CL))
-@test isapprox(CD, 0.01049, atol=.01*abs(CD))
-# @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
+    vehicle = vcat(wing, htail, vtail)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(vehicle, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.60563, atol=.01*abs(CL))
+    @test isapprox(CD, 0.01049, atol=.01*abs(CD))
+    # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+end
+
+@testset "Wing/Tail - Vortex Rings - Untwisted Geometry"
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rcg = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
+
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    dihedral = fill(atan(zle[2]-zle[1], yle[2]-yle[1]), 2)
+    ns = 11
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    xle = [0.0, 0.14]
+    yle = [0.0, 1.25]
+    zle = [0.0, 0.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    dihedral = [0.0, 0.0]
+    ns = 5
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    htail = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    xle = [0.0, 0.14]
+    yle = [0.0, 0.0]
+    zle = [0.0, 1.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    dihedral = [pi/4, pi/4]
+    ns = 4
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    vtail = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, twist_geometry=false)
+
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    vehicle = vcat(wing, htail, vtail)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(vehicle, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.60563, atol=.01*abs(CL))
+    @test isapprox(CD, 0.01049, atol=.01*abs(CD))
+    # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+end
+
+@testset "Wing/Tail - Vortex Rings - Twisted Geometry"
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rcg = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rcg)
+
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    dihedral = fill(atan(zle[2]-zle[1], yle[2]-yle[1]), 2)
+    ns = 11
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    xle = [0.0, 0.14]
+    yle = [0.0, 1.25]
+    zle = [0.0, 0.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    dihedral = [0.0, 0.0]
+    ns = 5
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    htail = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    xle = [0.0, 0.14]
+    yle = [0.0, 0.0]
+    zle = [0.0, 1.0]
+    chord = [0.7, 0.42]
+    theta = [0.0, 0.0]
+    dihedral = [pi/4, pi/4]
+    ns = 4
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    vtail = wing_to_vortex_rings(xle, yle, zle, chord, theta, dihedral, fc, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    vehicle = vcat(wing, htail, vtail)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+    outputs = vlm(vehicle, ref, fs, symmetric)
+    CD, CY, CL = outputs.CF
+    Cl, Cm, Cn = outputs.CM
+    @test isapprox(CL, 0.60563, atol=.01*abs(CL))
+    @test isapprox(CD, 0.01049, atol=.01*abs(CD))
+    # @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
+    @test CY == 0.0
+    @test Cl == 0.0
+    @test Cn == 0.0
+
+end
 
 
 # # ---- Veldhius validation case ------

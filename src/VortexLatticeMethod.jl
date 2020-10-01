@@ -12,6 +12,7 @@ const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
 export AbstractPanel, Horseshoe, Ring
+export translate!
 
 include("geometry.jl")
 export Uniform, Cosine

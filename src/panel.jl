@@ -151,10 +151,10 @@ end
 @inline normal(panel::Ring) = panel.normal
 
 """
-    trefftz_plane_normal(panel, xhat)
+    trefftz_plane_normal(panel)
 
 Compute the normal vector for `panel` when projected onto the Trefftz plane
-(including magnitude), which is defined perpindicular to `xhat`
+(including magnitude)
 """
 trefftz_plane_normal
 
@@ -210,13 +210,6 @@ end
 end
 
 """
-    reflect_y(r)
-
-Reflects a vector across the y-axis
-"""
-@inline reflect_y(r) = SVector(r[1], -r[2], r[3])
-
-"""
     reflect_y(panel::AbstractPanel)
 
 Reflects a panel across the y-axis.
@@ -225,9 +218,9 @@ reflect_y
 
 function reflect_y(panel::Horseshoe)
 
-    rl = reflect_y(panel.rl)
-    rr = reflect_y(panel.rr)
-    rcp = reflect_y(panel.rcp)
+    rl = flipy(panel.rr)
+    rr = flipy(panel.rl)
+    rcp = flipy(panel.rcp)
     theta = panel.theta
 
     return Horseshoe(rl, rr, rcp, theta)
@@ -235,12 +228,42 @@ end
 
 function reflect_y(panel::Ring)
 
-    rtl = reflect_y(panel.rtl)
-    rtr = reflect_y(panel.rtr)
-    rbl = reflect_y(panel.rbl)
-    rbr = reflect_y(panel.rbr)
-    rcp = reflect_y(panel.rcp)
-    normal = reflect_y(panel.normal)
+    rtl = flipy(panel.rtr)
+    rtr = flipy(panel.rtl)
+    rbl = flipy(panel.rbr)
+    rbr = flipy(panel.rbl)
+    rcp = flipy(panel.rcp)
+    normal = flipy(panel.normal)
+    trailing = panel.trailing
+
+    return Ring(rtl, rtr, rbl, rbr, rcp, normal, trailing)
+end
+
+"""
+    rotate(panel::AbstractPanel, R)
+
+Rotates a panel using the rotation matrix `R`.
+"""
+rotate
+
+function rotate(panel::Horseshoe, R)
+
+    rl = R*panel.rr
+    rr = R*panel.rl
+    rcp = R*panel.rcp
+    theta = panel.theta
+
+    return Horseshoe(rl, rr, rcp, theta)
+end
+
+function rotate(panel::Ring, R)
+
+    rtl = R*panel.rtl
+    rtr = R*panel.rtr
+    rbl = R*panel.rbl
+    rbr = R*panel.rbr
+    rcp = R*panel.rcp
+    normal = R*panel.normal
     trailing = panel.trailing
 
     return Ring(rtl, rtr, rbl, rbr, rcp, normal, trailing)
@@ -279,7 +302,7 @@ induced_velocity
 
 end
 
-@inline function induced_velocity(rcp, panel::Ring, symmetric, xhat=SVector(1,0,0), include_top=true,
+@inline function induced_velocity(rcp, panel::Ring, symmetric, include_top=true,
     include_bottom=true)
 
     # position of control point relative to top of vortex ring
@@ -293,17 +316,17 @@ end
     # left bound vortex
     Vhat = bound_induced_velocity(r21, r11)
 
-    # right bound vortex
-    Vhat += bound_induced_velocity(r12, r22)
-
     # top bound vortex
     if include_top
         Vhat += bound_induced_velocity(r11, r12)
     end
 
+    # right bound vortex
+    Vhat += bound_induced_velocity(r12, r22)
+
     if panel.trailing
         # append horseshoe vortex to the back of the vortex ring
-        Vhat += trailing_induced_velocity(r21, r22, xhat)
+        Vhat += trailing_induced_velocity(r21, r22)
         # we omit the bottom bound vortex since it is cancelled by the horseshoe vortex
     else
         # bottom bound vortex
@@ -323,7 +346,7 @@ end
         Vhat += bound_induced_velocity(r12, r22) # right
         Vhat += bound_induced_velocity(r11, r12) # top
         if panel.trailing
-            Vhat += trailing_induced_velocity(r21, r22, xhat) # trailing
+            Vhat += trailing_induced_velocity(r21, r22) # trailing
         else
             Vhat += bound_induced_velocity(r22, r21) # bottom
         end
