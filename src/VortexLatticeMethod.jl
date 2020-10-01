@@ -55,12 +55,18 @@ Define the freestream properties.
 - `Omega::Array{Float64}(3)`: rotation (p, q, r) about the c.g., normalized by Vinf
 - `vother`: a function of the form: Vext = vother(r).  returns velocity at position r.  can also use nothing.
 """
-struct Freestream{TF, TV}
+struct Freestream{TF, TV, TO}
     alpha::TF
-    beta::TF
+    beta::TO
     Omega::Array{TF}
     vother::TV  
 end
+# struct Freestream{TF, TV}
+#     alpha::TF
+#     beta::TF
+#     Omega::Array{TF}
+#     vother::TV  
+# end # RMA
 
 
 """
@@ -91,19 +97,32 @@ Outputs from the VLM analysis
 - `CF::Float64`: force coeffients (CD, CY, CL) normalized by reference area
 TODO
 """
-struct Outputs{TF, TSD}
-    CF::Array{TF}
-    CM::Array{TF}
-    dCF::TSD
-    dCM::TSD
-    CDiff::TF
-    ymid::Array{TF}
-    zmid::Array{TF}
-    cf::Array{TF}
-    ds::Array{TF}
-    V::Array{TF}
-    Gamma::Array{TF}
+struct Outputs
+    CF
+    CM
+    dCF
+    dCM
+    CDiff
+    ymid
+    zmid
+    cf
+    ds
+    V
+    Gamma
 end
+# struct Outputs{TF, TSD}
+#     CF::Array{TF}
+#     CM::Array{TF}
+#     dCF::TSD
+#     dCM::TSD
+#     CDiff::TF
+#     ymid::Array{TF}
+#     zmid::Array{TF}
+#     cf::Array{TF}
+#     ds::Array{TF}
+#     V::Array{TF}
+#     Gamma::Array{TF}
+# end
 
 
 # normalized (so they don't matter, but are included just for clarity in the algorithms)
@@ -372,10 +391,14 @@ Compute the normal component of the external velocity along the geometry.
 This forms the right hand side of the circulation linear system solve.
 """
 function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
-    
+    # get initial types
+    nhat = normal_vector(panels[1])
+    Vext, dVext = ext_velocity(fs, panels[1].rcp, ref.rcg)
+    # println("Sherlock! 384 nhat = ",nhat[1])
+    # println("Sherlock! 385 Vext = ",Vext[1])
     # initialize
     N = length(panels)
-    b = zeros(N)
+    b = zeros(N) * nhat[1] * Vext[1]
     db = SDeriv(N)
 
     # iterate through panels
@@ -388,10 +411,23 @@ function vn_ext(panels::Array{Panel, 1}, ref::Reference, fs::Freestream)
         Vext, dVext = ext_velocity(fs, panels[i].rcp, ref.rcg)
 
         # right hand side vector
-        b[i] = -dot(Vext, nhat)
+        # println("Sherlock! VortexLatticeMethod:")
+        # println("\tVext = ",Vext)
+        # println("\tnhat = ",nhat)
+        # println("\tpanels[i].rcp = ",panels[i].rcp)
+        # println("\tref.rcg = ",ref.rcg)
+        # println("\tfs.α = ",fs.alpha)
+        # println("\tfs.β = ",fs.beta)
+        # println("\tfs.vother() = ",fs.vother)
 
+        checkpoint1 = -dot(Vext, nhat)
+        # println("Sherlock! VLM: 407: passed")
+        # println("\t-dot(Vext, nhat) = ", checkpoint1)
+        # println("")
+        b[i] = -dot(Vext, nhat)
+        # println("\t-dot(dVext, nhat) = ", -dot(dVext, nhat))
         # (partial) stability derivatives
-        db[i] = -dot(dVext, nhat)
+        # db[i] = -dot(dVext, nhat)
     end
 
     return b, db
@@ -411,7 +447,7 @@ function circulation(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, sy
 
     AIC = aic(panels, symmetric)
     b, db = vn_ext(panels, ref, fs)
-
+    # println("Checkpoint! VortexLatticeMethod: 433: b=",b)
     Gamma = AIC\b
 
     dGamma = SDeriv(AIC\db.alpha, AIC\db.beta, AIC\db.p, AIC\db.q, AIC\db.r)
@@ -431,14 +467,31 @@ end
 Computes the forces and moments acting on the aircraft using the given circulation.
 """
 function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, Gamma, dGamma, symmetric)
+    Vindi1 = zeros(3)
+    dVindi1 = SDeriv(3)
+    rmid = mid_point(panels[1])
+    for j = 1:1  # vortices  
+        Vij = vhat(rmid, panels[j].rl, panels[j].rr, symmetric, 1 != j)  # include bound vortices if i != j
+        Vindi1 += Vij*Gamma[j]
+    
+        dVindi1 += Vij*dGamma[j]
+    end
+    Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
+    Vi = Vindi1 + Vext
+    
+    dVi = dVindi1 + dVext
+    
+    # forces and moments
+    Delta_s = panels[1].rr - panels[1].rl
+    Fbi = RHO*Gamma[1]*cross(Vi, Delta_s)
 
     N = length(panels)
 
     # initialize
     Fb = zeros(3)  # forces
     Mb = zeros(3)  # moments
-    Fpvec = zeros(3, N)  # distributed forces
-    Vtotal = zeros(3, N)  # total velocities
+    Fpvec = zeros(3, N) .* Fbi   # distributed forces
+    Vtotal = zeros(3, N) .* Vi  # total velocities
     ds = zeros(N)  # panel size
     
     dFb = SDeriv(3)
@@ -477,6 +530,9 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     
         # force per unit length along wing (y and z)
         ds[i] = sqrt(Delta_s[2]^2 + Delta_s[3]^2)
+        # println("Sherlock! VortexLatticeMethod: 503:")
+        # println("\tFbi = ",Fbi)
+        # println("\tds[i] = ",ds[i])
         Fpvec[:, i] = Fbi/ds[i]  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
 
         # save in array
@@ -506,7 +562,10 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     dMw = Rot*dMb + dRot*Mb
 
     # rotate distributed forces from body to wind frame
-    Fwpvec = zeros(3, N)
+    # println("Sherlock! VortexLatticeMethod 552: Rot = ",Rot)
+    # println("Sherlock! VortexLatticeMethod 553: Fpvec = ",Fpvec)
+    # println("Sherlock! Rot*Fpvec[:, 1] = ",Rot*Fpvec[:, 1])
+    Fwpvec = zeros(3, N) .* (Rot*Fpvec[:, 1])[1]
     for i = 1:N
         Fwpvec[:, i] = Rot*Fpvec[:, i]
     end
@@ -655,19 +714,22 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     CF = F/(qinf*Sref)
     CM = M./(qinf*Sref*[bref; cref; bref])
     
-    dCF = dF/(qinf*Sref)
-    dCM = SDeriv(3)    
-    dCM[1] = dM[1]/(qinf*Sref*bref)  # I'm sure there's a better way to overload this.
-    dCM[2] = dM[2]/(qinf*Sref*cref)
-    dCM[3] = dM[3]/(qinf*Sref*bref)
+    # dCF = dF/(qinf*Sref)
+    # dCM = SDeriv(3)
+    # dCM[1] = dM[1]/(qinf*Sref*bref)  # I'm sure there's a better way to overload this.
+    # dCM[2] = dM[2]/(qinf*Sref*cref)
+    # dCM[3] = dM[3]/(qinf*Sref*bref)
+    dCF = 0.0
+    dCM = 0.0
 
 
     # trefftz plane analysis for drag
-    CDiff = Di_trefftz(panels, fs, Gamma, symmetric) / (qinf*Sref)  
+    # CDiff = Di_trefftz(panels, fs, Gamma, symmetric) / (qinf*Sref)
+    CDiff = 0.0  
 
     # # normalize p, q, r    
-    dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*VINF/bref, dCF.q*2*VINF/cref, dCF.r*2*VINF/bref)
-    dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*VINF/bref, dCM.q*2*VINF/cref, dCM.r*2*VINF/bref)
+    # dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*VINF/bref, dCF.q*2*VINF/cref, dCF.r*2*VINF/bref)
+    # dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*VINF/bref, dCM.q*2*VINF/cref, dCM.r*2*VINF/bref)
 
     # rotate p, q, r, from wind to stability axes
 

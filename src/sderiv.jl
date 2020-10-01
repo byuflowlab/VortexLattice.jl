@@ -4,13 +4,20 @@ import LinearAlgebra
 """
 Define a type to hold the stability derivatives
 """
-struct SDeriv{TF}
-    alpha::TF
-    beta::TF
-    p::TF
-    q::TF
-    r::TF
+struct SDeriv
+    alpha
+    beta
+    p
+    q
+    r
 end
+# struct SDeriv{TF}
+#     alpha::TF
+#     beta::TF
+#     p::TF
+#     q::TF
+#     r::TF
+# end # RMA
 
 
 
