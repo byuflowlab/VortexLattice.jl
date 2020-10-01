@@ -193,7 +193,7 @@ Defines a simple linear wing section with one chordwise panel
  - `mirror`: flag indicating whether the geometry should be mirrored across the y-axis
  - `spacing`: spanwise discretization scheme
 """
-function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
+function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, mirror, spacing)
 
     # geometry parsing
     S = b^2/AR
@@ -206,7 +206,7 @@ function simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
     chord = [cr; ct]
     theta = [θr; θt]
 
-    return linearsections(xle, yle, zle, chord, theta, [npanels], [spacing], [1], ["u"], duplicate)
+    return linear_sections(xle, yle, zle, chord, theta, [npanels], [spacing], [1], [Uniform()], mirror)
 
 end
 
