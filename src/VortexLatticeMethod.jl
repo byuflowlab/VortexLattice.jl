@@ -4,6 +4,7 @@ using LinearAlgebra
 using StaticArrays
 using Interpolations
 using ForwardDiff
+using WriteVTK
 
 # values for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -15,7 +16,7 @@ export AbstractPanel, Horseshoe, Ring
 export translate!
 
 include("geometry.jl")
-export Uniform, Cosine
+export Uniform, Sine, Cosine
 export grid_to_horseshoe_vortices, grid_to_vortex_rings
 export wing_to_horseshoe_vortices, wing_to_vortex_rings
 
@@ -35,6 +36,9 @@ export Outputs
 export forces_moments, trefftz_induced_drag, vlm
 
 include("stability.jl")
-export StabilityDerivatives, stability_analysis
+export StabilityDerivatives, stability_derivatives
+
+include("visualization.jl")
+export write_vtk
 
 end # module
