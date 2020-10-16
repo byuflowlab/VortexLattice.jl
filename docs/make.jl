@@ -10,7 +10,7 @@ makedocs(;
         "Theory" => "theory.md"
     ],
     sitename = "VortexFlow.jl",
-    authors = ["Taylor McDonnell <taylormcd@byu.edu>", "Andrew Ning <aning@byu.edu>"],
+    authors = "Taylor McDonnell <taylormcd@byu.edu> and Andrew Ning <aning@byu.edu>",
 )
 
 deploydocs(

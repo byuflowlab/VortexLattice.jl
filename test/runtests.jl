@@ -1,5 +1,5 @@
 using Test
-using VortexLatticeMethod
+using VortexFlow
 using LinearAlgebra
 
 ztol = sqrt(eps())
@@ -54,9 +54,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -76,9 +76,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s, spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -98,9 +98,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -120,9 +120,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -173,9 +173,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -192,9 +192,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -245,9 +245,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -264,9 +264,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -332,9 +332,9 @@ end
         panels[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te)
     end
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -358,9 +358,9 @@ end
         panels[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.trailing)
     end
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -426,9 +426,9 @@ end
         panels[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te)
     end
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -452,9 +452,9 @@ end
         panels[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.trailing)
     end
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -561,9 +561,9 @@ end
 
     panels = vcat(wing, htail, vtail)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -597,9 +597,9 @@ end
 
     panels = vcat(wing, htail, vtail)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+Γ = circulation(panels, ref, fs; symmetric=symmetric)
+CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -651,9 +651,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -670,9 +670,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -724,9 +724,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -743,9 +743,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -799,9 +799,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -821,9 +821,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    Γ = circulation(panels, ref, fs, symmetric)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ, frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    Γ = circulation(panels, ref, fs; symmetric=symmetric)
+    CF, CM, panelprops = near_field_forces(panels, ref, fs, Γ; symmetric=symmetric, frame=Stability())
+    CDiff = far_field_drag(panels, ref, fs, Γ, symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -871,9 +871,9 @@ end
     panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
+    AIC = influence_coefficients(panels; symmetric=symmetric)
 
-    dCF, dCM = stability_derivatives(panels, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(panels, ref, fs, AIC; symmetric=symmetric)
 
     CDa, CYa, CLa = dCF.alpha
     CDb, CYb, CLb = dCF.beta
@@ -910,9 +910,9 @@ end
     panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
+    AIC = influence_coefficients(panels; symmetric=symmetric)
 
-    dCF, dCM = stability_derivatives(panels, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(panels, ref, fs, AIC; symmetric=symmetric)
 
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha

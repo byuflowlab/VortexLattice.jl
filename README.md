@@ -54,4 +54,4 @@ See the [documentation](https://flow.byu.edu/VortexFlow.jl/dev)
 Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
 
 <a id="2">[2]</a>
-Katz, J., and Plotkin A. Low-Speed Aerodynamics. Vol. 13. Cambridge University Press, 2001.
+Katz, J., and Plotkin A. Low-Speed Aerodynamics. Cambridge University Press, 2001.

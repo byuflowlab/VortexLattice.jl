@@ -134,6 +134,7 @@ VortexFlow.external_velocity_derivatives
 ### Circulation
 ```@docs
 VortexFlow.normal_velocity_derivatives
+VortexFlow.normal_velocity_derivatives!
 VortexFlow.circulation_derivatives
 ```
 
