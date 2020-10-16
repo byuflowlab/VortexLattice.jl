@@ -1,6 +1,8 @@
+# Run 6: Wing and Tail
 echo -e "oper\na a 5\nx\n\nquit\n" > commands
-cat commands - | ./avl3.35 wingtail.avl > output
+cat commands | avl wingtail.avl > output
 grep -o "CLtot.*" output
+grep -o "CDtot.*" output
 grep -o "CDff.*" output
 grep -o "Cmtot.*" output
 grep -o "CYtot.*" output

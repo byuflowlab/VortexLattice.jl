@@ -1,5 +1,5 @@
 """
-    Reference(S, c, b, rcg)
+    Reference(S, c, b, r)
 
 Reference quantities.
 
@@ -7,18 +7,18 @@ Reference quantities.
 - `S`: reference area
 - `c`: reference chord
 - `b`: reference span
-- `rcg`: location of center of gravity
+- `r`: reference location for all rotations/moments
 """
 struct Reference{TF}
     S::TF
     c::TF
     b::TF
-    rcg::SVector{3, TF}
+    r::SVector{3, TF}
 end
 
-function Reference(S, c, b, rcg)
-    TF = promote_type(typeof(S), typeof(c), typeof(b), eltype(rcg))
-    return Reference{TF}(S, c, b, rcg)
+function Reference(S, c, b, r)
+    TF = promote_type(typeof(S), typeof(c), typeof(b), eltype(r))
+    return Reference{TF}(S, c, b, r)
 end
 
 Base.eltype(::Type{Reference{TF}}) where TF = TF

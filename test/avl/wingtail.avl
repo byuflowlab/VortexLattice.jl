@@ -1,6 +1,6 @@
 Plane Vanilla
 #Mach
- 0.0    
+ 0.0
 #IYsym   IZsym   Zsym
  0       0       0.0
 #Sref    Cref    Bref
@@ -10,13 +10,16 @@ Plane Vanilla
 #
 #
 #====================================================================
-SURFACE 
-Wing 
+SURFACE
+Wing
 #Nchordwise  Cspace   Nspanwise   Sspace
 1            0.0       12         0.0
 #
 YDUPLICATE
 0.0
+#
+COMPONENT
+1
 #
 ANGLE
 2.0
@@ -63,6 +66,9 @@ H-stab
 YDUPLICATE
 0.0
 #
+COMPONENT
+1
+#
 TRANSLATE
 4.0 0.0 0.0
 #
@@ -81,7 +87,11 @@ SURFACE
 V-stab
 #Nchordwise  Cspace    Nspanwise  Sspace
 1            1.0       5          0.0
-TRANSLATE 
+#
+COMPONENT
+1
+#
+TRANSLATE
 4.0 0.0 0.0
 #-------------------------------------------------------------
 SECTION

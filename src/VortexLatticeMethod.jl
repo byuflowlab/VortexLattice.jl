@@ -3,7 +3,6 @@ module VortexLatticeMethod
 using LinearAlgebra
 using StaticArrays
 using Interpolations
-using ForwardDiff
 using WriteVTK
 
 # values for dimensionalizing, included just for clarity in the algorithms
@@ -13,10 +12,10 @@ const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
 export AbstractPanel, Horseshoe, Ring
-export translate!
+export translate, translate!, reflect, rotate
 
 include("geometry.jl")
-export Uniform, Sine, Cosine
+export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_horseshoe_vortices, grid_to_vortex_rings
 export wing_to_horseshoe_vortices, wing_to_vortex_rings
 
@@ -25,18 +24,25 @@ export Reference
 
 include("freestream.jl")
 export Freestream
+export body_to_stability, stability_to_body
+export stablity_to_wind, wind_to_stability
+export wind_to_body, body_to_wind
 
 include("circulation.jl")
 export influence_coefficients, influence_coefficients!
 export normal_velocity, normal_velocity!
 export circulation, circulation!
 
-include("forces.jl")
-export Outputs
-export forces_moments, trefftz_induced_drag, vlm
+include("nearfield.jl")
+export AbstractFrame, Body, Stability, Wind
+export PanelProperties
+export near_field_forces
+
+include("farfield.jl")
+export far_field_drag
 
 include("stability.jl")
-export StabilityDerivatives, stability_derivatives
+export body_derivatives, stability_derivatives
 
 include("visualization.jl")
 export write_vtk
