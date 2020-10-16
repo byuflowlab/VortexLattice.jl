@@ -54,7 +54,6 @@ influence_coefficients!
 normal_velocity
 normal_velocity!
 circulation
-circulation!
 ```
 
 ### Near Field Forces and Moments
@@ -87,66 +86,66 @@ write_vtk
 
 ### Geometry
 ```@docs
-VortexFlow.linearinterp
-VortexFlow.spanwise_spacing
-VortexFlow.chordwise_spacing
-VortexFlow.interpolate_grid
+VLMFlow.linearinterp
+VLMFlow.spanwise_spacing
+VLMFlow.chordwise_spacing
+VLMFlow.interpolate_grid
 ```
 
 ### Vortex Lattice Panels
 ```@docs
-VortexFlow.controlpoint
-VortexFlow.normal
-VortexFlow.trefftz_normal
-VortexFlow.midpoint
-VortexFlow.left_midpoint
-VortexFlow.right_midpoint
-VortexFlow.top_vector
-VortexFlow.left_vector
-VortexFlow.right_vector
-VortexFlow.endpoints
-VortexFlow.reflected_endpoints
-VortexFlow.trefftz_endpoints
-VortexFlow.trefftz_center
-VortexFlow.panel_induced_drag
-VortexFlow.flipy
-VortexFlow.not_on_symmetry_plane
-VortexFlow.trailing_induced_velocity
-VortexFlow.bound_induced_velocity
-VortexFlow.induced_velocity
-VortexFlow.vortex_induced_drag
+VLMFlow.controlpoint
+VLMFlow.normal
+VLMFlow.trefftz_normal
+VLMFlow.midpoint
+VLMFlow.left_midpoint
+VLMFlow.right_midpoint
+VLMFlow.top_vector
+VLMFlow.left_vector
+VLMFlow.right_vector
+VLMFlow.endpoints
+VLMFlow.reflected_endpoints
+VLMFlow.trefftz_endpoints
+VLMFlow.trefftz_center
+VLMFlow.panel_induced_drag
+VLMFlow.flipy
+VLMFlow.not_on_symmetry_plane
+VLMFlow.trailing_induced_velocity
+VLMFlow.bound_induced_velocity
+VLMFlow.induced_velocity
+VLMFlow.vortex_induced_drag
 ```
 
 ### Freestream
 ```@docs
-VortexFlow.body_to_stability_alpha
-VortexFlow.body_to_wind_derivatives
-VortexFlow.stability_to_body_alpha
-VortexFlow.stability_to_wind_beta
-VortexFlow.wind_to_body_derivatives
-VortexFlow.wind_to_stability_beta
-VortexFlow.freestream_velocity
-VortexFlow.freestream_velocity_derivatives
-VortexFlow.external_velocity
-VortexFlow.external_velocity_derivatives
+VLMFlow.body_to_stability_alpha
+VLMFlow.body_to_wind_derivatives
+VLMFlow.stability_to_body_alpha
+VLMFlow.stability_to_wind_beta
+VLMFlow.wind_to_body_derivatives
+VLMFlow.wind_to_stability_beta
+VLMFlow.freestream_velocity
+VLMFlow.freestream_velocity_derivatives
+VLMFlow.external_velocity
+VLMFlow.external_velocity_derivatives
 ```
 
 ### Circulation
 ```@docs
-VortexFlow.normal_velocity_derivatives
-VortexFlow.normal_velocity_derivatives!
-VortexFlow.circulation_derivatives
+VLMFlow.normal_velocity_derivatives
+VLMFlow.normal_velocity_derivatives!
+VLMFlow.circulation_derivatives
 ```
 
 ### Near-Field
 ```@docs
-VortexFlow.near_field_forces_derivatives
-VortexFlow.body_to_frame
+VLMFlow.near_field_forces_derivatives
+VLMFlow.body_to_frame
 ```
 
 ### Far-Field
 ```@docs
-VortexFlow.project_panels
+VLMFlow.project_panels
 ```
 
 ## Index

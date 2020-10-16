@@ -16,7 +16,7 @@ function write_vtk(name, panels::AbstractVector{<:Horseshoe}; xhat=SVector(1, 0,
     TF = eltype(eltype(panels))
 
     if mirror
-        panels = vcat(panels, reflect_panel.(panels))
+        panels = vcat(panels, reflect(panels))
     end
 
     npanels = length(panels)
@@ -82,7 +82,7 @@ function write_vtk(name, panels::AbstractVector{<:Ring}; xhat=SVector(1, 0, 0), 
     TF = eltype(eltype(panels))
 
     if mirror
-        panels = vcat(panels, reflect_panel.(panels))
+        panels = vcat(panels, reflect(panels))
     end
 
     npanels = length(panels)

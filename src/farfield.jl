@@ -15,13 +15,13 @@ function project_panels(panels, fs)
 end
 
 """
-    far_field_drag(panels, ref, fs, Γ; symmetric=false)
+    far_field_drag(panels, ref, fs, symmetric, Γ)
 
 Computes induced drag using the Trefftz plane (far field method).
 """
 far_field_drag
 
-function far_field_drag(panels::AbstractVector{<:Horseshoe}, ref, fs, Γ; symmetric=false)
+function far_field_drag(panels::AbstractVector{<:Horseshoe}, ref, fs, symmetric, Γ)
 
     # rotate panels into wind coordinate system
     panels = project_panels(panels, fs)
@@ -49,7 +49,7 @@ function far_field_drag(panels::AbstractVector{<:Horseshoe}, ref, fs, Γ; symmet
 end
 
 
-function far_field_drag(panels::AbstractVector{<:Ring}, ref, fs, Γ; symmetric=symmetric)
+function far_field_drag(panels::AbstractVector{<:Ring}, ref, fs, symmetric, Γ)
 
     # get panels that shed trailing vortices
     ip = findall((p)->p.trailing, panels)

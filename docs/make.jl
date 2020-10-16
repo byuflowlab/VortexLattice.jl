@@ -1,7 +1,7 @@
-using Documenter, VortexFlow
+using Documenter, VLMFlow
 
 makedocs(;
-    modules = [VortexFlow],
+    modules = [VLMFlow],
     pages = [
         "Home" => "index.md",
         "Getting Started" => "guide.md",
@@ -9,10 +9,10 @@ makedocs(;
         "Library" => "library.md",
         "Theory" => "theory.md"
     ],
-    sitename = "VortexFlow.jl",
+    sitename = "VLMFlow.jl",
     authors = "Taylor McDonnell <taylormcd@byu.edu> and Andrew Ning <aning@byu.edu>",
 )
 
 deploydocs(
-    repo = "github.com/byuflowlab/VortexFlow.jl.git",
+    repo = "github.com/byuflowlab/VLMFlow.jl.git",
 )

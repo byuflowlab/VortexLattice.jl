@@ -1,25 +1,25 @@
 # --- left hand side - AIC matrix --- #
 
 """
-    influence_coefficients(panels; symmetric=false, xhat=[1,0,0])
+    influence_coefficients(panels, symmetric; xhat=[1,0,0])
 
 Construct the aerodynamic influence coefficient matrix.
 """
-function influence_coefficients(panels; symmetric=false, xhat=SVector(1, 0, 0))
+function influence_coefficients(panels, symmetric; xhat=SVector(1, 0, 0))
 
     N = length(panels)
     TF = eltype(eltype(panels))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, panels; symmetric=symmetric, xhat=xhat)
+    return influence_coefficients!(AIC, panels, symmetric; xhat=xhat)
 end
 
 """
-    influence_coefficients!(AIC, panels, symmetric)
+    influence_coefficients!(AIC, panels, symmetric; xhat=[1,0,0])
 
 Pre-allocated version of `influence_coefficients`
 """
-function influence_coefficients!(AIC, panels; symmetric=false, xhat=SVector(1, 0, 0))
+function influence_coefficients!(AIC, panels, symmetric; xhat=SVector(1, 0, 0))
 
     N = length(panels)
 
@@ -168,13 +168,6 @@ end
 Solve for the circulation distribution.
 """
 circulation(AIC, b) = AIC\b
-
-"""
-    circulation!(AIC, b)
-
-Pre-allocated version of `circulation`
-"""
-circulation!(Γ, AIC, b) = ldiv!(Γ, factorize(AIC), b)
 
 """
     circulation_derivatives(AIC, b, db)

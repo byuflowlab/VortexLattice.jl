@@ -65,13 +65,13 @@ Base.eltype(::PanelProperties{TF}) where TF = TF
 # --- near field solution for forces and moments --- #
 
 """
-    near_field_forces(panels, reference, freestream, Γ; symmetric=false, xhat=[1,0,0], frame=Body())
+    near_field_forces(panels, reference, freestream, symmetric, Γ; xhat=[1,0,0], frame=Body())
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ`.  Return `CF`, `CM`, and a vector of panel properties of type
 `PanelProperties`.  `CF` and `CM` are returned in the frame specified by `frame`.
 """
-function near_field_forces(panels, ref, fs, Γ; symmetric=false, xhat=SVector(1, 0, 0), frame=Body())
+function near_field_forces(panels, ref, fs, symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
 
     # float number type
     TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
@@ -209,14 +209,14 @@ function near_field_forces(panels, ref, fs, Γ; symmetric=false, xhat=SVector(1,
 end
 
 """
-    near_field_forces_derivatives(panels, reference, freestream, Γ, dΓ; symmetric=false, xhat=[1,0,0])
+    near_field_forces_derivatives(panels, reference, freestream, symmetric, Γ, dΓ; xhat=[1,0,0])
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ` and their derivatives with respect to the variables in `freestream`.
 Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type
 `PanelProperties`.  `CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
 """
-function near_field_forces_derivatives(panels, ref, fs, Γ, dΓ; symmetric=false,
+function near_field_forces_derivatives(panels, ref, fs, symmetric, Γ, dΓ;
         xhat = SVector(1, 0, 0), frame=Body())
 
     # unpack derivatives

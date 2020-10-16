@@ -1,5 +1,5 @@
 """
-    body_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=[1,0,0])
+    body_derivatives(panels, ref, fs, symmetric, AIC; xhat=[1,0,0])
 
 Returns the derivatives of the body forces and moments with respect to the
 freestream velocity components `(u, v, w)` and the angular velocity components
@@ -7,14 +7,14 @@ freestream velocity components `(u, v, w)` and the angular velocity components
 
 The derivatives are returned as two named tuples: `dCF, dCM`
 """
-function body_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=SVector(1,0,0))
+function body_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
 
     b, db = normal_velocity_derivatives(panels, ref, fs)
 
     Γ, dΓ = circulation_derivatives(AIC, b, db)
 
     CF, CM, dCF, dCM, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        Γ, dΓ, symmetric=symmetric, xhat=xhat)
+        symmetric, Γ, dΓ; xhat=xhat)
 
     # unpack derivatives
     (CF_a, CF_b, CF_p, CF_q, CF_r) = dCF
@@ -47,7 +47,7 @@ function body_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=SVector(1,
 end
 
 """
-    stability_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=[1,0,0])
+    stability_derivatives(panels, ref, fs, symmetric, AIC; xhat=[1,0,0])
 
 Returns the derivatives of the body forces and moments in the stability frame
 with respect to the freestream velocity components `(alpha, beta)` and the angular
@@ -55,14 +55,14 @@ velocity components `(p, q, r)` in the stability frame.
 
 The derivatives are returned as two named tuples: `dCF, dCM`
 """
-function stability_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=SVector(1,0,0))
+function stability_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
 
     b, db = normal_velocity_derivatives(panels, ref, fs)
 
     Γ, dΓ = circulation_derivatives(AIC, b, db)
 
     CFb, CMb, dCFb, dCMb, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        Γ, dΓ; symmetric=symmetric, xhat=xhat)
+        symmetric, Γ, dΓ; xhat=xhat)
 
     # unpack derivatives
     (CFb_a, CFb_b, CFb_pb, CFb_qb, CFb_rb) = dCFb

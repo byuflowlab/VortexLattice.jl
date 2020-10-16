@@ -1,4 +1,4 @@
-module VortexFlow
+module VLMFlow
 
 using LinearAlgebra
 using StaticArrays
@@ -31,7 +31,7 @@ export wind_to_body, body_to_wind
 include("circulation.jl")
 export influence_coefficients, influence_coefficients!
 export normal_velocity, normal_velocity!
-export circulation, circulation!
+export circulation
 
 include("nearfield.jl")
 export AbstractFrame, Body, Stability, Wind
