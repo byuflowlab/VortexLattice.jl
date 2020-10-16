@@ -1,4 +1,4 @@
-module VortexLatticeMethod
+module VortexFlow
 
 using LinearAlgebra
 using StaticArrays

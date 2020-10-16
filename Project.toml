@@ -1,6 +1,6 @@
-name = "VortexLatticeMethod"
+name = "VortexFlow"
 uuid = "7a09bdf8-3785-11e9-0bdd-57d0ec69af3f"
-authors = ["Andrew Ning <aning@byu.edu>"]
+authors = ["Taylor McDonnell <taylormcd@byu.edu", "Andrew Ning <aning@byu.edu>"]
 version = "0.1.0"
 
 [deps]
