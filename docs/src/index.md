@@ -12,8 +12,8 @@ Authors: Taylor McDonnell and Andrew Ning
 
 ## Package Features
  - Custom vortex lattice panels
-  - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](#1))
-  - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](#2))
+  - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](@ref References))
+  - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](@ref References))
  - Convenient geometry generation
   - From pre-existing grid
   - From lifting surface parameters
@@ -50,8 +50,6 @@ This code has been optimized to be highly performant, primarily by maintaining t
 See the [documentation](https://flow.byu.edu/VortexFlow.jl/dev)
 
 ## References
-<a id="1">[1]</a>
-Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
+[1] Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
 
-<a id="2">[2]</a>
-Katz, J., and Plotkin A. Low-Speed Aerodynamics. Vol. 13. Cambridge University Press, 2001.
+[2] Katz, J., and Plotkin A. Low-Speed Aerodynamics. Cambridge University Press, 2001.
