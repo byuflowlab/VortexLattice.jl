@@ -1,17 +1,17 @@
 # --- left hand side - AIC matrix --- #
 
 """
-    influence_coefficients(panels, symmetric)
+    influence_coefficients(panels; symmetric=false, xhat=[1,0,0])
 
 Construct the aerodynamic influence coefficient matrix.
 """
-@inline function influence_coefficients(panels, symmetric; xhat=SVector(1, 0, 0))
+function influence_coefficients(panels; symmetric=false, xhat=SVector(1, 0, 0))
 
     N = length(panels)
     TF = eltype(eltype(panels))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, panels, symmetric; xhat=xhat)
+    return influence_coefficients!(AIC, panels; symmetric=symmetric, xhat=xhat)
 end
 
 """
@@ -19,7 +19,7 @@ end
 
 Pre-allocated version of `influence_coefficients`
 """
-@inline function influence_coefficients!(AIC, panels, symmetric; xhat=SVector(1, 0, 0))
+function influence_coefficients!(AIC, panels; symmetric=false, xhat=SVector(1, 0, 0))
 
     N = length(panels)
 
@@ -50,7 +50,7 @@ end
 Compute the normal component of the external velocity along the geometry.
 This forms the right hand side of the circulation linear system solve.
 """
-@inline function normal_velocity(panels, ref, fs)
+function normal_velocity(panels, ref, fs)
 
     N = length(panels)
     TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs))
@@ -64,7 +64,7 @@ end
 
 Non-allocating version of `normal_velocity`
 """
-@inline function normal_velocity!(b, panels, ref, fs)
+function normal_velocity!(b, panels, ref, fs)
 
     N = length(panels)
 
@@ -95,7 +95,7 @@ Compute the normal component of the external velocity along the geometry and its
 derivatives with respect to (alpha, beta, p, q, r). This forms the right hand
 side of the circulation linear system solve (and its derivatives).
 """
-@inline function normal_velocity_derivatives(panels, ref, fs)
+function normal_velocity_derivatives(panels, ref, fs)
 
     N = length(panels)
     TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs))
@@ -121,7 +121,7 @@ end
 
 Non-allocating version of `normal_velocity_derivatives`
 """
-@inline function normal_velocity_derivatives!(b, db, panels, ref, fs)
+function normal_velocity_derivatives!(b, db, panels, ref, fs)
 
     N = length(panels)
 
@@ -167,16 +167,14 @@ end
 
 Solve for the circulation distribution.
 """
-@inline circulation(AIC, b) = AIC\b
+circulation(AIC, b) = AIC\b
 
-@inline function circulation(panels, ref, fs, symmetric, xhat=SVector(1, 0, 0))
+"""
+    circulation!(AIC, b)
 
-    AIC = influence_coefficients(panels, symmetric; xhat=xhat)
-
-    b = normal_velocity(panels, ref, fs)
-
-    return circulation(AIC, b)
-end
+Pre-allocated version of `circulation`
+"""
+circulation!(Γ, AIC, b) = ldiv!(Γ, factorize(AIC), b)
 
 """
     circulation_derivatives(AIC, b, db)
@@ -184,7 +182,7 @@ end
 Solve for the circulation distribution and its derivatives with respect to
 (alpha, beta, p, q, r)    .
 """
-@inline function circulation_derivatives(AIC, b, db)
+function circulation_derivatives(AIC, b, db)
 
     # unpack derivatives
     (b_a, b_b, b_pb, b_qb, b_rb) = db
@@ -205,13 +203,4 @@ Solve for the circulation distribution and its derivatives with respect to
     dΓ = (Γ_a, Γ_b, Γ_pb, Γ_qb, Γ_rb)
 
     return Γ, dΓ
-end
-
-@inline function circulation_derivatives(panels, ref, fs, symmetric, xhat=SVector(1, 0, 0))
-
-    AIC = influence_coefficients(panels, symmetric; xhat=xhat)
-
-    b, db = normal_velocity_derivatives(panels, ref, fs)
-
-    return circulation_derivatives(AIC, b, db)
 end

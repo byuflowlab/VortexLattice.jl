@@ -52,11 +52,11 @@ struct PanelProperties{TF}
     cfr::SVector{3, TF}
 end
 
-function PanelProperties(gamma, v, cf)
+function PanelProperties(gamma, v, cf, cfl, cfr)
 
-    TF = promote_type(typeof(gamma), typeof(v), eltype(cf))
+    TF = promote_type(typeof(gamma), typeof(v), eltype(cf), eltype(cfl), eltype(cfr))
 
-    return PanelProperties{TF}(cf, v, gamma)
+    return PanelProperties{TF}(gamma, v, cf, cfl, cfr)
 end
 
 Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
@@ -65,13 +65,13 @@ Base.eltype(::PanelProperties{TF}) where TF = TF
 # --- near field solution for forces and moments --- #
 
 """
-    near_field_forces(panels, reference, freestream, symmetric, Γ; xhat=[1,0,0], frame=Body())
+    near_field_forces(panels, reference, freestream, Γ; symmetric=false, xhat=[1,0,0], frame=Body())
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ`.  Return `CF`, `CM`, and a vector of panel properties of type
 `PanelProperties`.  `CF` and `CM` are returned in the frame specified by `frame`.
 """
-@inline function near_field_forces(panels, ref, fs, symmetric, Γ, xhat=SVector(1, 0, 0); frame=Body())
+function near_field_forces(panels, ref, fs, Γ; symmetric=false, xhat=SVector(1, 0, 0), frame=Body())
 
     # float number type
     TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
@@ -209,14 +209,14 @@ distribution `Γ`.  Return `CF`, `CM`, and a vector of panel properties of type
 end
 
 """
-    near_field_forces_derivatives(panels, reference, freestream, symmetric, Γ, dΓ; xhat=[1,0,0])
+    near_field_forces_derivatives(panels, reference, freestream, Γ, dΓ; symmetric=false, xhat=[1,0,0])
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ` and their derivatives with respect to the variables in `freestream`.
 Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type
 `PanelProperties`.  `CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
 """
-@inline function near_field_forces_derivatives(panels, ref, fs, symmetric, Γ, dΓ;
+function near_field_forces_derivatives(panels, ref, fs, Γ, dΓ; symmetric=false,
         xhat = SVector(1, 0, 0), frame=Body())
 
     # unpack derivatives
@@ -511,14 +511,14 @@ to another frame
 """
 body_to_frame
 
-@inline body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
+body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
 
-@inline function body_to_frame(CF, CM, ref, fs, ::Stability)
+function body_to_frame(CF, CM, ref, fs, ::Stability)
     R = body_to_stability(fs)
     return R*CF, R*CM
 end
 
-@inline function body_to_frame(CF, CM, ref, fs, ::Wind)
+function body_to_frame(CF, CM, ref, fs, ::Wind)
     # remove reference lengths
     reflen = SVector(ref.b, ref.c, ref.b)
     CM = CM .* reflen

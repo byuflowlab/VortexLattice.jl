@@ -1,3 +1,8 @@
+"""
+    AbstractSpacing
+
+Spacing discretization scheme supertype
+"""
 abstract type AbstractSpacing end
 
 """

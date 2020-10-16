@@ -1,11 +1,25 @@
-function body_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
+"""
+    body_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=[1,0,0])
+
+Returns the derivatives of the body forces and moments with respect to the
+freestream velocity components `(u, v, w)` and the angular velocity components
+`(p, q, r)` in the body frame.
+
+The derivatives are returned as two named tuples: `dCF, dCM`
+"""
+function body_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=SVector(1,0,0))
 
     b, db = normal_velocity_derivatives(panels, ref, fs)
 
     Γ, dΓ = circulation_derivatives(AIC, b, db)
 
     CF, CM, dCF, dCM, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        symmetric, Γ, dΓ, xhat=xhat)
+        Γ, dΓ, symmetric=symmetric, xhat=xhat)
+
+    # unpack derivatives
+    (CF_a, CF_b, CF_p, CF_q, CF_r) = dCF
+    (CM_a, CM_b, CM_p, CM_q, CM_r) = dCM
+
 
     # convert derivatives to be with respect to (u, v, w) instead of (alpha, beta)
     u, v, w = freestream_velocity(fs)
@@ -32,14 +46,23 @@ function body_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
     return dCF, dCM
 end
 
-function stability_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
+"""
+    stability_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=[1,0,0])
+
+Returns the derivatives of the body forces and moments in the stability frame
+with respect to the freestream velocity components `(alpha, beta)` and the angular
+velocity components `(p, q, r)` in the stability frame.
+
+The derivatives are returned as two named tuples: `dCF, dCM`
+"""
+function stability_derivatives(panels, ref, fs, AIC; symmetric=false, xhat=SVector(1,0,0))
 
     b, db = normal_velocity_derivatives(panels, ref, fs)
 
     Γ, dΓ = circulation_derivatives(AIC, b, db)
 
     CFb, CMb, dCFb, dCMb, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        symmetric, Γ, dΓ; xhat=xhat)
+        Γ, dΓ; symmetric=symmetric, xhat=xhat)
 
     # unpack derivatives
     (CFb_a, CFb_b, CFb_pb, CFb_qb, CFb_rb) = dCFb

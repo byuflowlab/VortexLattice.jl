@@ -5,7 +5,7 @@ Rotates `panels` from the body frame into a wind-aligned coordinate system
 """
 project_panels
 
-@inline function project_panels(panels, fs)
+function project_panels(panels, fs)
 
     R = body_to_wind(fs)
 
@@ -15,13 +15,13 @@ project_panels
 end
 
 """
-    far_field_drag(panels, ref, fs, symmetric, Γ)
+    far_field_drag(panels, ref, fs, Γ; symmetric=false)
 
 Computes induced drag using the Trefftz plane (far field method).
 """
 far_field_drag
 
-@inline function far_field_drag(panels::AbstractVector{<:Horseshoe}, ref, fs, symmetric, Γ)
+function far_field_drag(panels::AbstractVector{<:Horseshoe}, ref, fs, Γ; symmetric=false)
 
     # rotate panels into wind coordinate system
     panels = project_panels(panels, fs)
@@ -49,7 +49,7 @@ far_field_drag
 end
 
 
-@inline function far_field_drag(panels::AbstractVector{<:Ring}, ref, fs, symmetric, Γ)
+function far_field_drag(panels::AbstractVector{<:Ring}, ref, fs, Γ; symmetric=symmetric)
 
     # get panels that shed trailing vortices
     ip = findall((p)->p.trailing, panels)

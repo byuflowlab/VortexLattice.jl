@@ -25,7 +25,7 @@ export Reference
 include("freestream.jl")
 export Freestream
 export body_to_stability, stability_to_body
-export stablity_to_wind, wind_to_stability
+export stability_to_wind, wind_to_stability
 export wind_to_body, body_to_wind
 
 include("circulation.jl")

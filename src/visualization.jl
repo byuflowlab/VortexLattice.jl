@@ -1,4 +1,17 @@
-function write_vtk(name, panels::AbstractVector{<:Horseshoe}; wake_length=10, mirror=false, metadata=Dict())
+"""
+    write_vtk(name, panels::AbstractVector{<:Horseshoe}; kwargs...)
+
+Writes the geometry to Paraview files for visualization.
+
+# Keyword Arguments:
+ - `xhat=[1, 0, 0]`: direction in which trailing vortices are shed
+ - `mirror=false`: creates a mirror image of the geometry across the X-Z axis
+ - `wake_length=10`: distance to extend the trailing vortices
+ - `metadata=Dict()`: dictionary of metadata to include in generated files
+"""
+write_vtk
+
+function write_vtk(name, panels::AbstractVector{<:Horseshoe}; xhat=SVector(1, 0, 0), mirror=false, wake_length=10, metadata=Dict())
 
     TF = eltype(eltype(panels))
 
@@ -12,16 +25,18 @@ function write_vtk(name, panels::AbstractVector{<:Horseshoe}; wake_length=10, mi
 
         # --- horseshoe vortices ---
 
-        points_h = Matrix{TF}(undef, 3, 4*npanels)
+        points_h = Matrix{TF}(undef, 3, 6*npanels)
         for i = 1:npanels
-            ipoint = 4*(i - 1)
-            points_h[:,ipoint+1] = panels[i].rl + SVector(wake_length, 0, 0)
-            points_h[:,ipoint+2] = panels[i].rl
-            points_h[:,ipoint+3] = panels[i].rr
-            points_h[:,ipoint+4] = panels[i].rr + SVector(wake_length, 0, 0)
+            ipoint = 6*(i - 1)
+            points_h[:,ipoint+1] = panels[i].rl + SVector(panels[i].xl_te, 0, 0) + wake_length*xhat
+            points_h[:,ipoint+2] = panels[i].rl + SVector(panels[i].xl_te, 0, 0)
+            points_h[:,ipoint+3] = panels[i].rl
+            points_h[:,ipoint+4] = panels[i].rr
+            points_h[:,ipoint+5] = panels[i].rr + SVector(panels[i].xr_te, 0, 0)
+            points_h[:,ipoint+6] = panels[i].rr + SVector(panels[i].xr_te, 0, 0) + wake_length*xhat
         end
 
-        cells_h = [MeshCell(PolyData.Lines(), 4*(i-1)+1 : 4*(i-1)+4) for i = 1:npanels]
+        cells_h = [MeshCell(PolyData.Lines(), 6*(i-1)+1 : 6*(i-1)+6) for i = 1:npanels]
 
         vtk_grid(vtmfile, points_h, cells_h) do vtkfile
 
@@ -62,7 +77,7 @@ function write_vtk(name, panels::AbstractVector{<:Horseshoe}; wake_length=10, mi
     return nothing
 end
 
-function write_vtk(name, panels::AbstractVector{<:Ring}; wake_length=10, mirror=false, metadata=Dict())
+function write_vtk(name, panels::AbstractVector{<:Ring}; xhat=SVector(1, 0, 0), wake_length=10, mirror=false, metadata=Dict())
 
     TF = eltype(eltype(panels))
 
@@ -103,10 +118,10 @@ function write_vtk(name, panels::AbstractVector{<:Ring}; wake_length=10, mirror=
         ipoint = 0
         for i = 1:length(panels)
             if panels[i].trailing
-                points_h[:,ipoint+1] = panels[i].rbl + SVector(wake_length, 0, 0)
+                points_h[:,ipoint+1] = panels[i].rbl + wake_length*xhat
                 points_h[:,ipoint+2] = panels[i].rbl
                 points_h[:,ipoint+3] = panels[i].rbr
-                points_h[:,ipoint+4] = panels[i].rbr + SVector(wake_length, 0, 0)
+                points_h[:,ipoint+4] = panels[i].rbr + wake_length*xhat
                 ipoint += 4
             end
         end
