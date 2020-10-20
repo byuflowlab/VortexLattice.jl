@@ -65,131 +65,180 @@ Base.eltype(::PanelProperties{TF}) where TF = TF
 # --- near field solution for forces and moments --- #
 
 """
-    near_field_forces(panels, reference, freestream, symmetric, Γ; xhat=[1,0,0], frame=Body())
+    near_field_forces(surface[s], reference, freestream, symmetric, Γ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
-distribution `Γ`.  Return `CF`, `CM`, and a vector of panel properties of type
-`PanelProperties`.  `CF` and `CM` are returned in the frame specified by `frame`.
+distribution `Γ`.
+
+Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
+
+# Keyword Arguments
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1,0,0]
+ - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
+    `Stability()`, and `Wind()`
+
+# Additional Keyword Arguments for Multiple Surfaces
+ - `surface_id`: ID for each surface, defaults to `1:length(surfaces)`
 """
-function near_field_forces(panels, ref, fs, symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
+near_field_forces
+
+# single surface
+function near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ;
+    xhat=SVector(1, 0, 0), frame=Body())
+
+    CF, CM, props = near_field_forces([surface], ref, fs, symmetric, Γ;
+        xhat=xhat, frame=frame, surface_id=1:1)
+
+    return CF, CM, props[1]
+end
+
+# multiple surfaces
+function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
+    symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body(), surface_id=1:length(surfaces))
 
     # float number type
-    TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
+    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
 
-    # number of panels
-    N = length(panels)
+    # number of surfaces
+    nsurf = length(surfaces)
 
     # initialize forces/moments in the body frame
     Fb = @SVector zeros(TF, 3)  # forces
     Mb = @SVector zeros(TF, 3)  # moments
 
-    # initialize storage for panel outputs
-    pprops = Vector{PanelProperties{TF}}(undef, N)
+    # initialize storage for panel properties
+    props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
 
-    # loop through receiving panels
-    for i = 1:N
+    # loop through receiving surfaces
+    iΓ = 0 # index for accessing Γ
+    for isurf = 1:nsurf
 
-        # --- Calculate forces for the bound vortices --- #
+        receiving = surfaces[isurf]
+        nr = length(receiving)
+        nr1, nr2 = size(receiving)
+        cr = CartesianIndices(receiving)
 
-        rc = midpoint(panels[i])
+        # initialize panel outputs for this surface
+        props[isurf] = Matrix{PanelProperties{TF}}(undef, nr1, nr2)
 
-        # get external velocity at the bound vortex midpoint
-        Vi = external_velocity(fs, rc, ref.r)
+        # loop through receiving panels
+        for i = 1:length(receiving)
 
-        # now add the velocity induced by each sending panel
-        for j = 1:N
+            # --- Calculate forces for the bound vortices --- #
+            I = cr[i]
 
-            # note that for the horseshoe ring case we assume panels are
-            # grouped into chordwise strips that are ordered from leading edge
-            # to trailing edge
-            # e.g.
-            #     1 4 7 10         1 10 7 4
-            #     2 5 8 11   and   2 11 8 5   are both valid orderings
-            #     3 6 9 12         3 12 9 6
+            rc = midpoint(receiving[I])
 
-            # get induced velocity for this sending panel normalized by Γ
-            if eltype(panels) <: Horseshoe
-                include_bound = i != j
-                Vij = induced_velocity(rc, panels[j], symmetric, xhat, i != j)
-            elseif eltype(panels) <: Ring
-                include_top = i != j
-                include_bottom = i != j+1
-                Vij = induced_velocity(rc, panels[j], symmetric, xhat, include_top, include_bottom)
+            # start with external velocity at the bound vortex midpoint
+            Vi = external_velocity(fs, rc, ref.r)
+
+            # now add the velocity induced by each sending panel
+            jΓ = 0 # index for accessing Γ
+            for jsurf = 1:nsurf
+
+                sending = surfaces[jsurf]
+                ns = length(sending)
+                ns1, ns2 = size(sending)
+                cs = CartesianIndices(sending)
+
+                # find out whether surfaces have the same index and/or ID
+                same_surface = isurf == jsurf
+                same_id = surface_id[isurf] == surface_id[jsurf]
+
+                # loop through each sending panel
+                for j = 1:ns
+
+                    J = cs[j]
+
+                    if typeof(sending[J]) <: Horseshoe
+                        include_bound = !(same_surface && I == J)
+                        Vij = induced_velocity(rc, sending[J], xhat, symmetric, same_id, include_bound)
+                    elseif typeof(sending[J]) <: Ring
+                        include_top = !(same_surface && I == J)
+                        include_bottom = !(same_surface && (I[1] == J[1]+1 && I[2] == J[2]))
+                        trailing = J[1] == ns1
+                        Vij = induced_velocity(rc, sending[J], xhat, symmetric,
+                            same_id, trailing, include_top, include_bottom)
+                    end
+
+                    # add contribution to velocity
+                    Vi += Vij*Γ[jΓ+j]
+                end
+                jΓ += ns
             end
 
-            # add contribution to velocity
-            Vi += Vij*Γ[j]
-        end
-
-        # now use the Kutta-Joukowski theorem to calculate the forces at this point
-        if eltype(panels) <: Horseshoe
-            Γi = Γ[i]
-        elseif eltype(panels) <: Ring
-            if i == 1 || panels[i-1].trailing
-                # panel is on the leading edge
-                Γi = Γ[i]
-            else
-                # panel is not on the leading edge
-                Γi = Γ[i] - Γ[i-1]
+            # now use the Kutta-Joukowski theorem to calculate the forces at this point
+            if typeof(receiving[I]) <: Horseshoe
+                Γi = Γ[iΓ+i]
+            elseif typeof(receiving[I]) <: Ring
+                if I[1] == 1
+                    # panel is on the leading edge
+                    Γi = Γ[iΓ+i]
+                else
+                    # panel is not on the leading edge
+                    Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
+                end
             end
+
+            Δs = top_vector(receiving[I])
+            lenb = norm(Δs)
+            Fbi = RHO*Γi*cross(Vi, Δs)
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbi
+            Mb += cross(Δr, Fbi)
+
+            # --- Calculate forces for the left bound vortex --- #
+
+            rc = left_midpoint(receiving[I])
+
+            # get effective velocity at the bound vortex midpoint
+            Veff = external_velocity(fs, rc, ref.r)
+
+            # note that we don't include induced velocity in the effective velocity
+            # because its influence is generally negligible once we take the cross product
+            # with the bound vortex vector, this is also assumed in AVL
+
+            # now use the Kutta-Joukowski theorem to calculate the forces
+            Γli = Γ[iΓ+i]
+            Δs = left_vector(receiving[I])
+            lenl = norm(Δs)
+            Fbli = RHO*Γli*cross(Veff, Δs)
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbli
+            Mb += cross(Δr, Fbli)
+
+            # --- Calculate forces for the right bound vortex --- #
+
+            rc = right_midpoint(receiving[I])
+
+            # get effective velocity at the bound vortex midpoint
+            Veff = external_velocity(fs, rc, ref.r)
+
+            # note that we don't include induced velocity in the effective velocity
+            # because its influence is generally negligible once we take the cross product
+            # with the bound vortex vector, this is also assumed in AVL
+
+            # now use the Kutta-Joukowski theorem to calculate the forces
+            Γri = Γ[iΓ+i]
+            Δs = right_vector(receiving[I])
+            lenr = norm(Δs)
+            Fbri = RHO*Γri*cross(Veff, Δs)
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbri
+            Mb += cross(Δr, Fbri)
+
+            # assemble normalized panel outputs
+            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
+                Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
         end
-
-        Δs = top_vector(panels[i])
-        lenb = norm(Δs)
-        Fbi = RHO*Γi*cross(Vi, Δs)
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbi
-        Mb += cross(Δr, Fbi)
-
-        # --- Calculate forces for the left bound vortex --- #
-
-        rc = left_midpoint(panels[i])
-
-        # get effective velocity at the bound vortex midpoint
-        Veff = external_velocity(fs, rc, ref.r)
-
-        # note that we don't include induced velocity in the effective velocity
-        # because its influence is generally negligible once we take the cross product
-        # with the bound vortex vector, this is also assumed in AVL
-
-        # now use the Kutta-Joukowski theorem to calculate the forces
-        Γli = Γ[i]
-        Δs = left_vector(panels[i])
-        lenl = norm(Δs)
-        Fbli = RHO*Γli*cross(Veff, Δs)
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbli
-        Mb += cross(Δr, Fbli)
-
-        # --- Calculate forces for the right bound vortex --- #
-
-        rc = right_midpoint(panels[i])
-
-        # get effective velocity at the bound vortex midpoint
-        Veff = external_velocity(fs, rc, ref.r)
-
-        # note that we don't include induced velocity in the effective velocity
-        # because its influence is generally negligible once we take the cross product
-        # with the bound vortex vector, this is also assumed in AVL
-
-        # now use the Kutta-Joukowski theorem to calculate the forces
-        Γri = Γ[i]
-        Δs = right_vector(panels[i])
-        lenr = norm(Δs)
-        Fbri = RHO*Γri*cross(Veff, Δs)
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbri
-        Mb += cross(Δr, Fbri)
-
-        # assemble normalized panel outputs
-        pprops[i] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
-            Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
+        # increment Γ index
+        iΓ += nr
     end
 
     # adjust body forces to account for symmetry
@@ -205,35 +254,48 @@ function near_field_forces(panels, ref, fs, symmetric, Γ; xhat=SVector(1, 0, 0)
 
     CF, CM = body_to_frame(CF, CM, ref, fs, frame)
 
-    return CF, CM, pprops
+    return CF, CM, props
 end
 
 """
-    near_field_forces_derivatives(panels, reference, freestream, symmetric, Γ, dΓ; xhat=[1,0,0])
+    near_field_forces_derivatives(surface[s], reference, freestream, symmetric, Γ, dΓ; xhat=[1,0,0])
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ` and their derivatives with respect to the variables in `freestream`.
 Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type
 `PanelProperties`.  `CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
 """
-function near_field_forces_derivatives(panels, ref, fs, symmetric, Γ, dΓ;
-        xhat = SVector(1, 0, 0), frame=Body())
+near_field_forces_derivatives
+
+# single surface
+function near_field_forces_derivatives(surface::AbstractMatrix, ref, fs, symmetric, Γ, dΓ;
+    xhat=SVector(1, 0, 0), frame=Body())
+
+    CF, CM, dCF, dCM, props = near_field_forces_derivatives([surface], ref, fs, symmetric, Γ, dΓ;
+        xhat=xhat, frame=frame, surface_id=1:1)
+
+    return CF, CM, dCF, dCM, props[1]
+end
+
+# multiple surfaces
+function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, symmetric, Γ, dΓ;
+        xhat = SVector(1, 0, 0), frame=Body(), surface_id=1:length(surfaces))
 
     # unpack derivatives
     Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = dΓ
 
     # float number type
-    TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs),
+    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs),
         eltype(Γ), eltype(Γ_a), eltype(Γ_b), eltype(Γ_p), eltype(Γ_q), eltype(Γ_r))
 
-    # number of panels
-    N = length(panels)
+    # number of surfaces
+    nsurf = length(surfaces)
 
-    # initialize body outputs
+    # initialize forces/moments in the body frame
     Fb = @SVector zeros(TF, 3)  # forces
     Mb = @SVector zeros(TF, 3)  # moments
 
-    # initialize derivatives of body outputs
+    # and their derivatives
     Fb_a = @SVector zeros(TF, 3)
     Fb_b = @SVector zeros(TF, 3)
     Fb_p = @SVector zeros(TF, 3)
@@ -247,217 +309,245 @@ function near_field_forces_derivatives(panels, ref, fs, symmetric, Γ, dΓ;
     Mb_r = @SVector zeros(TF, 3)
 
     # initialize panel outputs
-    pprops = Vector{PanelProperties{TF}}(undef, N)
+    props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
 
-    # loop through receiving panels
-    for i = 1:N
+    # loop through receiving surfaces
+    iΓ = 0 # index for accessing Γ
+    for isurf = 1:nsurf
 
-        # --- Calculate forces for the bound vortices --- #
+        receiving = surfaces[isurf]
+        nr = length(receiving)
+        nr1, nr2 = size(receiving)
+        cr = CartesianIndices(receiving)
 
-        rc = midpoint(panels[i])
+        # initialize panel outputs for this surface
+        props[isurf] = Matrix{PanelProperties{TF}}(undef, nr1, nr2)
 
-        # get external velocity at the bound vortex midpoint
-        Vi, dVi = external_velocity_derivatives(fs, rc, ref.r)
+        # loop through receiving panels
+        for i = 1:length(receiving)
 
-        # unpack derivatives
-        Vi_a, Vi_b, Vi_p, Vi_q, Vi_r = dVi
+            I = cr[i]
 
-        # now add the velocity induced by each sending panel
-        for j = 1:N
+            # --- Calculate forces for the bound vortices --- #
+            rc = midpoint(receiving[I])
 
-            # note that for the horseshoe ring case we assume panels are
-            # grouped into chordwise strips that are ordered from leading edge
-            # to trailing edge
-            # e.g.
-            #     1 4 7 10         1 10 7 4
-            #     2 5 8 11   and   2 11 8 5   are both valid orderings
-            #     3 6 9 12         3 12 9 6
+            # get external velocity at the bound vortex midpoint
+            Vi, dVi = external_velocity_derivatives(fs, rc, ref.r)
 
-            # get induced velocity for this sending panel normalized by Γ
-            if eltype(panels) <: Horseshoe
-                include_bound = i != j
-                Vij = induced_velocity(rc, panels[j], symmetric, xhat, include_bound)
-            elseif eltype(panels) <: Ring
-                include_top = i != j
-                include_bottom = i != j+1
-                Vij = induced_velocity(rc, panels[j], symmetric, xhat, include_top, include_bottom)
+            # unpack derivatives
+            Vi_a, Vi_b, Vi_p, Vi_q, Vi_r = dVi
+
+            # now add the velocity induced by each sending panel
+            jΓ = 0 # index for accessing Γ
+            for jsurf = 1:nsurf
+
+                sending = surfaces[jsurf]
+                ns = length(sending)
+                ns1, ns2 = size(sending)
+                cs = CartesianIndices(sending)
+
+                # find out whether surfaces have the same index and/or ID
+                same_surface = isurf == jsurf
+                same_id = surface_id[isurf] == surface_id[jsurf]
+
+                # loop through each sending panel
+                for j = 1:ns
+
+                    J = cs[j]
+
+                    if typeof(sending[J]) <: Horseshoe
+                        include_bound = !(same_surface && I == J)
+                        Vij = induced_velocity(rc, sending[J], xhat, symmetric, same_id, include_bound)
+                    elseif typeof(sending[J]) <: Ring
+                        include_top = !(same_surface && I == J)
+                        include_bottom = !(same_surface && (I[1] == J[1]+1 && I[2] == J[2]))
+                        trailing = J[1] == ns1
+                        Vij = induced_velocity(rc, sending[J], xhat, symmetric,
+                            same_id, trailing, include_top, include_bottom)
+                    end
+
+                    # add contribution to velocity
+                    Vi += Vij*Γ[jΓ+j]
+
+                    # derivatives
+                    Vi_a += Vij*Γ_a[j]
+                    Vi_b += Vij*Γ_b[j]
+                    Vi_p += Vij*Γ_p[j]
+                    Vi_q += Vij*Γ_q[j]
+                    Vi_r += Vij*Γ_r[j]
+                end
+                # increment Γ index
+                jΓ += ns
             end
 
-            # add contribution to induced velocity
-            Vi += Vij*Γ[j]
+            # now use the Kutta-Joukowski theorem to calculate the forces at this point
+            if typeof(receiving[I]) <: Horseshoe
+                Γi = Γ[iΓ+i]
 
-            # derivatives
-            Vi_a += Vij*Γ_a[j]
-            Vi_b += Vij*Γ_b[j]
-            Vi_p += Vij*Γ_p[j]
-            Vi_q += Vij*Γ_q[j]
-            Vi_r += Vij*Γ_r[j]
-        end
+                Γi_a = Γ_a[iΓ+i]
+                Γi_b = Γ_b[iΓ+i]
+                Γi_p = Γ_p[iΓ+i]
+                Γi_q = Γ_q[iΓ+i]
+                Γi_r = Γ_r[iΓ+i]
+            elseif typeof(receiving[I]) <: Ring
+                if I[1] == 1
+                    # panel is on the leading edge
+                    Γi = Γ[iΓ+i]
 
-        # now use the Kutta-Joukowski theorem to calculate the forces at this point
-        if eltype(panels) <: Horseshoe
-            Γi = Γ[i]
+                    Γi_a = Γ_a[iΓ+i]
+                    Γi_b = Γ_b[iΓ+i]
+                    Γi_p = Γ_p[iΓ+i]
+                    Γi_q = Γ_q[iΓ+i]
+                    Γi_r = Γ_r[iΓ+i]
+                else
+                    # panel is not on the leading edge
+                    Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
 
-            Γi_a = Γ_a[i]
-            Γi_b = Γ_b[i]
-            Γi_p = Γ_p[i]
-            Γi_q = Γ_q[i]
-            Γi_r = Γ_r[i]
-        elseif eltype(panels) <: Ring
-            if i == 1 || panels[i-1].trailing
-                # panel is on the leading edge
-                Γi = Γ[i]
-
-                Γi_a = Γ_a[i]
-                Γi_b = Γ_b[i]
-                Γi_p = Γ_p[i]
-                Γi_q = Γ_q[i]
-                Γi_r = Γ_r[i]
-            else
-                Γi = Γ[i] - Γ[i-1]
-
-                Γi_a = Γ_a[i] - Γ_a[i-1]
-                Γi_b = Γ_b[i] - Γ_b[i-1]
-                Γi_p = Γ_p[i] - Γ_p[i-1]
-                Γi_q = Γ_q[i] - Γ_q[i-1]
-                Γi_r = Γ_r[i] - Γ_r[i-1]
+                    Γi_a = Γ_a[iΓ+i] - Γ_a[iΓ+i-1]
+                    Γi_b = Γ_b[iΓ+i] - Γ_b[iΓ+i-1]
+                    Γi_p = Γ_p[iΓ+i] - Γ_p[iΓ+i-1]
+                    Γi_q = Γ_q[iΓ+i] - Γ_q[iΓ+i-1]
+                    Γi_r = Γ_r[iΓ+i] - Γ_r[iΓ+i-1]
+                end
             end
+
+            Δs = top_vector(receiving[I])
+            lenb = norm(Δs)
+            tmp = cross(Vi, Δs)
+            Fbi = RHO*Γi*tmp
+
+            Fbi_a = RHO*(Γi_a*tmp + Γi*cross(Vi_a, Δs))
+            Fbi_b = RHO*(Γi_b*tmp + Γi*cross(Vi_b, Δs))
+            Fbi_p = RHO*(Γi_p*tmp + Γi*cross(Vi_p, Δs))
+            Fbi_q = RHO*(Γi_q*tmp + Γi*cross(Vi_q, Δs))
+            Fbi_r = RHO*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbi
+            Mb += cross(Δr, Fbi)
+
+            # also add their derivatives
+            Fb_a += Fbi_a
+            Fb_b += Fbi_b
+            Fb_p += Fbi_p
+            Fb_q += Fbi_q
+            Fb_r += Fbi_r
+
+            Mb_a += cross(Δr, Fbi_a)
+            Mb_b += cross(Δr, Fbi_b)
+            Mb_p += cross(Δr, Fbi_p)
+            Mb_q += cross(Δr, Fbi_q)
+            Mb_r += cross(Δr, Fbi_r)
+
+            # --- Calculate forces for the left bound vortex --- #
+
+            rc = left_midpoint(receiving[I])
+
+            # get effective velocity at the bound vortex midpoint
+            Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
+
+            # unpack derivatives
+            Veff_a, Veff_b, Veff_p, Veff_q, Veff_r = dVeff
+
+            # note that we don't include induced velocity in the effective velocity
+            # because its influence is generally negligible once we take the cross product
+            # with the bound vortex vector, this is also assumed in AVL
+
+            # now use the Kutta-Joukowski theorem to calculate the forces
+            Γli = Γ[iΓ+i]
+            Δs = left_vector(receiving[I])
+            lenl = norm(Δs)
+            tmp = cross(Veff, Δs)
+            Fbli = RHO*Γli*tmp
+
+            Γli_a = Γ_a[iΓ+i]
+            Γli_b = Γ_b[iΓ+i]
+            Γli_p = Γ_p[iΓ+i]
+            Γli_q = Γ_q[iΓ+i]
+            Γli_r = Γ_r[iΓ+i]
+
+            Fbli_a = RHO*(Γli_a*tmp + Γli*cross(Veff_a, Δs))
+            Fbli_b = RHO*(Γli_b*tmp + Γli*cross(Veff_b, Δs))
+            Fbli_p = RHO*(Γli_p*tmp + Γli*cross(Veff_p, Δs))
+            Fbli_q = RHO*(Γli_q*tmp + Γli*cross(Veff_q, Δs))
+            Fbli_r = RHO*(Γli_r*tmp + Γli*cross(Veff_r, Δs))
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbli
+            Mb += cross(Δr, Fbli)
+
+            # also add their derivatives
+            Fb_a += Fbli_a
+            Fb_b += Fbli_b
+            Fb_p += Fbli_p
+            Fb_q += Fbli_q
+            Fb_r += Fbli_r
+
+            Mb_a += cross(Δr, Fbli_a)
+            Mb_b += cross(Δr, Fbli_b)
+            Mb_p += cross(Δr, Fbli_p)
+            Mb_q += cross(Δr, Fbli_q)
+            Mb_r += cross(Δr, Fbli_r)
+
+            # --- Calculate forces for the right bound vortex --- #
+
+            rc = right_midpoint(receiving[I])
+
+            # get effective velocity at the bound vortex midpoint
+            Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
+
+            # unpack derivatives
+            Veff_a, Veff_b, Veff_p, Veff_q, Veff_r = dVeff
+
+            # note that we don't include induced velocity in the effective velocity
+            # because its influence is generally negligible once we take the cross product
+            # with the bound vortex vector, this is also assumed in AVL
+
+            # now use the Kutta-Joukowski theorem to calculate the forces
+            Γri = Γ[iΓ+i]
+            Δs = right_vector(receiving[I])
+            lenr = norm(Δs)
+            tmp = cross(Veff, Δs)
+            Fbri = RHO*Γri*tmp
+
+            Γri_a = Γ_a[iΓ+i]
+            Γri_b = Γ_b[iΓ+i]
+            Γri_p = Γ_p[iΓ+i]
+            Γri_q = Γ_q[iΓ+i]
+            Γri_r = Γ_r[iΓ+i]
+
+            Fbri_a = RHO*(Γri_a*tmp + Γri*cross(Veff_a, Δs))
+            Fbri_b = RHO*(Γri_b*tmp + Γri*cross(Veff_b, Δs))
+            Fbri_p = RHO*(Γri_p*tmp + Γri*cross(Veff_p, Δs))
+            Fbri_q = RHO*(Γri_q*tmp + Γri*cross(Veff_q, Δs))
+            Fbri_r = RHO*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
+
+            # add the resulting forces and moments to the body forces and moments
+            Δr = rc - ref.r
+            Fb += Fbri
+            Mb += cross(Δr, Fbri)
+
+            # also add their derivatives
+            Fb_a += Fbri_a
+            Fb_b += Fbri_b
+            Fb_p += Fbri_p
+            Fb_q += Fbri_q
+            Fb_r += Fbri_r
+
+            Mb_a += cross(Δr, Fbri_a)
+            Mb_b += cross(Δr, Fbri_b)
+            Mb_p += cross(Δr, Fbri_p)
+            Mb_q += cross(Δr, Fbri_q)
+            Mb_r += cross(Δr, Fbri_r)
+
+            # assemble normalized panel outputs
+            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
+                Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
         end
-
-        Δs = top_vector(panels[i])
-        lenb = norm(Δs)
-        tmp = cross(Vi, Δs)
-        Fbi = RHO*Γi*tmp
-
-        Fbi_a = RHO*(Γi_a*tmp + Γi*cross(Vi_a, Δs))
-        Fbi_b = RHO*(Γi_b*tmp + Γi*cross(Vi_b, Δs))
-        Fbi_p = RHO*(Γi_p*tmp + Γi*cross(Vi_p, Δs))
-        Fbi_q = RHO*(Γi_q*tmp + Γi*cross(Vi_q, Δs))
-        Fbi_r = RHO*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbi
-        Mb += cross(Δr, Fbi)
-
-        # also add their derivatives
-        Fb_a += Fbi_a
-        Fb_b += Fbi_b
-        Fb_p += Fbi_p
-        Fb_q += Fbi_q
-        Fb_r += Fbi_r
-
-        Mb_a += cross(Δr, Fbi_a)
-        Mb_b += cross(Δr, Fbi_b)
-        Mb_p += cross(Δr, Fbi_p)
-        Mb_q += cross(Δr, Fbi_q)
-        Mb_r += cross(Δr, Fbi_r)
-
-        # --- Calculate forces for the left bound vortex --- #
-
-        rc = left_midpoint(panels[i])
-
-        # get effective velocity at the bound vortex midpoint
-        Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
-
-        # unpack derivatives
-        Veff_a, Veff_b, Veff_p, Veff_q, Veff_r = dVeff
-
-        # note that we don't include induced velocity in the effective velocity
-        # because its influence is generally negligible once we take the cross product
-        # with the bound vortex vector, this is also assumed in AVL
-
-        # now use the Kutta-Joukowski theorem to calculate the forces
-        Γli = Γ[i]
-        Δs = left_vector(panels[i])
-        lenl = norm(Δs)
-        tmp = cross(Veff, Δs)
-        Fbli = RHO*Γli*tmp
-
-        Γli_a = Γ_a[i]
-        Γli_b = Γ_b[i]
-        Γli_p = Γ_p[i]
-        Γli_q = Γ_q[i]
-        Γli_r = Γ_r[i]
-
-        Fbli_a = RHO*(Γli_a*tmp + Γli*cross(Veff_a, Δs))
-        Fbli_b = RHO*(Γli_b*tmp + Γli*cross(Veff_b, Δs))
-        Fbli_p = RHO*(Γli_p*tmp + Γli*cross(Veff_p, Δs))
-        Fbli_q = RHO*(Γli_q*tmp + Γli*cross(Veff_q, Δs))
-        Fbli_r = RHO*(Γli_r*tmp + Γli*cross(Veff_r, Δs))
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbli
-        Mb += cross(Δr, Fbli)
-
-        # also add their derivatives
-        Fb_a += Fbli_a
-        Fb_b += Fbli_b
-        Fb_p += Fbli_p
-        Fb_q += Fbli_q
-        Fb_r += Fbli_r
-
-        Mb_a += cross(Δr, Fbli_a)
-        Mb_b += cross(Δr, Fbli_b)
-        Mb_p += cross(Δr, Fbli_p)
-        Mb_q += cross(Δr, Fbli_q)
-        Mb_r += cross(Δr, Fbli_r)
-
-        # --- Calculate forces for the right bound vortex --- #
-
-        rc = right_midpoint(panels[i])
-
-        # get effective velocity at the bound vortex midpoint
-        Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
-
-        # unpack derivatives
-        Veff_a, Veff_b, Veff_p, Veff_q, Veff_r = dVeff
-
-        # note that we don't include induced velocity in the effective velocity
-        # because its influence is generally negligible once we take the cross product
-        # with the bound vortex vector, this is also assumed in AVL
-
-        # now use the Kutta-Joukowski theorem to calculate the forces
-        Γri = Γ[i]
-        Δs = right_vector(panels[i])
-        lenr = norm(Δs)
-        tmp = cross(Veff, Δs)
-        Fbri = RHO*Γri*tmp
-
-        Γri_a = Γ_a[i]
-        Γri_b = Γ_b[i]
-        Γri_p = Γ_p[i]
-        Γri_q = Γ_q[i]
-        Γri_r = Γ_r[i]
-
-        Fbri_a = RHO*(Γri_a*tmp + Γri*cross(Veff_a, Δs))
-        Fbri_b = RHO*(Γri_b*tmp + Γri*cross(Veff_b, Δs))
-        Fbri_p = RHO*(Γri_p*tmp + Γri*cross(Veff_p, Δs))
-        Fbri_q = RHO*(Γri_q*tmp + Γri*cross(Veff_q, Δs))
-        Fbri_r = RHO*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
-
-        # add the resulting forces and moments to the body forces and moments
-        Δr = rc - ref.r
-        Fb += Fbri
-        Mb += cross(Δr, Fbri)
-
-        # also add their derivatives
-        Fb_a += Fbri_a
-        Fb_b += Fbri_b
-        Fb_p += Fbri_p
-        Fb_q += Fbri_q
-        Fb_r += Fbri_r
-
-        Mb_a += cross(Δr, Fbri_a)
-        Mb_b += cross(Δr, Fbri_b)
-        Mb_p += cross(Δr, Fbri_p)
-        Mb_q += cross(Δr, Fbri_q)
-        Mb_r += cross(Δr, Fbri_r)
-
-        # assemble normalized panel outputs
-        pprops[i] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
-            Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
+        # increment Γ index
+        iΓ += nr
     end
 
     # adjust body forces to account for symmetry
@@ -500,7 +590,7 @@ function near_field_forces_derivatives(panels, ref, fs, symmetric, Γ, dΓ;
     dCF = (CF_a, CF_b, CF_p, CF_q, CF_r)
     dCM = (CM_a, CM_b, CM_p, CM_q, CM_r)
 
-    return CF, CM, dCF, dCM, pprops
+    return CF, CM, dCF, dCM, props
 end
 
 """

@@ -11,12 +11,12 @@ Writes the geometry to Paraview files for visualization.
 """
 write_vtk
 
-function write_vtk(name, panels::AbstractVector{<:Horseshoe}; xhat=SVector(1, 0, 0), mirror=false, wake_length=10, metadata=Dict())
+function write_vtk(name, panels::AbstractMatrix{<:Horseshoe}; xhat=SVector(1, 0, 0), mirror=false, wake_length=10, metadata=Dict())
 
     TF = eltype(eltype(panels))
 
     if mirror
-        panels = vcat(panels, reflect(panels))
+        panels = vcat(reflect(panels), panels)
     end
 
     npanels = length(panels)
@@ -77,12 +77,12 @@ function write_vtk(name, panels::AbstractVector{<:Horseshoe}; xhat=SVector(1, 0,
     return nothing
 end
 
-function write_vtk(name, panels::AbstractVector{<:Ring}; xhat=SVector(1, 0, 0), wake_length=10, mirror=false, metadata=Dict())
+function write_vtk(name, panels::AbstractMatrix{<:Ring}; xhat=SVector(1, 0, 0), wake_length=10, mirror=false, metadata=Dict())
 
     TF = eltype(eltype(panels))
 
     if mirror
-        panels = vcat(panels, reflect(panels))
+        panels = vcat(reflect(panels), panels)
     end
 
     npanels = length(panels)

@@ -20,6 +20,7 @@ direction to the trailing edge, and then into the farfield.
  - `xl_te`: x-distance from the left side of the bound vortex to the trailing edge
  - `xc_te`: x-distance from the center of the bound vortex to the trailing edge
  - `xr_te`: x-distance from the right side of the bound vortex to the trailing edge
+ - `core_size`: vortex core size
 """
 struct Horseshoe{TF} <: AbstractPanel{TF}
     rl::SVector{3, TF}
@@ -30,6 +31,7 @@ struct Horseshoe{TF} <: AbstractPanel{TF}
     xl_te::TF
     xc_te::TF
     xr_te::TF
+    core_size::TF
 end
 
 """
@@ -50,13 +52,13 @@ Construct and return a horseshoe vortex panel.
 """
 Horseshoe(rl, rr, rcp, ncp, xl_te, xr_te; rc=(rl+rr)/2, xc_te=(xl_te+xr_te)/2) = Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
 
-function Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
-    TF = promote_type(eltype(rl), eltype(rc), eltype(rr), eltype(rcp), eltype(ncp), typeof(xl_te), typeof(xc_te), typeof(xr_te))
-    return Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+function Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
+    TF = promote_type(eltype(rl), eltype(rc), eltype(rr), eltype(rcp), eltype(ncp), typeof(xl_te), typeof(xc_te), typeof(xr_te), typeof(core_size))
+    return Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
-Base.eltype(::Type{Horseshoe{TF}}) where TF = TF
-Base.eltype(::Horseshoe{TF}) where TF = TF
+@inline Base.eltype(::Type{Horseshoe{TF}}) where TF = TF
+@inline Base.eltype(::Horseshoe{TF}) where TF = TF
 
 # -------------------------------
 
@@ -74,7 +76,7 @@ Vortex ring shaped panel element.
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `trailing`: indicates whether the panel is on the trailing edge
+ - `core`: vortex core size
 """
 struct Ring{TF} <: AbstractPanel{TF}
     rtl::SVector{3, TF}
@@ -85,11 +87,11 @@ struct Ring{TF} <: AbstractPanel{TF}
     rbr::SVector{3, TF}
     rcp::SVector{3, TF}
     ncp::SVector{3, TF}
-    trailing::Bool
+    core_size::TF
 end
 
 """
-    Ring(rtl, rtr, rbl, rbr, rcp, ncp, trailing; rtc, rbc)
+    Ring(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc, rbc)
 
 Construct and return a vortex ring panel.
 
@@ -100,20 +102,20 @@ Construct and return a vortex ring panel.
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `trailing`: indicates whether the panel is on the trailing edge
+ - `core_size`: vortex core size
  - `rtc`: (optional) position of the center of the top bound vortex, defaults to `(rtl+rtr)/2`
  - `rbc`: (optional) position of the center of the bottom bound vortex, defaults to `(rbl+rbr)/2`
 """
-Ring(rtl, rtr, rbl, rbr, rcp, ncp, trailing; rtc=(rtl+rtr)/2, rbc=(rbl+rbr)/2) =
-    Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+Ring(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc=(rtl+rtr)/2, rbc=(rbl+rbr)/2) =
+    Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 
-function Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
-    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc), eltype(rbr), eltype(rcp), eltype(ncp))
-    return Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+function Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc), eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size))
+    return Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
-Base.eltype(::Type{Ring{TF}}) where TF = TF
-Base.eltype(::Ring{TF}) where TF = TF
+@inline Base.eltype(::Type{Ring{TF}}) where TF = TF
+@inline Base.eltype(::Ring{TF}) where TF = TF
 
 # --- geometric functions --- #
 
@@ -124,7 +126,7 @@ Return a copy of `panel` translated the distance specified by vector `r`
 """
 translate
 
-function translate(panel::Horseshoe, r)
+@inline function translate(panel::Horseshoe, r)
 
     rl = panel.rl + r
     rc = panel.rc + r
@@ -134,11 +136,12 @@ function translate(panel::Horseshoe, r)
     xl_te = panel.xl_te
     xc_te = panel.xc_te
     xr_te = panel.xr_te
+    core_size = panel.core_size
 
-    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
-function translate(panel::Ring, r)
+@inline function translate(panel::Ring, r)
 
     rtl = panel.rtl + r
     rtc = panel.rtc + r
@@ -148,9 +151,9 @@ function translate(panel::Ring, r)
     rbr = panel.rbr + r
     rcp = panel.rcp + r
     ncp = panel.ncp
-    trailing = panel.trailing
+    core_size = panel.core_size
 
-    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
 """
@@ -178,9 +181,6 @@ end
     reflect(panel::AbstractPanel)
 
 Reflects a panel across the y-axis.
-
-If the number of panels in the chordwise direction `nc` and spanwise direction
-`ns` are provided the grid-based ordering will be preserved.
 """
 reflect
 
@@ -194,8 +194,9 @@ function reflect(panel::Horseshoe)
     xl_te = panel.xr_te
     xc_te = panel.xc_te
     xr_te = panel.xl_te
+    core_size = panel.core_size
 
-    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
 function reflect(panel::Ring)
@@ -208,60 +209,17 @@ function reflect(panel::Ring)
     rbr = flipy(panel.rbl)
     rcp = flipy(panel.rcp)
     ncp = flipy(panel.ncp)
-    trailing = panel.trailing
+    core_size = panel.core_size
 
-    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
 """
-    reflect(panels::AbstractVector{<:AbstractPanel})
-
-Reflects the panels in `panels` across the y-axis.
-"""
-reflect(panels::AbstractVector{<:AbstractPanel}) = reflect.(panels)
-
-"""
-    reflect(panels::AbstractVector{<:AbstractPanel}, nc, ns)
+    reflect(panels::AbstractMatrix{<:AbstractPanel})
 
 Reflects panels about the y-axis, preserving panel grid-based ordering
 """
-reflect(panels::AbstractVector{<:AbstractPanel}, nc, ns) = reflect.(reverse(reshape(panels, nc, ns), dims=2))
-
-"""
-    rotate(panel::AbstractPanel, R)
-
-Rotates a panel using the rotation matrix `R`.
-"""
-rotate
-
-function rotate(panel::Horseshoe, R)
-
-    rl = R*panel.rr
-    rc = R*panel.rc
-    rr = R*panel.rl
-    rcp = R*panel.rcp
-    ncp = R*panel.ncp
-    xl_te = panel.xl_te
-    xc_te = panel.xc_te
-    xr_te = panel.xr_te
-
-    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
-end
-
-function rotate(panel::Ring, R)
-
-    rtl = R*panel.rtl
-    rtc = R*panel.rtc
-    rtr = R*panel.rtr
-    rbl = R*panel.rbl
-    rbc = R*panel.rbc
-    rbr = R*panel.rbr
-    rcp = R*panel.rcp
-    ncp = R*panel.ncp
-    trailing = panel.trailing
-
-    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
-end
+reflect(panels::AbstractMatrix{<:AbstractPanel}) = reflect.(reverse(panels, dims=2))
 
 """
     controlpoint(panel::AbstractPanel)
@@ -270,9 +228,9 @@ Return the control point of `panel` (typically located at the 3/4 chord)
 """
 controlpoint
 
-controlpoint(panel::Horseshoe) = panel.rcp
+@inline controlpoint(panel::Horseshoe) = panel.rcp
 
-controlpoint(panel::Ring) = panel.rcp
+@inline controlpoint(panel::Ring) = panel.rcp
 
 """
     normal(panel::AbstractPanel)
@@ -281,31 +239,9 @@ Return the normal vector of `panel`
 """
 normal
 
-normal(panel::Horseshoe) = panel.ncp
+@inline normal(panel::Horseshoe) = panel.ncp
 
-normal(panel::Ring) = panel.ncp
-
-"""
-    trefftz_normal(panel)
-
-Compute the normal vector for `panel` when projected onto the Trefftz plane
-(including magnitude)
-"""
-trefftz_normal
-
-trefftz_normal(panel::Horseshoe) = trefftz_normal(panel.rl, panel.rr)
-
-trefftz_normal(panel::Ring) = trefftz_normal(panel.rbl, panel.rbr)
-
-function trefftz_normal(rl, rr)
-
-    dy = rr[2] - rl[2]
-    dz = rr[3] - rl[3]
-
-    nhat = SVector(0, -dz, dy)
-
-    return nhat
-end
+@inline normal(panel::Ring) = panel.ncp
 
 """
     midpoint(panel::AbstractPanel)
@@ -314,9 +250,9 @@ Return the midpoint of the bound vortex on `panel`
 """
 midpoint
 
-midpoint(panel::Horseshoe) = panel.rc
+@inline midpoint(panel::Horseshoe) = panel.rc
 
-midpoint(panel::Ring) = panel.rtc
+@inline midpoint(panel::Ring) = panel.rtc
 
 """
     left_midpoint(panel::AbstractPanel)
@@ -325,9 +261,9 @@ Return the midpoint of the left bound vortex on `panel`
 """
 left_midpoint
 
-left_midpoint(panel::Horseshoe) = panel.rl + SVector(panel.xl_te/2, 0, 0)
+@inline left_midpoint(panel::Horseshoe) = panel.rl + SVector(panel.xl_te/2, 0, 0)
 
-left_midpoint(panel::Ring) = (panel.rtl + panel.rbl)/2
+@inline left_midpoint(panel::Ring) = (panel.rtl + panel.rbl)/2
 
 """
     right_midpoint(panel::AbstractPanel)
@@ -336,8 +272,8 @@ Return the midpoint of the right bound vortex on `panel`
 """
 right_midpoint
 
-right_midpoint(panel::Horseshoe) = panel.rr + SVector(panel.xr_te/2, 0, 0)
-right_midpoint(panel::Ring) = (panel.rtr + panel.rbr)/2
+@inline right_midpoint(panel::Horseshoe) = panel.rr + SVector(panel.xr_te/2, 0, 0)
+@inline right_midpoint(panel::Ring) = (panel.rtr + panel.rbr)/2
 
 """
     top_vector(panel)
@@ -345,8 +281,8 @@ right_midpoint(panel::Ring) = (panel.rtr + panel.rbr)/2
 Returns the path of the top bound vortex for `panel`
 """
 top_vector
-top_vector(panel::Horseshoe) = panel.rr - panel.rl
-top_vector(panel::Ring) = panel.rtr - panel.rtl
+@inline top_vector(panel::Horseshoe) = panel.rr - panel.rl
+@inline top_vector(panel::Ring) = panel.rtr - panel.rtl
 
 """
     left_vector(panel)
@@ -354,8 +290,8 @@ top_vector(panel::Ring) = panel.rtr - panel.rtl
 Return the path of the left bound vortex for `panel`
 """
 left_vector
-left_vector(panel::Horseshoe) = -SVector(panel.xl_te, 0, 0)
-left_vector(panel::Ring) = panel.rtl - panel.rbl
+@inline left_vector(panel::Horseshoe) = -SVector(panel.xl_te, 0, 0)
+@inline left_vector(panel::Ring) = panel.rtl - panel.rbl
 
 """
     right_vector(panel)
@@ -363,8 +299,8 @@ left_vector(panel::Ring) = panel.rtl - panel.rbl
 Return the path of the right bound vortex for `panel`
 """
 right_vector
-right_vector(panel::Horseshoe) = SVector(panel.xr_te, 0, 0)
-right_vector(panel::Ring) = panel.rbr - panel.rtr
+@inline right_vector(panel::Horseshoe) = SVector(panel.xr_te, 0, 0)
+@inline right_vector(panel::Ring) = panel.rbr - panel.rtr
 
 """
     endpoints(panel)
@@ -372,14 +308,14 @@ right_vector(panel::Ring) = panel.rbr - panel.rtr
 Return the endpoints of the bound vortices in `panel`.
 """
 endpoints
-function endpoints(panel::Horseshoe)
+@inline function endpoints(panel::Horseshoe)
     r11 = panel.rl
     r12 = panel.rr
     r21 = panel.rl + SVector(panel.xl_te, 0, 0)
     r22 = panel.rr + SVector(panel.xr_te, 0, 0)
     return r11, r12, r21, r22
 end
-endpoints(panel::Ring) = panel.rtl, panel.rtr, panel.rbl, panel.rbr
+@inline endpoints(panel::Ring) = panel.rtl, panel.rtr, panel.rbl, panel.rbr
 
 """
     reflected_endpoints(panel)
@@ -387,14 +323,14 @@ endpoints(panel::Ring) = panel.rtl, panel.rtr, panel.rbl, panel.rbr
 Return the endpoints of the bound vortice in `panel`, reflected across the y-axis.
 """
 reflected_endpoints
-function reflected_endpoints(panel::Horseshoe)
+@inline function reflected_endpoints(panel::Horseshoe)
     rtl = flipy(panel.rr)
     rtr = flipy(panel.rl)
     rbl = flipy(panel.rr) + SVector(panel.xr_te, 0, 0)
     rbr = flipy(panel.rl) + SVector(panel.xl_te, 0, 0)
     return rtl, rtr, rbl, rbr
 end
-function reflected_endpoints(panel::Ring)
+@inline function reflected_endpoints(panel::Ring)
     rtl = flipy(panel.rtr)
     rtr = flipy(panel.rtl)
     rbl = flipy(panel.rbr)
@@ -408,13 +344,13 @@ end
 Return the two points where trailing vortices originating from `panel` are shed
 into the farfield.
 """
-function trefftz_endpoints(panel::Horseshoe)
+@inline function trefftz_endpoints(panel::Horseshoe)
     rl = panel.rl + SVector(panel.xl_te, 0, 0)
     rr = panel.rr + SVector(panel.xr_te, 0, 0)
     return rl, rr
 end
 
-trefftz_endpoints(panel::Ring) = panel.rbl, panel.rbr
+@inline trefftz_endpoints(panel::Ring) = panel.rbl, panel.rbr
 
 """
     trefftz_center(panel)
@@ -422,61 +358,82 @@ trefftz_endpoints(panel::Ring) = panel.rbl, panel.rbr
 Return the center of the panel in the farfield created by vortices shed by `panel`
 """
 trefftz_center
-trefftz_center(panel::Horseshoe) = panel.rc + SVector(panel.xc_te, 0, 0)
-trefftz_center(panel::Ring) = panel.rbc
+@inline trefftz_center(panel::Horseshoe) = panel.rc + SVector(panel.xc_te, 0, 0)
+@inline trefftz_center(panel::Ring) = panel.rbc
 
 # --- induced velocity functions --- #
 
 """
-    induced_velocity(rcp, panel, symmetric, xhat, args...)
+    induced_velocity(rcp, panel, xhat, symmetric, same_surface, trailing, args...)
 
 Computes the normalized induced velocity at control point `rcp` from `panel`.
+
+# Arguments
+ - `rcp`: Control point for receiving panel
+ - `panel`: Sending panel
+ - `symmetric`: Flag indicating whether sending surface is symmetric
+ - `same_surface`: Flag indicating whether the sending and receiving surfaces are the same
+ - `trailing`: Flag indicating whether sending panel sheds trailing vortices
+ - `xhat`: Direction in which to shed trailing vortices (if applicable)
+
+# Optional Arguments for Horseshoe Vortices
+ - `include_bound`: Indicates whether to include the bound vortex in induced velocity
+    calculations, defaults to true
+
+# Optional Arguments for Vortex Rings
+ - `include_top`: Indicates whether to include the top bound vortex in induced velocity
+    calculations, defaults to true
+ - `include_bottom`: Indicates whether to include the bottom bound vortex in induced velocity
+    calculations, defaults to true
 """
 induced_velocity
 
 # horseshoe vortex
-function induced_velocity(rcp, panel::Horseshoe, symmetric, xhat, include_bound=true)
+@inline function induced_velocity(rcp, panel::Horseshoe, xhat, symmetric,
+    same_surface, include_bound=true)
 
     rtl, rtr, rbl, rbr = endpoints(panel)
     r11, r12, r21, r22 = rcp - rtl, rcp - rtr, rcp - rbl, rcp - rbr
-    Vhat = trailing_induced_velocity(r21, r22, xhat) # trailing vortices
-    Vhat += bound_induced_velocity(r21, r11) # left side (to trailing edge)
-    Vhat += bound_induced_velocity(r12, r22) # right side (to trailing edge)
+    core_size = panel.core_size
+    Vhat = trailing_induced_velocity(r21, r22, xhat, core_size, same_surface) # trailing vortices
+    Vhat += bound_induced_velocity(r21, r11, core_size, same_surface) # left side (to trailing edge)
+    Vhat += bound_induced_velocity(r12, r22, core_size, same_surface) # right side (to trailing edge)
     if include_bound
-        Vhat += bound_induced_velocity(r11, r12) # bound vortex
+        Vhat += bound_induced_velocity(r11, r12, core_size, same_surface) # bound vortex
     end
 
     # add contribution from other side (if applicable)
     if symmetric && not_on_symmetry_plane(panel.rl, panel.rr)
         rtl, rtr, rbl, rbr = reflected_endpoints(panel)
         r11, r12, r21, r22 = rcp - rtl, rcp - rtr, rcp - rbl, rcp - rbr
-        Vhat += trailing_induced_velocity(r21, r22, xhat) # trailing vortices
-        Vhat += bound_induced_velocity(r21, r11) # left side (to trailing edge)
-        Vhat += bound_induced_velocity(r12, r22) # right side (to trailing edge)
-        Vhat += bound_induced_velocity(r11, r12) # bound vortex
+        Vhat += trailing_induced_velocity(r21, r22, xhat, core_size, same_surface) # trailing vortices
+        Vhat += bound_induced_velocity(r21, r11, core_size, same_surface) # left side (to trailing edge)
+        Vhat += bound_induced_velocity(r12, r22, core_size, same_surface) # right side (to trailing edge)
+        Vhat += bound_induced_velocity(r11, r12, core_size, same_surface) # bound vortex
     end
 
     return Vhat
 end
 
 # vortex ring
-function induced_velocity(rcp, panel::Ring, symmetric, xhat,
-    include_top=true, include_bottom=true)
+@inline function induced_velocity(rcp, panel::Ring, xhat, symmetric, same_surface,
+    trailing, include_top=true, include_bottom=true)
 
     rtl, rtr, rbl, rbr = endpoints(panel)
     r11, r12, r21, r22 = rcp - rtl, rcp - rtr, rcp - rbl, rcp - rbr
-    Vhat = bound_induced_velocity(r21, r11) # left bound vortex
-    Vhat += bound_induced_velocity(r12, r22) # right bound vortex
+    core_size = panel.core_size
+    Vhat = bound_induced_velocity(r21, r11, core_size, same_surface) # left bound vortex
+    Vhat += bound_induced_velocity(r12, r22, core_size, same_surface) # right bound vortex
 
     if include_top
-        Vhat += bound_induced_velocity(r11, r12) # top bound vortex
+        Vhat += bound_induced_velocity(r11, r12, core_size, same_surface) # top bound vortex
     end
 
-    if panel.trailing
-        Vhat += trailing_induced_velocity(r21, r22, xhat) # trailing vortices
+    if trailing
+        Vhat += trailing_induced_velocity(r21, r22, xhat, core_size, same_surface) # trailing vortices
     else
         if include_bottom
-            Vhat += bound_induced_velocity(r22, r21) # bottom bound vortex
+            Vhat += bound_induced_velocity(r22, r21, core_size, same_surface) # bottom bound vortex
         end
     end
 
@@ -484,40 +441,19 @@ function induced_velocity(rcp, panel::Ring, symmetric, xhat,
     if symmetric && not_on_symmetry_plane(panel.rtl, panel.rtr)
         rtl, rtr, rbl, rbr = reflected_endpoints(panel)
         r11, r12, r21, r22 = rcp - rtl, rcp - rtr, rcp - rbl, rcp - rbr
-        Vhat += bound_induced_velocity(r21, r11) # left bound vortex
-        Vhat += bound_induced_velocity(r12, r22) # right bound vortex
-        Vhat += bound_induced_velocity(r11, r12) # top bound vortex
-        if panel.trailing
-            Vhat += trailing_induced_velocity(r21, r22, xhat) # trailing vortices
+        Vhat += bound_induced_velocity(r21, r11, core_size, same_surface) # left bound vortex
+        Vhat += bound_induced_velocity(r12, r22, core_size, same_surface) # right bound vortex
+        Vhat += bound_induced_velocity(r11, r12, core_size, same_surface) # top bound vortex
+        if trailing
+            Vhat += trailing_induced_velocity(r21, r22, xhat, core_size, same_surface) # trailing vortices
         else
-            Vhat += bound_induced_velocity(r22, r21) # bottom bound vortex
+            Vhat += bound_induced_velocity(r22, r21, core_size, same_surface) # bottom bound vortex
         end
     end
 
     return Vhat
 end
 
-"""
-    panel_induced_drag(panel_j, Γj, panel_i, Γi, symmetric)
-
-Induced drag from `panel_j` induced on `panel_i`
-"""
-function panel_induced_drag(panel_j, Γj, panel_i, Γi, symmetric)
-
-    rlj, rrj = trefftz_endpoints(panel_j)
-    ri = trefftz_center(panel_i)
-    nhati = trefftz_normal(panel_i)
-
-    Di = vortex_induced_drag(rlj, -Γj, ri, Γi, nhati)
-    Di += vortex_induced_drag(rrj, Γj, ri, Γi, nhati)
-
-    if symmetric && not_on_symmetry_plane(rlj, rrj)
-        Di += vortex_induced_drag(flipy(rrj), -Γj, ri, Γi, nhati)
-        Di += vortex_induced_drag(flipy(rlj), Γj, ri, Γi, nhati)
-    end
-
-    return Di
-end
 
 # --- helper functions --- #
 
@@ -526,31 +462,38 @@ end
 
 Flip sign of y-component of vector `r` (used for symmetry)
 """
-flipy(r) = SVector{3}(r[1], -r[2], r[3])
+@inline flipy(r) = SVector{3}(r[1], -r[2], r[3])
 
 """
     not_on_symmetry_plane(r1, r2, tol=eps())
 
 Test whether points `r1` and `r2` are on the symmetry plane (y = 0)
 """
-function not_on_symmetry_plane(r1, r2, tol=eps())
+@inline function not_on_symmetry_plane(r1, r2, tol=eps())
     return !(isapprox(r1[2], 0.0, atol=tol) && isapprox(r2[2], 0.0, atol=tol))
 end
 
 """
-    trailing_induced_velocity(r1, r2, xhat=[1,0,0])
+    trailing_induced_velocity(r1, r2, xhat, core_size, same_surface)
 
 Compute the induced velocity (per unit circulation) for two vortices trailing in
 the `xhat` direction, at a control point located at `r1` relative to the start of the
 left trailing vortex and `r2` relative to the start of the right trailing vortex.
 """
-function trailing_induced_velocity(r1, r2, xhat)
+@inline function trailing_induced_velocity(r1, r2, xhat, core_size, same_surface)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
 
-    f1 = cross(r1, xhat)/(nr1 - r1[1])/nr1
-    f2 = cross(r2, xhat)/(nr2 - r2[1])/nr2
+    if same_surface || core_size == 0
+        # no finite core
+        f1 = cross(r1, xhat)/(nr1 - dot(r1, xhat))/nr1
+        f2 = cross(r2, xhat)/(nr2 - dot(r2, xhat))/nr2
+    else
+        # finite core
+        f1 = cross(r1, xhat)/(nr1^2 - dot(r1, xhat)^2 + core_size^2)
+        f2 = cross(r2, xhat)/(nr2^2 - dot(r2, xhat)^2 + core_size^2)
+    end
 
     Vhat = (f1 - f2)/(4*pi)
 
@@ -558,18 +501,28 @@ function trailing_induced_velocity(r1, r2, xhat)
 end
 
 """
-    bound_induced_velocity(r1, r2)
+    bound_induced_velocity(r1, r2, core_size, same_surface)
 
 Compute the induced velocity (per unit circulation) for a bound vortex, at a
 control point located at `r1` relative to the start of the bound vortex and `r2`
 relative to the end of the bound vortex
 """
-function bound_induced_velocity(r1, r2)
+@inline function bound_induced_velocity(r1, r2, core_size, same_surface)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
-    f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
-    f2 = (1/nr1 + 1/nr2)
+
+    if same_surface || core_size == 0
+        # no finite core
+        f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
+        f2 = (1/nr1 + 1/nr2)
+    else
+        # finite core
+        rdot = dot(r1, r2)
+        nr1s, nr2s = nr1^2, nr2^2
+        f1 = cross(r1, r2)/(nr1s*nr2s - rdot^2 + (nr1s + nr2s - 2*nr1*nr2)*core_size^2)
+        f2 = (nr1s - rdot/sqrt(nr1s + core_size^2)) + (nr2s - rdot/sqrt(nr2s + core_size^2))
+    end
 
     Vhat = (f1*f2)/(4*pi)
 
@@ -581,11 +534,11 @@ end
 
 Return induced drag from vortex `j` induced on panel `i`
 """
-function vortex_induced_drag(rj, Γj, ri, Γi, nhati)
+@inline function vortex_induced_drag(rj, Γj, ri, Γi, nhati, core_size, same_surface)
 
     rij = ri - rj
-    rij = SVector(0, rij[2], rij[3]) # 2D plane (no x-component)
-    Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*norm(rij)^2)
+    ε = ifelse(same_surface, zero(core_size), core_size)
+    Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*sqrt(rij[2]^2 + rij[3]^2 + core_size^2))
     Vn = -dot(Vthetai, nhati)
 
     Di = RHO/2.0*Γi*Vn

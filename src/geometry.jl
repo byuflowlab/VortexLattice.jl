@@ -191,14 +191,12 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
 
     nc = size(grid, 2)-1 # number of chordwise panels
     ns = size(grid, 3)-1 # number of spanwise panels
-    N = (1+mirror)*nc*ns # total number of panels
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
-    left_side = !right_side
 
     # initialize output
-    panels = Vector{Horseshoe{TF}}(undef, N)
+    panels = Matrix{Horseshoe{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -250,8 +248,12 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
             xr_te = grid[1,end,j+1] - rr[1]
             xc_te = (xl_te + xr_te)/2
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+            # set core_size size
+            core_size = 0.0
+
+            ip = i
+            jp = mirror*right_side*nc*ns + j
+            panels[ip,jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
 
@@ -259,9 +261,10 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end
@@ -293,10 +296,9 @@ function grid_to_vortex_rings(xyz; mirror=false)
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
-    left_side = !right_side
 
     # initialize output
-    panels = Vector{Ring{TF}}(undef, N)
+    panels = Matrix{Ring{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -347,11 +349,10 @@ function grid_to_vortex_rings(xyz; mirror=false)
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
 
-            # not a trailing edge panel (no shed wake)
-            trailing = false
+            core_size = 0.0
 
             ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+            panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
         end
 
         # grid corners of current panel
@@ -387,20 +388,21 @@ function grid_to_vortex_rings(xyz; mirror=false)
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
 
-        # trailing edge panel (wake is shed from this panel)
-        trailing = true
+        core_size = 0.0
 
-        ipanel = mirror*right_side*nc*ns + (j-1)*nc + nc
-        panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+        ip = i
+        jp = mirror*right_side*nc*ns + j
+        panels[ip,jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
     end
 
     # other side
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end
@@ -436,8 +438,6 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
 
     TF = promote_type(eltype(xyz), eltype(theta))
 
-    N = (1+mirror)*nc*ns # total number of panels
-
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
@@ -455,10 +455,9 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
-    left_side = !right_side
 
     # initialize output
-    panels = Vector{Horseshoe{TF}}(undef, N)
+    panels = Matrix{Horseshoe{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -494,8 +493,11 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
             xc_te = xyz_center[1,end,j] - rc[1]
             xr_te = xyz_corner[1,end,j+1] - rr[1]
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+            core_size = 0.0
+
+            ip = i
+            jp = mirror*right_side*nc*ns + j
+            panels[ip, jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
 
@@ -503,9 +505,10 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end
@@ -546,8 +549,6 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
 
     TF = eltype(xyz)
 
-    N = (1+mirror)*nc*ns # number of panels
-
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
@@ -565,10 +566,9 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
-    left_side = !right_side
 
     # initialize output
-    panels = Vector{Ring{TF}}(undef, N)
+    panels = Matrix{Ring{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -582,10 +582,11 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            trailing = i == nc
+            core_size = 0.0
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+            ip = i
+            jp = mirror*right_side*nc*ns + j
+            panels[ip, jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
         end
     end
 
@@ -593,9 +594,10 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end
@@ -637,8 +639,6 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
     interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
-
-    N = (1+mirror)*nc*ns
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -724,11 +724,10 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; ydir=2)
 
     # initialize output
-    panels = Vector{Horseshoe{TF}}(undef, N)
+    panels = Matrix{Horseshoe{TF}}(undef, nc, (1+mirror)*ns)
 
     # check which side we're working with
     right_side = sum(yle) > 0
-    left_side = !right_side
 
     # populate each panel
     for j = 1:ns
@@ -765,8 +764,11 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
             xc_te = xyz_center[1,end,j] - rc[1]
             xr_te = xyz_corner[1,end,j+1] - rr[1]
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te)
+            core_size = 0.0
+
+            ip = i
+            jp = mirror*right_side*nc*ns + j
+            panels[ip, jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
 
@@ -774,9 +776,10 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end
@@ -905,11 +908,10 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; ydir=2)
 
     # initialize output
-    panels = Vector{Ring{TF}}(undef, N)
+    panels = Matrix{Ring{TF}}(undef,  nc, (1+mirror)*ns)
 
     # check which side we're working with
     right_side = sum(yle) > 0
-    left_side = !right_side
 
     # populate each panel
     for j = 1:ns
@@ -923,10 +925,11 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            trailing = i == nc
+            core_size = 0.0
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, trailing)
+            ip = i
+            jp = mirror*right_side*nc*ns + j
+            panels[ip, jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
         end
     end
 
@@ -934,9 +937,10 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     if mirror
         for j = 1:ns
             for i = 1:nc
-                ipanel1 = right_side*nc*ns + (j-1)*nc + i
-                ipanel2 = left_side*nc*ns + (ns-j)*nc + i
-                panels[ipanel2] = reflect(panels[ipanel1])
+                ip = i
+                jp1 = right_side*nc*ns + j
+                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
     end

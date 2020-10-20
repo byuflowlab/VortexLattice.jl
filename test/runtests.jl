@@ -51,14 +51,14 @@ end
     mirror = false
     symmetric = true
 
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -75,14 +75,14 @@ end
     mirror = true
     symmetric = false
 
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s, spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -99,14 +99,14 @@ end
     mirror = false
     symmetric = true
 
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -123,14 +123,14 @@ end
     mirror = true
     symmetric = false
 
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -178,14 +178,14 @@ end
     chord = @. chord/cos(theta)
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -199,14 +199,14 @@ end
     @test isapprox(Cn, 0.0, atol=ztol)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -254,14 +254,14 @@ end
     chord = @. chord/cos(theta)
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -275,14 +275,14 @@ end
     @test isapprox(Cn, 0.0, atol=ztol)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -338,21 +338,21 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(panels)
+    for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        panels[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -366,21 +366,21 @@ end
     @test isapprox(Cn, 0.0, atol=ztol)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(panels)
+    for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        panels[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.trailing)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -436,21 +436,21 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(panels)
+    for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        panels[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -464,21 +464,21 @@ end
     @test isapprox(Cn, 0.0, atol=ztol)
 
     # vortex rings, untwisted geometry
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(panels)
+    for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        panels[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.trailing)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -572,7 +572,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
     htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -583,13 +583,13 @@ end
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
-    panels = vcat(wing, htail, vtail)
+    surfaces = [wing, htail, vtail]
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(surfaces, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(surfaces, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -610,7 +610,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.trailing)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
     htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -621,13 +621,13 @@ end
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
-    panels = vcat(wing, htail, vtail)
+    surfaces = [wing, htail, vtail]
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(surfaces, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(surfaces, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -676,14 +676,14 @@ end
     symmetric = true
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -697,14 +697,14 @@ end
     @test isapprox(Cn, 0.0, atol=1e-16)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -753,14 +753,14 @@ end
     symmetric = true
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -774,14 +774,14 @@ end
     @test isapprox(Cn, 0.0, atol=1e-16)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -832,14 +832,14 @@ end
     mirror = true
     symmetric = false
 
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -856,14 +856,14 @@ end
     mirror = true
     symmetric = false
 
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
-    b = normal_velocity(panels, ref, fs)
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -908,12 +908,12 @@ end
     fs = Freestream(alpha, beta, Omega, vother)
 
     # horseshoe vortices
-    panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
+    AIC = influence_coefficients(wing, symmetric)
 
-    dCF, dCM = stability_derivatives(panels, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
 
     CDa, CYa, CLa = dCF.alpha
     CDb, CYb, CLb = dCF.beta
@@ -947,12 +947,12 @@ end
     @test isapprox(Cnr, -0.000898, rtol=0.01)
 
     # vortex rings
-    panels = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(panels, symmetric)
+    AIC = influence_coefficients(wing, symmetric)
 
-    dCF, dCM = stability_derivatives(panels, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
 
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha

@@ -1,40 +1,139 @@
 # --- left hand side - AIC matrix --- #
 
 """
-    influence_coefficients(panels, symmetric; xhat=[1,0,0])
+    influence_coefficients(surface[s], symmetric; kwargs...)
 
-Construct the aerodynamic influence coefficient matrix.
+Construct the aerodynamic influence coefficient matrix for a single surface or
+a vector of surfaces.
+
+# Keyword Arguments
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1,0,0]
+
+# Additional Keyword Arguments for Multiple Surfaces
+ - `surface_id`: ID for each surface, defaults to `1:length(surfaces)`
 """
-function influence_coefficients(panels, symmetric; xhat=SVector(1, 0, 0))
+influence_coefficients
 
-    N = length(panels)
-    TF = eltype(eltype(panels))
+# one surface
+function influence_coefficients(surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
+
+    N = length(surface)
+    TF = eltype(eltype(surface))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, panels, symmetric; xhat=xhat)
+    return influence_coefficients!(AIC, surface, symmetric; xhat=xhat)
+end
+
+# multiple surfaces
+function influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix}, symmetric;
+    xhat=SVector(1, 0, 0), surface_id=1:length(surfaces))
+
+    N = sum(length.(surfaces))
+    TF = eltype(eltype(eltype(surfaces)))
+    AIC = Matrix{TF}(undef, N, N)
+
+    return influence_coefficients!(AIC, surfaces, symmetric; xhat=xhat, surface_id=surface_id)
 end
 
 """
-    influence_coefficients!(AIC, panels, symmetric; xhat=[1,0,0])
+    influence_coefficients!(AIC, surface[s], symmetric; kwargs...)
 
 Pre-allocated version of `influence_coefficients`
 """
-function influence_coefficients!(AIC, panels, symmetric; xhat=SVector(1, 0, 0))
+influence_coefficients!
 
-    N = length(panels)
+# one surface
+function influence_coefficients!(AIC, surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
 
-    # loop over control points
-    for i = 1:N
+    receiving = surface
+    sending = surface
+    same_surface = true
+
+    influence_coefficients!(AIC, surface, surface, same_surface, symmetric, xhat)
+
+    return AIC
+end
+
+# multiple surfaces
+function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix},
+    symmetric; xhat=SVector(1, 0, 0), surface_id=1:length(surfaces))
+
+    nsurf = length(surfaces)
+
+    # indices for keeping track of where we are in the AIC matrix
+    iAIC = 0
+    jAIC = 0
+
+    # loop through receving surfaces
+    for i = 1:nsurf
+        receiving = surfaces[i]
+
+        # extract number of panels on this receiving surface
+        nr = length(receiving) # number of panels on this receiving surface
+
+        # loop through sending surfaces
+        jAIC = 0
+        for j = 1:nsurf
+            sending = surfaces[j]
+
+            # extract number of panels on this sending surface
+            ns = length(sending)
+
+            # extract portion of AIC matrix for the two surfaces
+            vAIC = view(AIC, iAIC+1:iAIC+nr, jAIC+1:jAIC+ns)
+
+            # check if it's the same surface
+            same_surface = surface_id[i] == surface_id[j]
+
+            # populate entries in the AIC matrix
+            influence_coefficients!(vAIC, receiving, sending, same_surface, symmetric, xhat)
+
+            # increment position in AIC matrix
+            jAIC += ns
+        end
+        # increment position in AIC matrix
+        iAIC += nr
+    end
+
+    return AIC
+end
+
+# one surface on another surface
+function influence_coefficients!(AIC, receiving, sending, same_surface, symmetric, xhat)
+
+    Nr = length(receiving)
+    Ns = length(sending)
+
+    cr = CartesianIndices(receiving)
+    cs = CartesianIndices(sending)
+    nchordwise = size(sending,1)
+
+    # loop over receiving panels
+    for i = 1:Nr
+        I = cr[i]
 
         # control point location
-        rcp = controlpoint(panels[i])
+        rcp = controlpoint(receiving[I])
 
         # normal vector body axis
-        nhat = normal(panels[i])
+        nhat = normal(receiving[I])
 
-        # loop over bound vortices
-        for j = 1:N
-            Vhat = induced_velocity(rcp, panels[j], symmetric, xhat)
+        # loop over sending panels
+        for j = 1:Ns
+            J = cs[j]
+
+            if typeof(sending[J]) <: Horseshoe
+                include_bound = true
+                Vhat = induced_velocity(rcp, sending[J], xhat, symmetric, same_surface,
+                    include_bound)
+            elseif typeof(sending[j]) <: Ring
+                trailing = J[1] == nchordwise
+                include_top = true
+                include_bottom = true
+                Vhat = induced_velocity(rcp, sending[J], xhat, symmetric, same_surface,
+                    trailing, include_top, include_bottom)
+            end
+
             AIC[i, j] = dot(Vhat, nhat)
         end
     end
@@ -45,37 +144,58 @@ end
 # --- right hand side - normal velocities at control points --- #
 
 """
-    normal_velocity(panels, ref, fs)
+    normal_velocity(surface[s], ref, fs)
 
-Compute the normal component of the external velocity along the geometry.
+Compute the normal component of the external velocity for a single surface or
+for a vector of surfaces.
+
 This forms the right hand side of the circulation linear system solve.
 """
-function normal_velocity(panels, ref, fs)
+normal_velocity
 
-    N = length(panels)
-    TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs))
+# one surface
+function normal_velocity(surface::AbstractMatrix, ref, fs)
+
+    N = length(surface)
+    TF = promote_type(eltype(eltype(surface)), eltype(ref), eltype(fs))
     b = Vector{TF}(undef, N)
 
-    return normal_velocity!(b, panels, ref, fs)
+    return normal_velocity!(b, surface, ref, fs)
+end
+
+# multiple surfaces
+function normal_velocity(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+
+    N = sum(length.(surfaces))
+    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs))
+    b = Vector{TF}(undef, N)
+
+    return normal_velocity!(b, surfaces, ref, fs)
 end
 
 """
-    normal_velocity!(b, panels, ref, fs)
+    normal_velocity!(b, surface[s], ref, fs)
 
 Non-allocating version of `normal_velocity`
 """
-function normal_velocity!(b, panels, ref, fs)
+normal_velocity!
 
-    N = length(panels)
+# one surface
+function normal_velocity!(b, surface::AbstractMatrix, ref, fs)
+
+    N = length(surface)
+    c = CartesianIndices(surface)
 
     # iterate through panels
     for i = 1:N
 
+        I = c[i]
+
         # control point
-        rcp = controlpoint(panels[i])
+        rcp = controlpoint(surface[I])
 
         # normal vector
-        nhat = normal(panels[i])
+        nhat = normal(surface[I])
 
         # external velocity
         Vext = external_velocity(fs, rcp, ref.r)
@@ -88,17 +208,48 @@ function normal_velocity!(b, panels, ref, fs)
     return b
 end
 
-"""
-    normal_velocity_derivatives(panels, ref, fs)
+# multiple surfaces
+function normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
 
-Compute the normal component of the external velocity along the geometry and its
-derivatives with respect to (alpha, beta, p, q, r). This forms the right hand
-side of the circulation linear system solve (and its derivatives).
-"""
-function normal_velocity_derivatives(panels, ref, fs)
+    nsurf = length(surfaces)
 
-    N = length(panels)
-    TF = promote_type(eltype(eltype(panels)), eltype(ref), eltype(fs))
+    # index for keeping track of where we are in the b vector
+    ib = 0
+
+    # loop through receiving surfaces
+    for i = 1:nsurf
+
+        # number of panels on this surface
+        n = length(surfaces[i])
+
+        # create view into RHS vector
+        vb = view(b, ib+1:ib+n)
+
+        # fill in RHS vector
+        normal_velocity!(vb, surfaces[i], ref, fs)
+
+        # increment position in AIC matrix
+        ib += n
+    end
+
+    return b
+end
+
+"""
+    normal_velocity_derivatives(surface[s], ref, fs)
+
+Compute the normal component of the external velocity for a single surface or
+for a vector of surfaces and its derivatives with respect to (alpha, beta, p, q, r).
+
+This forms the right hand side of the circulation linear system solve (and its derivatives).
+"""
+normal_velocity_derivatives
+
+# one surface
+function normal_velocity_derivatives(surface::AbstractMatrix, ref, fs)
+
+    N = length(surface)
+    TF = promote_type(eltype(eltype(surface)), eltype(ref), eltype(fs))
 
     # RHS vector
     b = Vector{TF}(undef, N)
@@ -106,36 +257,65 @@ function normal_velocity_derivatives(panels, ref, fs)
     # derivatives of RHS wrt freestream variables
     b_a = Vector{TF}(undef, N)
     b_b = Vector{TF}(undef, N)
-    b_pb = Vector{TF}(undef, N)
-    b_qb = Vector{TF}(undef, N)
-    b_rb = Vector{TF}(undef, N)
+    b_p = Vector{TF}(undef, N)
+    b_q = Vector{TF}(undef, N)
+    b_r = Vector{TF}(undef, N)
 
     # pack up derivatives
-    db = (b_a, b_b, b_pb, b_qb, b_rb)
+    db = (b_a, b_b, b_p, b_q, b_r)
 
-    return normal_velocity_derivatives!(b, db, panels, ref, fs)
+    return normal_velocity_derivatives!(b, db, surface, ref, fs)
+end
+
+# multiple surfaces
+function normal_velocity_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+
+    N = sum(length.(surfaces))
+    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs))
+
+    # RHS vector
+    b = Vector{TF}(undef, N)
+
+    # derivatives of RHS wrt freestream variables
+    b_a = Vector{TF}(undef, N)
+    b_b = Vector{TF}(undef, N)
+    b_p = Vector{TF}(undef, N)
+    b_q = Vector{TF}(undef, N)
+    b_r = Vector{TF}(undef, N)
+
+    # pack up derivatives
+    db = (b_a, b_b, b_p, b_q, b_r)
+
+    return normal_velocity_derivatives!(b, db, surfaces, ref, fs)
 end
 
 """
-    normal_velocity_derivatives!(b, db, panels, ref, fs)
+    normal_velocity_derivatives!(b, db, surface[s], ref, fs)
 
 Non-allocating version of `normal_velocity_derivatives`
 """
-function normal_velocity_derivatives!(b, db, panels, ref, fs)
+normal_velocity_derivatives
 
-    N = length(panels)
+# single surface
+function normal_velocity_derivatives!(b, db, surface, ref, fs)
+
+    N = length(surface)
+
+    c = CartesianIndices(surface)
 
     # unpack derivatives
-    (b_a, b_b, b_pb, b_qb, b_rb) = db
+    (b_a, b_b, b_p, b_q, b_r) = db
 
-    # iterate through panels
+    # iterate through surface
     for i = 1:N
 
+        I = c[i]
+
         # control point
-        rcp = controlpoint(panels[i])
+        rcp = controlpoint(surface[I])
 
         # normal vector
-        nhat = normal(panels[i])
+        nhat = normal(surface[I])
 
         # external velocity and its derivatives
         Vext, dVext = external_velocity_derivatives(fs, rcp, ref.r)
@@ -149,15 +329,46 @@ function normal_velocity_derivatives!(b, db, panels, ref, fs)
         # associated derivatives
         b_a[i] = -dot(Vext_a, nhat)
         b_b[i] = -dot(Vext_b, nhat)
-        b_pb[i] = -dot(Vext_pb, nhat)
-        b_qb[i] = -dot(Vext_qb, nhat)
-        b_rb[i] = -dot(Vext_rb, nhat)
+        b_p[i] = -dot(Vext_pb, nhat)
+        b_q[i] = -dot(Vext_qb, nhat)
+        b_r[i] = -dot(Vext_rb, nhat)
 
     end
 
-    db = (b_a, b_b, b_pb, b_qb, b_rb)
+    db = (b_a, b_b, b_p, b_q, b_r)
 
     return b, db
+end
+
+# multiple surfaces
+function normal_velocity_derivatives!(b, db, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+
+    nsurf = length(surfaces)
+
+    # unpack derivatives
+    (b_a, b_b, b_p, b_q, b_r) = db
+
+    # index for keeping track of where we are in the b vector
+    ib = 0
+
+    # loop through receving panels
+    for i = 1:nsurf
+
+        # number of panels on this surface
+        n = length(surfaces[i])
+
+        # create view into RHS vector and its derivatives
+        vb = view(b, ib+1:ib+n)
+        vdb = view.(b, Ref(ib+1:ib+n))
+
+        # fill in RHS vector and its derivatives
+        normal_velocity_derivatives!(vb, vdb, surfaces[i], ref, fs)
+
+        # increment position in AIC matrix
+        ib += n
+    end
+
+    return b
 end
 
 # --- circulation solve --- #
@@ -178,7 +389,7 @@ Solve for the circulation distribution and its derivatives with respect to
 function circulation_derivatives(AIC, b, db)
 
     # unpack derivatives
-    (b_a, b_b, b_pb, b_qb, b_rb) = db
+    (b_a, b_b, b_p, b_q, b_r) = db
 
     # factorize AIC matrix (since we'll be reusing it)
     fAIC = factorize(AIC)
@@ -188,9 +399,9 @@ function circulation_derivatives(AIC, b, db)
 
     Γ_a = fAIC\b_a
     Γ_b = fAIC\b_b
-    Γ_pb = fAIC\b_pb
-    Γ_qb = fAIC\b_qb
-    Γ_rb = fAIC\b_rb
+    Γ_pb = fAIC\b_p
+    Γ_qb = fAIC\b_q
+    Γ_rb = fAIC\b_r
 
     # pack up derivatives
     dΓ = (Γ_a, Γ_b, Γ_pb, Γ_qb, Γ_rb)
