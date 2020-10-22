@@ -7,12 +7,29 @@ struct TrefftzPanel{TF}
     rl::SVector{3,TF}
     rc::SVector{3,TF}
     rr::SVector{3,TF}
-    core_size::TF
     Γ::TF
 end
 
 @inline Base.eltype(::Type{TrefftzPanel{TF}}) where TF = TF
 @inline Base.eltype(::TrefftzPanel{TF}) where TF = TF
+
+"""
+    normal(panel::TrefftzPanel)
+
+Return the normal vector of `panel`, including magnitude
+"""
+@inline function normal(panel::TrefftzPanel)
+
+    rl = panel.rl
+    rr = panel.rr
+
+    dy = rr[2] - rl[2]
+    dz = rr[3] - rl[3]
+
+    nhat = SVector(0, -dz, dy)
+
+    return nhat
+end
 
 """
     trefftz_panels(surface[s], freestream, Γ)
@@ -21,8 +38,8 @@ Constructs a set of panels for Trefftz plane calculations
 """
 trefftz_panels
 
-# single surface
-function trefftz_panels(surface::AbstractMatrix, fs, Γ)
+# single surface, horseshow
+function trefftz_panels(surface::AbstractMatrix{<:Horseshoe}, fs, Γ)
 
     TF = promote_type(eltype(eltype(surface)), eltype(fs), eltype(Γ))
 
@@ -36,21 +53,14 @@ function trefftz_panels(surface::AbstractMatrix, fs, Γ)
 
     for j = 1:n2
         # use trailing edge panel for geometry
-        rl, rr = trefftz_endpoints(surface[end,j])
-        rc = trefftz_center(surface[end,j])
+        rl = bottom_left(surface[end,j])
+        rc = bottom_center(surface[end,j])
+        rr = bottom_right(surface[end,j])
 
-        # note that we use trailing edge core size
-        core_size = surface[end,j].core_size
-
-        if eltype(surface) <: Horseshoe
-            # sum circulation across chordwise strip to get panel circulation
-            Γt = zero(eltype(Γ))
-            for i = 1:n1
-                Γt += rΓ[i,j]
-            end
-        elseif eltype(surface) <: Ring
-            # panel circulation is trailing edge panel circulation
-            Γt = rΓ[end,j]
+        # sum circulation across chordwise strip to get panel circulation
+        Γt = zero(eltype(Γ))
+        for i = 1:n1
+            Γt += rΓ[i,j]
         end
 
         # rotate into Trefftz plane frame of reference
@@ -63,7 +73,45 @@ function trefftz_panels(surface::AbstractMatrix, fs, Γ)
         rc = SVector(0, rc[2], rc[3])
         rr = SVector(0, rr[2], rr[3])
 
-        panels[j] = TrefftzPanel(rl, rc, rr, core_size, Γt)
+        panels[j] = TrefftzPanel(rl, rc, rr, Γt)
+    end
+
+    return panels
+end
+
+# single surface, vortex ring
+function trefftz_panels(surface::AbstractMatrix{<:Ring}, fs, Γ)
+
+    TF = promote_type(eltype(eltype(surface)), eltype(fs), eltype(Γ))
+
+    n1, n2 = size(surface)
+
+    rΓ = reshape(Γ, n1, n2)
+
+    R = body_to_wind(fs)
+
+    panels = Vector{TrefftzPanel{TF}}(undef, n2)
+
+    for j = 1:n2
+        # use trailing edge panel for geometry
+        rl = bottom_left(surface[end,j])
+        rc = bottom_center(surface[end,j])
+        rr = bottom_right(surface[end,j])
+
+        # panel circulation is trailing edge panel circulation
+        Γt = rΓ[end,j]
+
+        # rotate into Trefftz plane frame of reference
+        rl = R*rl
+        rc = R*rc
+        rr = R*rr
+
+        # zero out x-components
+        rl = SVector(0, rl[2], rl[3])
+        rc = SVector(0, rc[2], rc[3])
+        rr = SVector(0, rr[2], rr[3])
+
+        panels[j] = TrefftzPanel(rl, rc, rr, Γt)
     end
 
     return panels
@@ -101,33 +149,35 @@ function trefftz_panels(surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
 end
 
 """
-    trefftz_normal(panel)
+    panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel, same_id, symmetric)
 
-Compute the normal vector for `panel` when projected onto the Trefftz plane
-(including magnitude)
+Induced drag on `receiving` panel induced by `sending` panel.
 """
-trefftz_normal
+@inline function panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel,
+    symmetric)
 
-@inline trefftz_normal(panel::TrefftzPanel) = trefftz_normal(panel.rl, panel.rr)
+    rl = sending.rl
+    rr = sending.rr
+    Γs = sending.Γ
 
-@inline function trefftz_normal(rl, rr)
+    rc = receiving.rc
+    nc = normal(receiving)
+    Γr = receiving.Γ
 
-    dy = rr[2] - rl[2]
-    dz = rr[3] - rl[3]
+    Di = vortex_induced_drag(rl, -Γs, rc, Γr, nc)
+    Di += vortex_induced_drag(rr, Γs, rc, Γr, nc)
+    if symmetric && not_on_symmetry_plane(rl, rr)
+        Di += vortex_induced_drag(flipy(rr), -Γs, rc, Γr, nc)
+        Di += vortex_induced_drag(flipy(rl), Γs, rc, Γr, nc)
+    end
 
-    nhat = SVector(0, -dz, dy)
-
-    return nhat
+    return Di
 end
 
-
 """
-    far_field_drag(surface[s], ref, fs, symmetric, Γ; kwargs...)
+    far_field_drag(surface[s], ref, fs, symmetric, Γ)
 
 Computes induced drag using the Trefftz plane (far field method).
-
-# Keyword Arguments for Multiple Surfaces
- - `surface_id`: ID for each surface, defaults to `1:length(surfaces)`
 """
 far_field_drag
 
@@ -136,30 +186,27 @@ function far_field_drag(surface::AbstractMatrix, ref, fs, symmetric, Γ)
 
     panels = trefftz_panels(surface, fs, Γ)
 
-    same_surface = true
-
-    return far_field_drag(panels, panels, ref, fs, symmetric, same_surface)
+    return far_field_drag(panels, panels, ref, fs, symmetric)
 end
 
 # multiple surfaces
 function far_field_drag(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
-    symmetric, Γ; surface_id=1:length(surfaces))
+    symmetric, Γ)
 
     nsurf = length(surfaces)
 
     panels = trefftz_panels(surfaces, fs, Γ)
 
-    CD = 0.0
+    CD = zero(eltype(eltype(eltype(surfaces))))
     for i = 1:nsurf, j = 1:nsurf
-        same_surface = surface_id[i] == surface_id[j]
-        CD += far_field_drag(panels[i], panels[j], ref, fs, symmetric, same_surface)
+        CD += far_field_drag(panels[i], panels[j], ref, fs, symmetric)
     end
 
     return CD
 end
 
 # one surface on another surface
-function far_field_drag(receiving, sending, ref, fs, symmetric, same_surface)
+function far_field_drag(receiving, sending, ref, fs, symmetric)
 
     TF = promote_type(eltype(eltype(receiving)), eltype(eltype(sending)), eltype(ref), eltype(fs))
 
@@ -170,7 +217,7 @@ function far_field_drag(receiving, sending, ref, fs, symmetric, same_surface)
     Di = zero(TF)
     for j = 1:Ns
         for i = 1:Nr
-            Di += panel_induced_drag(receiving[i], sending[j], symmetric, same_surface)
+            Di += panel_induced_drag(receiving[i], sending[j], symmetric)
         end
     end
 
@@ -185,44 +232,17 @@ function far_field_drag(receiving, sending, ref, fs, symmetric, same_surface)
     return CDi
 end
 
-"""
-    panel_induced_drag(panel_j, Γj, panel_i, Γi, symmetric, same_surface)
-
-Induced drag from `sending` Trefftz-plane panel induced on `receiving` Trefftz-plane panel
-"""
-@inline function panel_induced_drag(receiving, sending, symmetric, same_surface)
-
-    rl = sending.rl
-    rr = sending.rr
-    Γs = sending.Γ
-
-    rc = receiving.rc
-    nc = trefftz_normal(receiving)
-    Γr = receiving.Γ
-
-    core_size = sending.core_size
-
-    Di = vortex_induced_drag(rl, -Γs, rc, Γr, nc, core_size, same_surface)
-    Di += vortex_induced_drag(rr, Γs, rc, Γr, nc, core_size, same_surface)
-    if symmetric && not_on_symmetry_plane(rl, rr)
-        Di += vortex_induced_drag(flipy(rr), -Γs, rc, Γr, nc, core_size, same_surface)
-        Di += vortex_induced_drag(flipy(rl), Γs, rc, Γr, nc, core_size, same_surface)
-    end
-
-    return Di
-end
+# --- internal functions --- #
 
 """
     vortex_induced_drag(rj, Γj, ri, Γi, nhati)
 
 Return induced drag from vortex `j` induced on panel `i`
 """
-@inline function vortex_induced_drag(rj, Γj, ri, Γi, nhati, core_size, same_surface)
-
-    ε = ifelse(same_surface, zero(core_size), core_size)
+@inline function vortex_induced_drag(rj, Γj, ri, Γi, nhati)
 
     rij = ri - rj
-    Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*(rij[2]^2 + rij[3]^2 + ε^2))
+    Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*(rij[2]^2 + rij[3]^2))
     Vn = -dot(Vthetai, nhati)
 
     Di = RHO/2.0*Γi*Vn

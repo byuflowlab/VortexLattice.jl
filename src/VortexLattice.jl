@@ -1,4 +1,4 @@
-module VLMFlow
+module VortexLattice
 
 using LinearAlgebra
 using StaticArrays
@@ -12,7 +12,7 @@ const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
 export AbstractPanel, Horseshoe, Ring
-export translate, translate!, reflect, rotate
+export translate, translate!, reflect
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine

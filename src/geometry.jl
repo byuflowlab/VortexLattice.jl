@@ -164,7 +164,7 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 end
 
 """
-    grid_to_horseshoe_vortices(xyz; mirror=false)
+    grid_to_horseshoe_vortices(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs))
 
 Construct a set of horseshoe vortex panels given a potentially curved lifting surface
 defined by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
@@ -181,11 +181,11 @@ however, are set using the original geometry.
 The optional argument `mirror` may be used to mirror the geometry across the
 y-axis.
 
-The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`  (`reshape(panels, ni-1, 2*(nj-1))` if the
-geometry is mirrored).
+The argument `fcore` defines a function for setting the finite core size based
+on the chord length in the x-direction and/or the panel width in the y/z directions.
+The default function is the same as that used by AVL.
 """
-function grid_to_horseshoe_vortices(xyz; mirror=false)
+function grid_to_horseshoe_vortices(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
 
     TF = eltype(xyz)
 
@@ -210,6 +210,11 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
 
         rcy = (yl + yr)/2
         rcz = (zl + zr)/2
+
+        # also get chord length for setting finite core size
+        cl = grid[1,end,j] - grid[1,1,j]
+        cr = grid[1,end,j+1] - grid[1,1,j+1]
+        c = (cl + cr)/2
 
         for i = 1:nc
 
@@ -248,11 +253,12 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
             xr_te = grid[1,end,j+1] - rr[1]
             xc_te = (xl_te + xr_te)/2
 
-            # set core_size size
-            core_size = 0.0
+            # set finite core size
+            Δs = sqrt((rr[2]-rl[2])^2 + (rr[3]-rl[3])^2)
+            core_size = fcore(c, Δs)
 
             ip = i
-            jp = mirror*right_side*nc*ns + j
+            jp = mirror*right_side*ns + j
             panels[ip,jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
@@ -262,8 +268,8 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
@@ -273,7 +279,7 @@ function grid_to_horseshoe_vortices(xyz; mirror=false)
 end
 
 """
-    grid_to_vortex_rings(xyz; mirror=false)
+    grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
 
 Construct a set of vortex ring panels given a potentially curved lifting surface
 defined by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
@@ -282,11 +288,14 @@ direction (ordered from left to right).  The leading edge of each ring vortex
 will be placed at the 1/4 chord and the control point will be placed at the 3/4
 chord of each panel.
 
-The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, ni-1, nj-1)`.  (`reshape(panels, ni-1, 2*(nj-1))` if
-the geometry is mirrored).
+The optional argument `mirror` may be used to mirror the geometry across the
+y-axis.
+
+The argument `fcore` defines a function for setting the finite core size based
+on the chord length in the x-direction and/or the panel width in the y/z directions.
+The default function is the same as that used by AVL.
 """
-function grid_to_vortex_rings(xyz; mirror=false)
+function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
 
     TF = eltype(xyz)
 
@@ -303,10 +312,16 @@ function grid_to_vortex_rings(xyz; mirror=false)
     # populate each panel
     for j = 1:ns
 
+        # get leading edge panel corners
         r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
         r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
         r3n = SVector(grid[1,2,j], grid[2,2,j], grid[3,2,j]) # bottom left
         r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
+
+        # also get chord length for setting finite core size
+        cl = grid[1,end,j] - grid[1,1,j]
+        cr = grid[1,end,j+1] - grid[1,1,j+1]
+        c = (cl + cr)/2
 
         for i = 1:nc-1
 
@@ -349,7 +364,9 @@ function grid_to_vortex_rings(xyz; mirror=false)
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
 
-            core_size = 0.0
+            # set finite core size
+            Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+            core_size = fcore(c, Δs)
 
             ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
             panels[ipanel] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
@@ -388,10 +405,12 @@ function grid_to_vortex_rings(xyz; mirror=false)
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
 
-        core_size = 0.0
+        # set finite core size
+        Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+        core_size = fcore(c, Δs)
 
         ip = i
-        jp = mirror*right_side*nc*ns + j
+        jp = mirror*right_side*ns + j
         panels[ip,jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
     end
 
@@ -400,8 +419,8 @@ function grid_to_vortex_rings(xyz; mirror=false)
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
@@ -411,8 +430,10 @@ function grid_to_vortex_rings(xyz; mirror=false)
 end
 
 """
-    grid_to_horseshoe_vortices(xyz, ns, nc; spacing_s=Cosine(), spacing_c=Uniform(),
-        interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt), interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    grid_to_horseshoe_vortices(xyz, ns, nc; mirror=false,
+        fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
+        interp_s=(x)->(x,y,xpt)->LinearInterpolation(x, y)(xpt),
+        interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a potentially curved lifting surface defined by a grid with dimensions
 (3, i, j) where `i` corresponds to the chordwise direction (ordered from leading
@@ -428,15 +449,26 @@ to the same y and z-coordinates as found at the leading edge of the chordwise
 strip.  The normal vectors used to satisfy the no-flow boundary conditions,
 however, are set using the original geometry.
 
-The resulting vector of panels can be reshaped to correspond to the original
-grid with `reshape(panels, nc, ns)` (`reshape(panels, nc, 2*ns)` if
-the geometry is mirrored).
+# Arguments
+ - `xyz`: grid of dimensions (3, i, j) where where `i` corresponds to the
+    chordwise direction and `j` corresponds to the spanwise direction.
+ - `ns`: number of spanwise panels
+ - `nc`: number of chordwise panels
+ - `mirror`:  mirror the geometry across the y-axis? defaults to `false`.
+ - `fcore`: function for setting the finite core size based on the chord length
+        (in the x-direction) and/or the panel width (in the y/z directions).
+        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
+ - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
+ - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
+ - `interp_s`: spanwise interpolation function, defaults to linear interpolation
+ - `interp_c`: chordwise interpolation function, defaults to linear interpolation
 """
-function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=Cosine(),
-    spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x,y)(xpt),
+function grid_to_horseshoe_vortices(xyz, ns, nc; mirror=false,
+    fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
+    interp_s=(x,y,xpt)->LinearInterpolation(x,y)(xpt),
     interp_c=(x,y,xpt)->LinearInterpolation(x,y)(xpt))
 
-    TF = promote_type(eltype(xyz), eltype(theta))
+    TF = eltype(xyz)
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
@@ -471,6 +503,9 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
         rcy = xyz_center[2,1,j]
         rcz = xyz_center[3,1,j]
 
+        # also get chord length for setting the finite core size
+        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+
         for i = 1:nc
             # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
             rl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
@@ -493,10 +528,12 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
             xc_te = xyz_center[1,end,j] - rc[1]
             xr_te = xyz_corner[1,end,j+1] - rr[1]
 
-            core_size = 0.0
+            # set finite core size
+            Δs = sqrt((rr[2]-rl[2])^2 + (rr[3]-rl[3])^2)
+            core_size = fcore(c, Δs)
 
             ip = i
-            jp = mirror*right_side*nc*ns + j
+            jp = mirror*right_side*ns + j
             panels[ip, jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
@@ -506,8 +543,8 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
@@ -517,7 +554,8 @@ function grid_to_horseshoe_vortices(xyz, theta, ns, nc; mirror=false, spacing_s=
 end
 
 """
-    grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
+    grid_to_vortex_rings(xyz, ns, nc; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
+        spacing_s=Cosine(), spacing_c=Uniform(),
         interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
         interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
@@ -535,16 +573,17 @@ discretization scheme `spacing_c`.  The bound vortex will be placed at the
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
  - `mirror`:  mirror the geometry across the y-axis? defaults to `false`.
+ - `fcore`: function for setting the finite core size based on the chord length
+        (in the x-direction) and/or the panel width (in the y/z directions).
+        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
  - `interp_c`: chordwise interpolation function, defaults to linear interpolation
-
-The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, nc, ns)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
-function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
-    spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
+function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
+    fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
+    interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
     interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = eltype(xyz)
@@ -553,8 +592,8 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    # add trailing edge to grid
-    vcat(eta_qtr, 1.0)
+    # add leading and trailing edge to grid
+    eta_qtr = vcat(0.0, eta_qtr, 1.0)
 
     # interpolate grid first along `i` then along `j`
     xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c, ydir=1)
@@ -572,20 +611,28 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
 
     # populate each panel
     for j = 1:ns
+
+        # get chord for setting finite core size
+        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+
         for i = 1:nc
-            rtl = SVector(xyz_corner[1,i,j], xyz_corner[2,i,j], xyz_corner[3,i,j])
-            rtc = SVector(xyz_center[1,i,j], xyz_center[2,i,j], xyz_center[3,i,j])
-            rtr = SVector(xyz_corner[1,i,j+1], xyz_corner[2,i,j+1], xyz_corner[3,i,j+1])
-            rbl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
-            rbc = SVector(xyz_center[1,i+1,j], xyz_center[2,i+1,j], xyz_center[3,i+1,j])
-            rbr = SVector(xyz_corner[1,i+1,j+1], xyz_corner[2,i+1,j+1], xyz_corner[3,i+1,j+1])
+            # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
+            rtl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
+            rtc = SVector(xyz_center[1,i+1,j], xyz_center[2,i+1,j], xyz_center[3,i+1,j])
+            rtr = SVector(xyz_corner[1,i+1,j+1], xyz_corner[2,i+1,j+1], xyz_corner[3,i+1,j+1])
+            rbl = SVector(xyz_corner[1,i+2,j], xyz_corner[2,i+2,j], xyz_corner[3,i+2,j])
+            rbc = SVector(xyz_center[1,i+2,j], xyz_center[2,i+2,j], xyz_center[3,i+2,j])
+            rbr = SVector(xyz_corner[1,i+2,j+1], xyz_corner[2,i+2,j+1], xyz_corner[3,i+2,j+1])
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            core_size = 0.0
+
+            # set finite core size
+            Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+            core_size = fcore(c, Δs)
 
             ip = i
-            jp = mirror*right_side*nc*ns + j
+            jp = mirror*right_side*ns + j
             panels[ip, jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
         end
     end
@@ -595,8 +642,8 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false, spacing_s=Cosine(),
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
@@ -607,8 +654,8 @@ end
 
 """
     wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
-        fc=fill(x->0, length(xle)), mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
-        interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+        fc=fill(x->0, length(xle)), mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
+        spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise horseshoe vortex panels
 according to the spanwise discretization scheme `spacing_s` and chordwise
@@ -625,18 +672,18 @@ discretization scheme `spacing_c`.
  - `nc`: number of chordwise panels
  - `fc`: (optional) camber line function y=f(x) of each airfoil section
  - `mirror`:  mirror the geometry across the y-axis?, defaults to `false`
+ - `fcore`: function for setting the finite core size based on the chord length
+        (in the x-direction) and/or the panel width (in the y/z directions).
+        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
-
-The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, ni-1, nj-1)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
 wing_to_horseshoe_vortices
 
 function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
-    fc=fill(x->0, length(xle)), mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
-    interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    fc=fill(x->0, length(xle)), mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
+    spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -742,6 +789,9 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         rcy = xyz_center[2,1,j]
         rcz = xyz_center[3,1,j]
 
+        # also get chord for setting finite core size
+        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+
         for i = 1:nc
             # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
             rl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
@@ -764,10 +814,12 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
             xc_te = xyz_center[1,end,j] - rc[1]
             xr_te = xyz_corner[1,end,j+1] - rr[1]
 
-            core_size = 0.0
+            # set finite core size
+            Δs = sqrt((rr[2]-rl[2])^2 + (rr[3]-rl[3])^2)
+            core_size = fcore(c, Δs)
 
             ip = i
-            jp = mirror*right_side*nc*ns + j
+            jp = mirror*right_side*ns + j
             panels[ip, jp] = Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
         end
     end
@@ -777,8 +829,8 @@ function wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end
@@ -789,7 +841,8 @@ end
 
 """
     wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
-        fc=fill(x->0, length(xle)), mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
+        fc=fill(x->0, length(xle)), mirror=false,
+        fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
         interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise vortex ring panels
@@ -807,18 +860,18 @@ discretization scheme `spacing_c`.
  - `nc`: number of chordwise panels
  - `fc`: (optional) camber line function y=f(x) of each airfoil section
  - `mirror`:  mirror the geometry across the y-axis?, defaults to `false`
+ - `fcore`: function for setting the finite core size based on the chord length
+        (in the x-direction) and/or the panel width (in the y/z directions).
+        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
-
-The resulting vector of panels can be reshaped into a grid format with
-`reshape(panels, ni-1, nj-1)` (`reshape(panels, nc, 2*ns)` if the geometry is mirrored).
 """
 wing_to_vortex_rings
 
 function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
-    fc=fill(x->0, length(xle)), mirror=false, spacing_s=Cosine(), spacing_c=Uniform(),
-    interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    fc=fill(x->0, length(xle)), mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
+    spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -828,15 +881,15 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    # add trailing edge to grid
-    eta_qtr = vcat(eta_qtr, 1.0)
+    # add leading and trailing edge to grid
+    eta_qtr = vcat(0.0, eta_qtr, 1.0)
 
     # check input dimensions
     n = length(xle)
     @assert n == length(yle) == length(zle) == length(chord) == length(theta) == length(phi)
 
     # set bound vortex and control point chordwise locations
-    xyz_bound = Array{TF, 3}(undef, 3, nc+1, n)
+    xyz_bound = Array{TF, 3}(undef, 3, nc+2, n)
     xyz_cp = Array{TF, 3}(undef, 3, nc, n)
     for j = 1:n
 
@@ -852,7 +905,7 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         rle = SVector(xle[j], yle[j], zle[j])
 
         # bound vortex chordwise locations (and trailing edge)
-        for i = 1:nc+1
+        for i = 1:nc+2
             # bound vortex location
             xc = eta_qtr[i]
             zc = fc[j](xc)
@@ -915,20 +968,28 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
 
     # populate each panel
     for j = 1:ns
+
+        # get chord for setting finite core size
+        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+
         for i = 1:nc
-            rtl = SVector(xyz_corner[1,i,j], xyz_corner[2,i,j], xyz_corner[3,i,j])
-            rtc = SVector(xyz_center[1,i,j], xyz_center[2,i,j], xyz_center[3,i,j])
-            rtr = SVector(xyz_corner[1,i,j+1], xyz_corner[2,i,j+1], xyz_corner[3,i,j+1])
-            rbl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
-            rbc = SVector(xyz_center[1,i+1,j], xyz_center[2,i+1,j], xyz_center[3,i+1,j])
-            rbr = SVector(xyz_corner[1,i+1,j+1], xyz_corner[2,i+1,j+1], xyz_corner[3,i+1,j+1])
+            # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
+            rtl = SVector(xyz_corner[1,i+1,j], xyz_corner[2,i+1,j], xyz_corner[3,i+1,j])
+            rtc = SVector(xyz_center[1,i+1,j], xyz_center[2,i+1,j], xyz_center[3,i+1,j])
+            rtr = SVector(xyz_corner[1,i+1,j+1], xyz_corner[2,i+1,j+1], xyz_corner[3,i+1,j+1])
+            rbl = SVector(xyz_corner[1,i+2,j], xyz_corner[2,i+2,j], xyz_corner[3,i+2,j])
+            rbc = SVector(xyz_center[1,i+2,j], xyz_center[2,i+2,j], xyz_center[3,i+2,j])
+            rbr = SVector(xyz_corner[1,i+2,j+1], xyz_corner[2,i+2,j+1], xyz_corner[3,i+2,j+1])
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            core_size = 0.0
+
+            # set finite core size
+            Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+            core_size = fcore(c, Δs)
 
             ip = i
-            jp = mirror*right_side*nc*ns + j
+            jp = mirror*right_side*ns + j
             panels[ip, jp] = Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
         end
     end
@@ -938,8 +999,8 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         for j = 1:ns
             for i = 1:nc
                 ip = i
-                jp1 = right_side*nc*ns + j
-                jp2 = 2*nc*ns - right_side*nc*ns - j + 1
+                jp1 = right_side*ns + j
+                jp2 = 2*ns - right_side*ns - j + 1
                 panels[ip,jp2] = reflect(panels[ip,jp1])
             end
         end

@@ -1,5 +1,5 @@
 using Test
-using VLMFlow
+using VortexLattice
 using LinearAlgebra
 
 ztol = sqrt(eps())
@@ -345,7 +345,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -373,7 +373,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -443,7 +443,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -471,7 +471,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -495,9 +495,158 @@ end
 
 @testset "AVL - Run 6" begin
 
-    # Wing and Tail
+    # Wing and Tail without Finite Core Model
 
     # NOTE: AVL's finite-core model is turned off for these tests
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices - finite core deactivated
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
+    end
+
+    htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 1, 1]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60408, atol=1e-4)
+    @test isapprox(CD, 0.01058, atol=1e-5)
+    @test isapprox(CDiff, 0.010378, atol=1e-4)
+    @test isapprox(Cm, -0.02778, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings - finite core deactivated
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
+    end
+
+    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 1, 1]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60408, atol=1e-3)
+    @test isapprox(CD, 0.01058, atol=1e-4)
+    @test isapprox(CDiff, 0.010378, atol=1e-4)
+    @test isapprox(Cm, -0.02778, atol=2e-3)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 7" begin
+
+    # Wing and Tail with Finite Core Model
 
     # NOTE: There is some interaction between twist, dihedral, and chordwise
     # position which causes the normal vectors found by AVL to differ from those
@@ -572,7 +721,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
     end
 
     htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -584,20 +733,21 @@ end
     translate!(vtail, [4.0, 0.0, 0.0])
 
     surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
 
-    AIC = influence_coefficients(surfaces, symmetric)
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
     b = normal_velocity(surfaces, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, ref, fs, symmetric, Γ; frame=Stability())
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
     CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
 
-    @test isapprox(CL, 0.60408, atol=1e-4)
+    @test isapprox(CL, 0.60562, atol=1e-4)
     @test isapprox(CD, 0.01058, atol=1e-5)
-    @test isapprox(CDiff, 0.010378, atol=1e-4)
-    @test isapprox(Cm, -0.02778, atol=1e-4)
+    @test isapprox(CDiff, 0.0104855, atol=1e-4)
+    @test isapprox(Cm, -0.03377, atol=1e-4)
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
@@ -610,7 +760,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
     end
 
     htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -622,27 +772,28 @@ end
     translate!(vtail, [4.0, 0.0, 0.0])
 
     surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
 
-    AIC = influence_coefficients(surfaces, symmetric)
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
     b = normal_velocity(surfaces, ref, fs)
     Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, ref, fs, symmetric, Γ; frame=Stability())
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
     CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
 
-    @test isapprox(CL, 0.60408, atol=1e-3)
+    @test isapprox(CL, 0.60562, atol=1e-3)
     @test isapprox(CD, 0.01058, atol=1e-4)
-    @test isapprox(CDiff, 0.010378, atol=1e-4)
-    @test isapprox(Cm, -0.02778, atol=2e-3)
+    @test isapprox(CDiff, 0.0104855, atol=1e-4)
+    @test isapprox(Cm, -0.03377, atol=2e-3)
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
 
 end
 
-@testset "AVL - Run 7" begin
+@testset "AVL - Run 8" begin
 
     # Simple Wing with Chordwise Panels
 
@@ -719,7 +870,7 @@ end
 
 end
 
-@testset "AVL - Run 8" begin
+@testset "AVL - Run 9" begin
 
     # Simple Wing with Cosine-Spaced Spanwise and Chordwise Panels
 
@@ -796,7 +947,7 @@ end
 
 end
 
-@testset "AVL - Run 9" begin
+@testset "AVL - Run 10" begin
 
     # Simple Wing with Sideslip
 
@@ -878,9 +1029,9 @@ end
 
 end
 
-@testset "AVL - Run 10" begin
+@testset "AVL - Run 11" begin
 
-    # Run 9: Simple Wing Stability Derivatives
+    # Run 11: Simple Wing Stability Derivatives
 
     xle = [0.0, 0.4]
     yle = [0.0, 7.5]

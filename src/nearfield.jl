@@ -1,4 +1,4 @@
-# --- frames of reference for expressing near-field forces --- #
+# --- reference frames --- #
 
 """
     AbstractFrame
@@ -29,72 +29,62 @@ Reference frame rotated to be aligned with the freestream `alpha` and `beta`
 """
 struct Wind <: AbstractFrame end
 
-# --- struct to store panel properties --- #
+# --- near field force calculations --- #
 
 """
-    PanelProperties
-
-Panel specific properties calculated during the vortex lattice method analysis.
-
-**Fields**
- - `gamma`: Panel circulation strength (normalized by the freestream velocity)
- - `v`: Local velocity at the panel's center (typically the quarter-chord), normalized
- - `cf`: Bound vortex force per unit length, normalized by `QINF*S` where `QINF`
-    is the dynamic pressure and `S` is the user-provided reference area.
- - `cfl`: Left vortex force per unit length, normalized by `QINF*S`
- - `cfr`: Right vortex force per unit length, normalized by `QINF*S`
-"""
-struct PanelProperties{TF}
-    gamma::TF
-    v::SVector{3, TF}
-    cf::SVector{3, TF}
-    cfl::SVector{3, TF}
-    cfr::SVector{3, TF}
-end
-
-function PanelProperties(gamma, v, cf, cfl, cfr)
-
-    TF = promote_type(typeof(gamma), typeof(v), eltype(cf), eltype(cfl), eltype(cfr))
-
-    return PanelProperties{TF}(gamma, v, cf, cfl, cfr)
-end
-
-Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
-Base.eltype(::PanelProperties{TF}) where TF = TF
-
-# --- near field solution for forces and moments --- #
-
-"""
-    near_field_forces(surface[s], reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces(surface, reference, freestream, symmetric, Γ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ`.
 
 Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
 
-# Keyword Arguments
- - `xhat`: direction in which trailing vortices are shed, defaults to [1,0,0]
+# Arguments:
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
  - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
     `Stability()`, and `Wind()`
-
-# Additional Keyword Arguments for Multiple Surfaces
- - `surface_id`: ID for each surface, defaults to `1:length(surfaces)`
 """
-near_field_forces
-
-# single surface
 function near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ;
     xhat=SVector(1, 0, 0), frame=Body())
 
-    CF, CM, props = near_field_forces([surface], ref, fs, symmetric, Γ;
-        xhat=xhat, frame=frame, surface_id=1:1)
+    CF, CM, props = near_field_forces([surface], 1:1, ref, fs, symmetric, Γ;
+        xhat=xhat, frame=frame)
 
     return CF, CM, props[1]
 end
 
-# multiple surfaces
-function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
-    symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body(), surface_id=1:length(surfaces))
+"""
+    near_field_forces(surfaces, surface_id, reference, freestream, symmetric, Γ; kwargs...)
+
+Compute the forces and moments acting on the aircraft given the circulation
+distribution `Γ`.
+
+Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
+
+# Arguments:
+ - `surface`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value.
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
+    `Stability()`, and `Wind()`
+"""
+function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_id, ref, fs,
+    symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
 
     # float number type
     TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
@@ -127,9 +117,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
             # --- Calculate forces for the bound vortices --- #
             I = cr[i]
 
-            rc = midpoint(receiving[I])
+            rc = top_center(receiving[I])
 
-            # start with external velocity at the bound vortex midpoint
+            # start with external velocity at the bound vortex center
             Vi = external_velocity(fs, rc, ref.r)
 
             # now add the velocity induced by each sending panel
@@ -150,16 +140,11 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
 
                     J = cs[j]
 
-                    if typeof(sending[J]) <: Horseshoe
-                        include_bound = !(same_surface && I == J)
-                        Vij = induced_velocity(rc, sending[J], xhat, symmetric, same_id, include_bound)
-                    elseif typeof(sending[J]) <: Ring
-                        include_top = !(same_surface && I == J)
-                        include_bottom = !(same_surface && (I[1] == J[1]+1 && I[2] == J[2]))
-                        trailing = J[1] == ns1
-                        Vij = induced_velocity(rc, sending[J], xhat, symmetric,
-                            same_id, trailing, include_top, include_bottom)
-                    end
+                    trailing = J[1] == ns1
+
+                    # calculate induced velocity
+                    Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
+                        same_surface, symmetric, same_id, xhat, trailing)
 
                     # add contribution to velocity
                     Vi += Vij*Γ[jΓ+j]
@@ -167,19 +152,16 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
                 jΓ += ns
             end
 
-            # now use the Kutta-Joukowski theorem to calculate the forces at this point
-            if typeof(receiving[I]) <: Horseshoe
-                Γi = Γ[iΓ+i]
-            elseif typeof(receiving[I]) <: Ring
-                if I[1] == 1
-                    # panel is on the leading edge
-                    Γi = Γ[iΓ+i]
-                else
-                    # panel is not on the leading edge
-                    Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
-                end
-            end
+            # circulation of upstream bound vortex
+            Γ1 = isone(I[1]) ? zero(eltype(Γ)) : Γ[iΓ+i-1]
 
+            # circulation of bound vortex on current panel
+            Γ2 = Γ[iΓ+i]
+
+            # circulation of current panel
+            Γi = panel_circulation(receiving[I], Γ1, Γ2)
+
+            # now use the Kutta-Joukowski theorem to solve for the panel force
             Δs = top_vector(receiving[I])
             lenb = norm(Δs)
             Fbi = RHO*Γi*cross(Vi, Δs)
@@ -191,9 +173,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
 
             # --- Calculate forces for the left bound vortex --- #
 
-            rc = left_midpoint(receiving[I])
+            rc = left_center(receiving[I])
 
-            # get effective velocity at the bound vortex midpoint
+            # get effective velocity at the bound vortex center
             Veff = external_velocity(fs, rc, ref.r)
 
             # note that we don't include induced velocity in the effective velocity
@@ -213,9 +195,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
 
             # --- Calculate forces for the right bound vortex --- #
 
-            rc = right_midpoint(receiving[I])
+            rc = right_center(receiving[I])
 
-            # get effective velocity at the bound vortex midpoint
+            # get effective velocity at the bound vortex center
             Veff = external_velocity(fs, rc, ref.r)
 
             # note that we don't include induced velocity in the effective velocity
@@ -258,28 +240,61 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
 end
 
 """
-    near_field_forces_derivatives(surface[s], reference, freestream, symmetric, Γ, dΓ; xhat=[1,0,0])
+    near_field_forces_derivatives(surface, reference, freestream, symmetric, Γ, dΓ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ` and their derivatives with respect to the variables in `freestream`.
-Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type
-`PanelProperties`.  `CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
+
+Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type `PanelProperties`.
+`CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
+
+# Arguments:
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `Γ`: Vector of circulation strengths for each panel
+ - `dΓ`: Tuple containing the derivative of the circulation strength with respect
+    to each of the freestream parameters
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
 """
-near_field_forces_derivatives
-
-# single surface
 function near_field_forces_derivatives(surface::AbstractMatrix, ref, fs, symmetric, Γ, dΓ;
-    xhat=SVector(1, 0, 0), frame=Body())
+    xhat=SVector(1, 0, 0))
 
-    CF, CM, dCF, dCM, props = near_field_forces_derivatives([surface], ref, fs, symmetric, Γ, dΓ;
-        xhat=xhat, frame=frame, surface_id=1:1)
+    CF, CM, dCF, dCM, props = near_field_forces_derivatives([surface], 1:1, ref, fs, symmetric, Γ, dΓ;
+        xhat=xhat)
 
     return CF, CM, dCF, dCM, props[1]
 end
 
-# multiple surfaces
-function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, symmetric, Γ, dΓ;
-        xhat = SVector(1, 0, 0), frame=Body(), surface_id=1:length(surfaces))
+"""
+    near_field_forces_derivatives(surfaces, surface_id, reference, freestream, symmetric, Γ; kwargs...)
+
+Compute the forces and moments acting on the aircraft given the circulation
+distribution `Γ` and their derivatives with respect to the variables in `freestream`.
+
+Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type `PanelProperties`.
+`CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
+
+# Arguments:
+ - `surface`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value.
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `Γ`: Vector of circulation strengths for each panel
+ - `dΓ`: Tuple containing the derivative of the circulation strength with respect
+    to each of the freestream parameters
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+"""
+function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix},
+        surface_id, ref, fs, symmetric, Γ, dΓ; xhat = SVector(1, 0, 0))
 
     # unpack derivatives
     Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = dΓ
@@ -329,9 +344,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             I = cr[i]
 
             # --- Calculate forces for the bound vortices --- #
-            rc = midpoint(receiving[I])
+            rc = top_center(receiving[I])
 
-            # get external velocity at the bound vortex midpoint
+            # get external velocity at the bound vortex center
             Vi, dVi = external_velocity_derivatives(fs, rc, ref.r)
 
             # unpack derivatives
@@ -355,16 +370,11 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
                     J = cs[j]
 
-                    if typeof(sending[J]) <: Horseshoe
-                        include_bound = !(same_surface && I == J)
-                        Vij = induced_velocity(rc, sending[J], xhat, symmetric, same_id, include_bound)
-                    elseif typeof(sending[J]) <: Ring
-                        include_top = !(same_surface && I == J)
-                        include_bottom = !(same_surface && (I[1] == J[1]+1 && I[2] == J[2]))
-                        trailing = J[1] == ns1
-                        Vij = induced_velocity(rc, sending[J], xhat, symmetric,
-                            same_id, trailing, include_top, include_bottom)
-                    end
+                    trailing = J[1] == ns1
+
+                    # calculate induced velocity
+                    Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
+                        same_surface, symmetric, same_id, xhat, trailing)
 
                     # add contribution to velocity
                     Vi += Vij*Γ[jΓ+j]
@@ -380,37 +390,40 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
                 jΓ += ns
             end
 
-            # now use the Kutta-Joukowski theorem to calculate the forces at this point
-            if typeof(receiving[I]) <: Horseshoe
-                Γi = Γ[iΓ+i]
-
-                Γi_a = Γ_a[iΓ+i]
-                Γi_b = Γ_b[iΓ+i]
-                Γi_p = Γ_p[iΓ+i]
-                Γi_q = Γ_q[iΓ+i]
-                Γi_r = Γ_r[iΓ+i]
-            elseif typeof(receiving[I]) <: Ring
-                if I[1] == 1
-                    # panel is on the leading edge
-                    Γi = Γ[iΓ+i]
-
-                    Γi_a = Γ_a[iΓ+i]
-                    Γi_b = Γ_b[iΓ+i]
-                    Γi_p = Γ_p[iΓ+i]
-                    Γi_q = Γ_q[iΓ+i]
-                    Γi_r = Γ_r[iΓ+i]
-                else
-                    # panel is not on the leading edge
-                    Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
-
-                    Γi_a = Γ_a[iΓ+i] - Γ_a[iΓ+i-1]
-                    Γi_b = Γ_b[iΓ+i] - Γ_b[iΓ+i-1]
-                    Γi_p = Γ_p[iΓ+i] - Γ_p[iΓ+i-1]
-                    Γi_q = Γ_q[iΓ+i] - Γ_q[iΓ+i-1]
-                    Γi_r = Γ_r[iΓ+i] - Γ_r[iΓ+i-1]
-                end
+            # circulation of upstream bound vortex
+            if isone(I[1])
+                Γ1 = zero(eltype(Γ))
+                Γ1_a = zero(eltype(Γ_a))
+                Γ1_b = zero(eltype(Γ_b))
+                Γ1_p = zero(eltype(Γ_p))
+                Γ1_q = zero(eltype(Γ_q))
+                Γ1_r = zero(eltype(Γ_r))
+            else
+                Γ1 = Γ[iΓ+i-1]
+                Γ1_a = Γ_a[iΓ+i-1]
+                Γ1_b = Γ_b[iΓ+i-1]
+                Γ1_p = Γ_p[iΓ+i-1]
+                Γ1_q = Γ_q[iΓ+i-1]
+                Γ1_r = Γ_r[iΓ+i-1]
             end
 
+            # circulation of bound vortex on current panel
+            Γ2 = Γ[iΓ+i]
+            Γ2_a = Γ_a[iΓ+i]
+            Γ2_b = Γ_b[iΓ+i]
+            Γ2_p = Γ_p[iΓ+i]
+            Γ2_q = Γ_q[iΓ+i]
+            Γ2_r = Γ_r[iΓ+i]
+
+            # circulation of current panel
+            Γi = panel_circulation(receiving[I], Γ1, Γ2)
+            Γi_a = panel_circulation(receiving[I], Γ1_a, Γ2_a)
+            Γi_b = panel_circulation(receiving[I], Γ1_b, Γ2_b)
+            Γi_p = panel_circulation(receiving[I], Γ1_p, Γ2_p)
+            Γi_q = panel_circulation(receiving[I], Γ1_q, Γ2_q)
+            Γi_r = panel_circulation(receiving[I], Γ1_r, Γ2_r)
+
+            # now use the Kutta-Joukowski theorem to calculate the forces at this point
             Δs = top_vector(receiving[I])
             lenb = norm(Δs)
             tmp = cross(Vi, Δs)
@@ -442,9 +455,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
             # --- Calculate forces for the left bound vortex --- #
 
-            rc = left_midpoint(receiving[I])
+            rc = left_center(receiving[I])
 
-            # get effective velocity at the bound vortex midpoint
+            # get effective velocity at the bound vortex center
             Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
 
             # unpack derivatives
@@ -493,9 +506,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
             # --- Calculate forces for the right bound vortex --- #
 
-            rc = right_midpoint(receiving[I])
+            rc = right_center(receiving[I])
 
-            # get effective velocity at the bound vortex midpoint
+            # get effective velocity at the bound vortex center
             Veff, dVeff = external_velocity_derivatives(fs, rc, ref.r)
 
             # unpack derivatives

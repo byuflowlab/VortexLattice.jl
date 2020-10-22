@@ -1,20 +1,15 @@
-# --- left hand side - AIC matrix --- #
-
 """
-    influence_coefficients(surface[s], symmetric; kwargs...)
+    influence_coefficients(surface, symmetric; kwargs...)
 
-Construct the aerodynamic influence coefficient matrix for a single surface or
-a vector of surfaces.
+Construct the aerodynamic influence coefficient matrix for a single surface.
 
-# Keyword Arguments
- - `xhat`: direction in which trailing vortices are shed, defaults to [1,0,0]
-
-# Additional Keyword Arguments for Multiple Surfaces
- - `surface_id`: ID for each surface, defaults to `1:length(surfaces)`
+# Arguments:
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
 """
-influence_coefficients
-
-# one surface
 function influence_coefficients(surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
 
     N = length(surface)
@@ -24,39 +19,54 @@ function influence_coefficients(surface::AbstractMatrix, symmetric; xhat=SVector
     return influence_coefficients!(AIC, surface, symmetric; xhat=xhat)
 end
 
-# multiple surfaces
-function influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix}, symmetric;
-    xhat=SVector(1, 0, 0), surface_id=1:length(surfaces))
+"""
+    influence_coefficients(surfaces, surface_id, symmetric; kwargs...)
+
+Construct the aerodynamic influence coefficient matrix for multiple surfaces.
+
+# Arguments:
+ - `surface`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value.
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+"""
+function influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix},
+    surface_id, symmetric; xhat=SVector(1, 0, 0))
 
     N = sum(length.(surfaces))
     TF = eltype(eltype(eltype(surfaces)))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, surfaces, symmetric; xhat=xhat, surface_id=surface_id)
+    return influence_coefficients!(AIC, surfaces, surface_id, symmetric; xhat=xhat)
 end
 
 """
-    influence_coefficients!(AIC, surface[s], symmetric; kwargs...)
+    influence_coefficients!(AIC, surface, symmetric; kwargs...)
 
 Pre-allocated version of `influence_coefficients`
 """
-influence_coefficients!
-
-# one surface
 function influence_coefficients!(AIC, surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
 
     receiving = surface
     sending = surface
-    same_surface = true
+    same_id = true
 
-    influence_coefficients!(AIC, surface, surface, same_surface, symmetric, xhat)
+    influence_coefficients!(AIC, surface, surface, symmetric, same_id, xhat)
 
     return AIC
 end
 
-# multiple surfaces
+"""
+    influence_coefficients!(AIC, surfaces, surface_id, symmetric; kwargs...)
+
+Pre-allocated version of `influence_coefficients`
+"""
 function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix},
-    symmetric; xhat=SVector(1, 0, 0), surface_id=1:length(surfaces))
+    surface_id, symmetric; xhat=SVector(1, 0, 0))
 
     nsurf = length(surfaces)
 
@@ -83,59 +93,16 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
             vAIC = view(AIC, iAIC+1:iAIC+nr, jAIC+1:jAIC+ns)
 
             # check if it's the same surface
-            same_surface = surface_id[i] == surface_id[j]
+            same_id = surface_id[i] == surface_id[j]
 
             # populate entries in the AIC matrix
-            influence_coefficients!(vAIC, receiving, sending, same_surface, symmetric, xhat)
+            influence_coefficients!(vAIC, receiving, sending, symmetric, same_id, xhat)
 
             # increment position in AIC matrix
             jAIC += ns
         end
         # increment position in AIC matrix
         iAIC += nr
-    end
-
-    return AIC
-end
-
-# one surface on another surface
-function influence_coefficients!(AIC, receiving, sending, same_surface, symmetric, xhat)
-
-    Nr = length(receiving)
-    Ns = length(sending)
-
-    cr = CartesianIndices(receiving)
-    cs = CartesianIndices(sending)
-    nchordwise = size(sending,1)
-
-    # loop over receiving panels
-    for i = 1:Nr
-        I = cr[i]
-
-        # control point location
-        rcp = controlpoint(receiving[I])
-
-        # normal vector body axis
-        nhat = normal(receiving[I])
-
-        # loop over sending panels
-        for j = 1:Ns
-            J = cs[j]
-
-            if typeof(sending[J]) <: Horseshoe
-                include_bound = true
-                Vhat = induced_velocity(rcp, sending[J], xhat, symmetric, same_surface,
-                    include_bound)
-            elseif typeof(sending[j]) <: Ring
-                trailing = J[1] == nchordwise
-                include_top = true
-                include_bottom = true
-                Vhat = induced_velocity(rcp, sending[J], xhat, symmetric, same_surface,
-                    trailing, include_top, include_bottom)
-            end
-
-            AIC[i, j] = dot(Vhat, nhat)
-        end
     end
 
     return AIC
@@ -294,7 +261,7 @@ end
 
 Non-allocating version of `normal_velocity_derivatives`
 """
-normal_velocity_derivatives
+normal_velocity_derivatives!
 
 # single surface
 function normal_velocity_derivatives!(b, db, surface, ref, fs)

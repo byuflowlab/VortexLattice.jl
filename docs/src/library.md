@@ -7,31 +7,32 @@ Depth = 3
 
 ## Public API
 
-### Generating Geometry
+### Generating Lifting Surfaces
 
 ```@docs
 AbstractSpacing
 Uniform
 Sine
 Cosine
-grid_to_horseshoe_vortices
-grid_to_vortex_rings
+grid_to_horseshoe_vortices(xyz)
+grid_to_vortex_rings(xyz)
+grid_to_horseshoe_vortices(xyz, ns, nc)
+grid_to_vortex_rings(xyz, ns, nc)
 wing_to_horseshoe_vortices
 wing_to_vortex_rings
 ```
 
-### Manipulating Vortex Lattice Panels
+### Manipulating Lifting Surfaces
 ```@docs
 AbstractPanel
 Horseshoe
 Ring
-translate
-translate!
-reflect
-rotate
+translate(panels::AbstractVector{<:AbstractPanel}, r)
+translate!(panels, r)
+reflect(panels::AbstractMatrix{<:AbstractPanel})
 ```
 
-### Reference Parameters
+### Reference Parameters and Frames
 ```@docs
 Reference
 ```
@@ -49,8 +50,12 @@ wind_to_stability
 
 ### Solving for Circulation
 ```@docs
-influence_coefficients
-influence_coefficients!
+influence_coefficients(surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
+influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix},
+    surface_id, symmetric; xhat=SVector(1, 0, 0))
+influence_coefficients!(AIC, surface::AbstractMatrix, symmetric; xhat=SVector(1, 0, 0))
+influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix},
+    surface_id, symmetric; xhat=SVector(1, 0, 0))
 normal_velocity
 normal_velocity!
 circulation
@@ -63,7 +68,8 @@ Body
 Stability
 Wind
 PanelProperties
-near_field_forces
+near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ)
+near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_id, ref, fs, symmetric, Γ)
 ```
 
 ### Far Field Drag
@@ -86,66 +92,76 @@ write_vtk
 
 ### Geometry
 ```@docs
-VLMFlow.linearinterp
-VLMFlow.spanwise_spacing
-VLMFlow.chordwise_spacing
-VLMFlow.interpolate_grid
+VortexLattice.linearinterp
+VortexLattice.spanwise_spacing
+VortexLattice.chordwise_spacing
+VortexLattice.interpolate_grid
 ```
 
 ### Vortex Lattice Panels
 ```@docs
-VLMFlow.controlpoint
-VLMFlow.normal
-VLMFlow.trefftz_normal
-VLMFlow.midpoint
-VLMFlow.left_midpoint
-VLMFlow.right_midpoint
-VLMFlow.top_vector
-VLMFlow.left_vector
-VLMFlow.right_vector
-VLMFlow.endpoints
-VLMFlow.reflected_endpoints
-VLMFlow.trefftz_endpoints
-VLMFlow.trefftz_center
-VLMFlow.panel_induced_drag
-VLMFlow.flipy
-VLMFlow.not_on_symmetry_plane
-VLMFlow.trailing_induced_velocity
-VLMFlow.bound_induced_velocity
-VLMFlow.induced_velocity
-VLMFlow.vortex_induced_drag
+VortexLattice.top_left
+VortexLattice.top_center
+VortexLattice.top_right
+VortexLattice.bottom_left
+VortexLattice.bottom_center
+VortexLattice.bottom_right
+VortexLattice.controlpoint
+VortexLattice.normal
+VortexLattice.get_core_size
+VortexLattice.translate(panel::AbstractPanel, r)
+VortexLattice.reflect(panel::AbstractPanel)
+VortexLattice.induced_velocity
+VortexLattice.panel_induced_velocity
+VortexLattice.panel_circulation
+VortexLattice.influence_coefficients!(AIC, receiving::AbstractMatrix{<:AbstractPanel}, sending::AbstractMatrix{<:AbstractPanel}, same_id, symmetric, xhat)
+VortexLattice.left_center
+VortexLattice.right_center
+VortexLattice.top_vector
+VortexLattice.left_vector
+VortexLattice.right_vector
+VortexLattice.bottom_vector
+VortexLattice.flipy
+VortexLattice.not_on_symmetry_plane
+VortexLattice.trailing_induced_velocity
+VortexLattice.bound_induced_velocity
 ```
 
 ### Freestream
 ```@docs
-VLMFlow.body_to_stability_alpha
-VLMFlow.body_to_wind_derivatives
-VLMFlow.stability_to_body_alpha
-VLMFlow.stability_to_wind_beta
-VLMFlow.wind_to_body_derivatives
-VLMFlow.wind_to_stability_beta
-VLMFlow.freestream_velocity
-VLMFlow.freestream_velocity_derivatives
-VLMFlow.external_velocity
-VLMFlow.external_velocity_derivatives
+VortexLattice.body_to_stability_alpha
+VortexLattice.body_to_wind_derivatives
+VortexLattice.stability_to_body_alpha
+VortexLattice.stability_to_wind_beta
+VortexLattice.wind_to_body_derivatives
+VortexLattice.wind_to_stability_beta
+VortexLattice.freestream_velocity
+VortexLattice.freestream_velocity_derivatives
+VortexLattice.external_velocity
+VortexLattice.external_velocity_derivatives
 ```
 
 ### Circulation
 ```@docs
-VLMFlow.normal_velocity_derivatives
-VLMFlow.normal_velocity_derivatives!
-VLMFlow.circulation_derivatives
+VortexLattice.normal_velocity_derivatives
+VortexLattice.normal_velocity_derivatives!
+VortexLattice.circulation_derivatives
 ```
 
 ### Near-Field
 ```@docs
-VLMFlow.near_field_forces_derivatives
-VLMFlow.body_to_frame
+VortexLattice.body_to_frame
+VortexLattice.near_field_forces_derivatives(surface::AbstractMatrix, ref, fs, symmetric, Γ, dΓ)
+VortexLattice.near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, surface_id, ref, fs, symmetric, Γ, dΓ)
 ```
 
 ### Far-Field
 ```@docs
-VLMFlow.project_panels
+VortexLattice.TrefftzPanel
+VortexLattice.normal(panel::VortexLattice.TrefftzPanel)
+VortexLattice.trefftz_panels
+VortexLattice.panel_induced_drag
+VortexLattice.vortex_induced_drag
 ```
 
 ## Index

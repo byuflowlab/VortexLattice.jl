@@ -1,14 +1,14 @@
-# VLMFlow
+# VortexLattice
 
-[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://flow.byu.edu/VLMFlow.jl/stable)
-[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://flow.byu.edu/VLMFlow.jl/dev)
-![](https://github.com/byuflowlab/VLMFlow.jl/workflows/Run%20tests/badge.svg)
+[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://flow.byu.edu/VortexLattice.jl/stable)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://flow.byu.edu/VortexLattice.jl/dev)
+![](https://github.com/byuflowlab/VortexLattice.jl/workflows/Run%20tests/badge.svg)
 
-*A flexible Julia implementation of the Vortex Lattice Method*
+*A Comprehensive Julia implementation of the Vortex Lattice Method*
 
 Authors: Taylor McDonnell and Andrew Ning
 
-**VLMFlow** is a flexible Julia implementation of the vortex lattice method.  It is designed to be fast, accurate (within theoretical limitations), easy to use, and applicable to arbitrary geometries and velocity fields.  It has been extensively verified against results generated using Mark Drela's AVL, but has also been enhanced to incorporate features and modeling capabilties not present in AVL.
+**VortexLattice** is a comprehensive pure-Julia implementation of the vortex lattice method.  It is designed to be fast, accurate (within theoretical limitations), easy to use, and applicable to arbitrary geometries and velocity fields.  It has been extensively verified against results generated using Mark Drela's AVL, but has also been enhanced to incorporate features and modeling capabilties not present in AVL.
 
 ![](docs/src/showoff.png)
 
@@ -16,6 +16,7 @@ Authors: Taylor McDonnell and Andrew Ning
  - Custom vortex lattice panels
    - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](#1))
    - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](#2))
+   - Optional finite-core model
  - Convenient geometry generation
    - From pre-existing grid
    - From lifting surface parameters
@@ -40,7 +41,7 @@ Authors: Taylor McDonnell and Andrew Ning
 Enter the package manager by typing `]` and then run the following:
 
 ```julia
-pkg> add https://github.com/byuflowlab/VLMFlow.jl
+pkg> add https://github.com/byuflowlab/VortexLattice.jl
 ```
 
 ## Performance
@@ -49,7 +50,7 @@ This code has been optimized to be highly performant, primarily by maintaining t
 
 ## Usage
 
-See the [documentation](https://flow.byu.edu/VLMFlow.jl/dev)
+See the [documentation](https://flow.byu.edu/VortexLattice.jl/dev)
 
 ## References
 <a id="1">[1]</a>

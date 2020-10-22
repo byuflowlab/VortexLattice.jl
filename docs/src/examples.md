@@ -1,6 +1,6 @@
 # Examples
 
-These examples show how to use VLMFlow for various geometries, flow conditions, and analyses.
+These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.
 
 ```@contents
 Pages = ["examples.md"]
@@ -10,7 +10,7 @@ Depth = 3
 ## Symmetric Simple Wing
 
 ```@example simple-symmetric
-using VLMFlow
+using VortexLattice
 
 # geometry
 xle = [0.0, 0.4]
@@ -40,22 +40,22 @@ Omega = [0.0; 0.0; 0.0]
 vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
-# construct panels
-panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+# construct surface
+surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
 
 # declare symmetry
 symmetric = true
 
 # get circulation
-AIC = influence_coefficients(panels, symmetric)
-b = normal_velocity(panels, ref, fs)
+AIC = influence_coefficients(surface, symmetric)
+b = normal_velocity(surface, ref, fs)
 Γ = circulation(AIC, b)
 
 # perform near-field analysis
-CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Wind())
+CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -68,7 +68,7 @@ nothing #hide
 ## Mirrored Simple Wing
 
 ```@example simple-mirrored
-using VLMFlow
+using VortexLattice
 
 # geometry
 xle = [0.0, 0.4]
@@ -98,22 +98,22 @@ Omega = [0.0; 0.0; 0.0]
 vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
-# construct panels (and mirror geometry)
-panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+# construct surface (and mirror geometry)
+surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # declare symmetry
 symmetric = false
 
 # get circulation
-AIC = influence_coefficients(panels, symmetric)
-b = normal_velocity(panels, ref, fs)
+AIC = influence_coefficients(surface, symmetric)
+b = normal_velocity(surface, ref, fs)
 Γ = circulation(AIC, b)
 
 # perform near-field analysis
-CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Wind())
+CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -126,7 +126,7 @@ nothing #hide
 ## Simple Wing with Dihedral
 
 ```@example simple-dihedral
-using VLMFlow
+using VortexLattice
 
 xle = [0.0, 0.4]
 yle = [0.0, 7.5]
@@ -154,14 +154,14 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # horseshoe vortices
-panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-AIC = influence_coefficients(panels, symmetric)
-b = normal_velocity(panels, ref, fs)
+AIC = influence_coefficients(surface, symmetric)
+b = normal_velocity(surface, ref, fs)
 Γ = circulation(AIC, b)
-CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Stability())
+CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -174,7 +174,7 @@ nothing #hide
 ## Wing and Tail
 
 ```@example wing-tail
-using VLMFlow
+using VortexLattice
 
 # wing
 xle = [0.0, 0.2]
@@ -241,13 +241,14 @@ vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v,
     mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vtail, [4.0, 0.0, 0.0])
 
-panels = vcat(wing, htail, vtail)
+surfaces = [wing, htail, vtail]
+surface_id = [1, 2, 3]
 
-AIC = influence_coefficients(panels, symmetric)
-b = normal_velocity(panels, ref, fs)
+AIC = influence_coefficients(surfaces, surface_id, symmetric)
+b = normal_velocity(surfaces, ref, fs)
 Γ = circulation(AIC, b)
-CF, CM, panelprops = near_field_forces(panels, ref, fs, symmetric, Γ; frame=Stability())
-CDiff = far_field_drag(panels, ref, fs, symmetric, Γ)
+CF, CM, panelprops = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -260,7 +261,7 @@ nothing #hide
 ## Body/Stability Derivatives
 
 ```@example stability
-using VLMFlow
+using VortexLattice
 
 xle = [0.0, 0.4]
 yle = [0.0, 7.5]
@@ -290,12 +291,12 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # horseshoe vortices
-panels = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-AIC = influence_coefficients(panels, symmetric)
+AIC = influence_coefficients(surface, symmetric)
 
-dCFb, dCMb = body_derivatives(panels, ref, fs, symmetric, AIC)
+dCFb, dCMb = body_derivatives(surface, ref, fs, symmetric, AIC)
 
 CXu, CYu, CZu = dCFb.u
 CXv, CYv, CZv = dCFb.v
@@ -311,7 +312,7 @@ Clp_b, Cmp_b, Cnp_b = dCMb.p
 Clq_b, Cmq_b, Cnq_b = dCMb.q
 Clr_b, Cmr_b, Cnr_b = dCMb.r
 
-dCFs, dCMs = stability_derivatives(panels, ref, fs, symmetric, AIC)
+dCFs, dCMs = stability_derivatives(surface, ref, fs, symmetric, AIC)
 
 CDa, CYa, CLa = dCFs.alpha
 CDb, CYb, CLb = dCFs.beta

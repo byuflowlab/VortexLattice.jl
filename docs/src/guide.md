@@ -1,13 +1,13 @@
 # Guide
 
-This guide demonstrates the basic capabilities of using VLMFlow.  First, we need to load the package.
+This guide demonstrates the basic capabilities of using VortexLattice.  First, we need to load the package.
 
 ```@example guide
-using VLMFlow
+using VortexLattice
 nothing #hide
 ```
 
-Then we need to create our geometry.  While VLMFlow can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
+Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
 
 ```@example guide
 xle = [0.0, 0.4] # leading edge x-position

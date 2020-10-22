@@ -1,4 +1,4 @@
-# Run 6: Wing and Tail
+# Run 6: Wing and Tail without Finite Core Model
 echo -e "oper\na a 5\nx\n\nquit\n" > commands
 cat commands | avl wingtail.avl > output
 grep -o "CLtot.*" output

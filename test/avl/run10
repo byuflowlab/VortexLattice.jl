@@ -1,13 +1,10 @@
-# Run 9: Simple Wing - Stability Derivatives
-echo -e "oper\na a 1\nb b 5\nx\nsb\n\n\nquit\n" > commands
+# Run 1: Simple Wing with Uniform Spacing
+echo -e "oper\na a 1\nb b 15\nx\n\nquit\n" > commands
 cat commands | avl simplewing1.avl > output
-grep -o "CLa =.*" output
-grep -o "CYa =.*" output
-grep -o "Cla =.*" output
-grep -o "Cma =.*" output
-grep -o "Cna =.*" output
-grep -o "CLp =.*" output
-grep -o "CYp =.*" output
-grep -o "Clp =.*" output
-grep -o "Cmp =.*" output
-grep -o "Cnp =.*" output
+grep -o "CLtot.*" output
+grep -o "CDtot.*" output
+grep -o "CDff.*" output
+grep -o "Cmtot.*" output
+grep -o "CYtot.*" output
+grep -o "Cltot.*" output
+grep -o "Cntot.*" output

@@ -1,0 +1,13 @@
+# Run 9: Simple Wing - Stability Derivatives
+echo -e "oper\na a 1\nb b 5\nx\nsb\n\n\nquit\n" > commands
+cat commands | avl simplewing1.avl > output
+grep -o "CLa =.*" output
+grep -o "CYa =.*" output
+grep -o "Cla =.*" output
+grep -o "Cma =.*" output
+grep -o "Cna =.*" output
+grep -o "CLp =.*" output
+grep -o "CYp =.*" output
+grep -o "Clp =.*" output
+grep -o "Cmp =.*" output
+grep -o "Cnp =.*" output
