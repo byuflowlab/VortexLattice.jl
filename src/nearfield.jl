@@ -142,6 +142,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 
                     trailing = J[1] == ns1
 
+                    #TODO: take advantage of shared edges when calculating induced velocity
+                    # (this should speed up the calculations)
+
                     # calculate induced velocity
                     Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
                         same_surface, symmetric, same_id, xhat, trailing)
@@ -371,6 +374,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
                     J = cs[j]
 
                     trailing = J[1] == ns1
+
+                    #TODO: take advantage of shared edges when calculating induced velocity
+                    # (this should speed up the calculations)
 
                     # calculate induced velocity
                     Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
