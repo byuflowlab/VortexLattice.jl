@@ -230,7 +230,7 @@ direction to the trailing edge, and then into the farfield.
  - `xl_te`: x-distance from the left side of the bound vortex to the trailing edge
  - `xc_te`: x-distance from the center of the bound vortex to the trailing edge
  - `xr_te`: x-distance from the right side of the bound vortex to the trailing edge
- - `chord`: section chord length for finite core calculations
+ - `core_size`: finite core size
 """
 struct Horseshoe{TF} <: AbstractPanel{TF}
     rl::SVector{3, TF}
@@ -241,7 +241,7 @@ struct Horseshoe{TF} <: AbstractPanel{TF}
     xl_te::TF
     xc_te::TF
     xr_te::TF
-    chord::TF
+    core_size::TF
 end
 
 """
@@ -256,16 +256,16 @@ Construct and return a horseshoe vortex panel.
 - `ncp`: normal vector at the panel control point
 - `xl_te`: x-distance from the left side of the bound vortex to the trailing edge
 - `xr_te`: x-distance from the right side of the bound vortex to the trailing edge
-- `chord`: section chord length for finite core calculations
+- `core_size`: finite core size
 - `rc`: (optional) position of the center of the bound vortex, defaults to `(rl+rr)/2`
 - `xc_te`: (optional) x-distance from the center of the bound vortex to the
     trailing edge, defaults to `(xl_te+xr_te)/2`
 """
-Horseshoe(rl, rr, rcp, ncp, xl_te, xr_te, chord; rc=(rl+rr)/2, xc_te=(xl_te+xr_te)/2) = Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, chord)
+Horseshoe(rl, rr, rcp, ncp, xl_te, xr_te, core_size; rc=(rl+rr)/2, xc_te=(xl_te+xr_te)/2) = Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 
-function Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, chord)
-    TF = promote_type(eltype(rl), eltype(rc), eltype(rr), eltype(rcp), eltype(ncp), typeof(xl_te), typeof(xc_te), typeof(xr_te), typeof(chord))
-    return Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, chord)
+function Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
+    TF = promote_type(eltype(rl), eltype(rc), eltype(rr), eltype(rcp), eltype(ncp), typeof(xl_te), typeof(xc_te), typeof(xr_te), typeof(core_size))
+    return Horseshoe{TF}(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
 @inline Base.eltype(::Type{Horseshoe{TF}}) where TF = TF
@@ -287,7 +287,7 @@ end
 
 @inline normal(panel::Horseshoe) = panel.ncp
 
-@inline get_core_size(panel::Horseshoe) = panel.chord
+@inline get_core_size(panel::Horseshoe) = panel.core_size
 
 @inline function induced_velocity(rcp, panel::Horseshoe, symmetric, same_id,
     xhat, include_bound)
@@ -363,6 +363,9 @@ end
         for j = 1:Ns
             J = cs[j]
 
+            #TODO: take advantage of shared edges when calculating influence coefficients
+            # (this should speed up the calculations)
+
             Vhat = induced_velocity(rcp, sending[J], symmetric, same_id,
                 xhat, include_bound)
 
@@ -383,9 +386,9 @@ end
     xl_te = panel.xl_te
     xc_te = panel.xc_te
     xr_te = panel.xr_te
-    chord = panel.chord
+    core_size = panel.core_size
 
-    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, chord)
+    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
 @inline function reflect(panel::Horseshoe)
@@ -398,9 +401,9 @@ end
     xl_te = panel.xr_te
     xc_te = panel.xc_te
     xr_te = panel.xl_te
-    chord = panel.chord
+    core_size = panel.core_size
 
-    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, chord)
+    return Horseshoe(rl, rc, rr, rcp, ncp, xl_te, xc_te, xr_te, core_size)
 end
 
 # --- Vortex Ring Implementation --- #
@@ -419,7 +422,7 @@ Vortex ring shaped panel element.
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `chord`: chord length for finite core calculations
+ - `core_size`: finite core size
 """
 struct Ring{TF} <: AbstractPanel{TF}
     rtl::SVector{3, TF}
@@ -430,11 +433,11 @@ struct Ring{TF} <: AbstractPanel{TF}
     rbr::SVector{3, TF}
     rcp::SVector{3, TF}
     ncp::SVector{3, TF}
-    chord::TF
+    core_size::TF
 end
 
 """
-    Ring(rtl, rtr, rbl, rbr, rcp, ncp, chord; rtc, rbc)
+    Ring(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc, rbc)
 
 Construct and return a vortex ring panel.
 
@@ -445,16 +448,16 @@ Construct and return a vortex ring panel.
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `chord`: chord length for finite core calculations
+ - `core_size`: core_size length for finite core calculations
  - `rtc`: (optional) position of the center of the top bound vortex, defaults to `(rtl+rtr)/2`
  - `rbc`: (optional) position of the center of the bottom bound vortex, defaults to `(rbl+rbr)/2`
 """
-Ring(rtl, rtr, rbl, rbr, rcp, ncp, chord; rtc=(rtl+rtr)/2, rbc=(rbl+rbr)/2) =
-    Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, chord)
+Ring(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc=(rtl+rtr)/2, rbc=(rbl+rbr)/2) =
+    Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 
-function Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, chord)
-    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc), eltype(rbr), eltype(rcp), eltype(ncp), typeof(chord))
-    return Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, chord)
+function Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc), eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size))
+    return Ring{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
 @inline Base.eltype(::Type{Ring{TF}}) where TF = TF
@@ -478,7 +481,7 @@ end
 
 @inline bottom_right(panel::Ring) = panel.rbr
 
-@inline get_core_size(panel::Ring) = panel.chord
+@inline get_core_size(panel::Ring) = panel.core_size
 
 @inline function induced_velocity(rcp, panel::Ring, symmetric, same_id,
     xhat, trailing, include_top, include_bottom)
@@ -584,9 +587,9 @@ end
     rbr = panel.rbr + r
     rcp = panel.rcp + r
     ncp = panel.ncp
-    chord = panel.chord
+    core_size = panel.core_size
 
-    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, chord)
+    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
 @inline function reflect(panel::Ring)
@@ -599,9 +602,9 @@ end
     rbr = flipy(panel.rbl)
     rcp = flipy(panel.rcp)
     ncp = flipy(panel.ncp)
-    chord = panel.chord
+    core_size = panel.core_size
 
-    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, chord)
+    return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
 # --- Struct to store panel properties --- #

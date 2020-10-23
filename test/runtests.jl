@@ -345,7 +345,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -373,7 +373,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -443,7 +443,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -471,7 +471,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
     AIC = influence_coefficients(wing, symmetric)
@@ -572,7 +572,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
     htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -611,7 +611,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
     htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -721,7 +721,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.chord)
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
     htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -760,7 +760,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.chord)
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
     htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
