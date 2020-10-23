@@ -363,6 +363,9 @@ end
         for j = 1:Ns
             J = cs[j]
 
+            #TODO: take advantage of shared edges when calculating influence coefficients
+            # (this should speed up the calculations)
+
             Vhat = induced_velocity(rcp, sending[J], symmetric, same_id,
                 xhat, include_bound)
 
