@@ -1,5 +1,6 @@
+# Run 3: Simple Wing at High Angle of Attack
 echo -e "oper\na a 8\nx\n\nquit\n" > commands
-cat commands - | ./avl3.35 simplewing1.avl > output
+cat commands | avl simplewing1.avl > output
 grep -o "CLtot.*" output
 grep -o "CDtot.*" output
 grep -o "CDff.*" output

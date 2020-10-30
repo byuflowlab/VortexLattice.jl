@@ -1,331 +1,1142 @@
 using Test
-using VortexLatticeMethod
-const VLM = VortexLatticeMethod
-
-# tests using AVL 3.35
-
-# ---- run1 ------  simple wing
-
-xle = [0.0; 0.4]
-yle = [0.0; 7.5]
-zle = [0.0; 0.0]
-chord = [2.2; 1.8]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [12]
-spacing = [Uniform()]
-duplicate = false
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-alpha = 1.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
-
-Sref = 30.0
-cref = 2.0
-bref = 15.0
-rcg = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00243, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02252, atol=1e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-# -----------------------------
-
-# ---- simple wing without symmetry -----
-duplicate = true
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-symmetric = false
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24324, atol=1e-3)
-@test isapprox(CD, 0.00243, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02252, atol=1e-4)
-@test isapprox(CY, 0.0, atol=1e-16)
-@test isapprox(Cl, 0.0, atol=1e-16)
-@test isapprox(Cn, 0.0, atol=1e-16)
-
-dCF, dCM = stability_analysis(panels, ref, fs, symmetric)
-CDa, CYa, CLa = dCF.alpha
-Cla, Cma, Cna = dCM.alpha
-CDb, CYb, CLb = dCF.beta
-Clb, Cmb, Cnb = dCM.beta
-CDp, CYp, CLp = dCF.p
-Clp, Cmp, Cnp = dCM.p
-CDq, CYq, CLq = dCF.q
-Clq, Cmq, Cnq = dCM.q
-CDr, CYr, CLr = dCF.r
-Clr, Cmr, Cnr = dCM.r
-
-@test isapprox(CLa, 4.638090, atol=.01*abs(CLa))
-@test isapprox(Cma, -0.429247, atol=.01*abs(Cma))
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clb, -0.025749, atol=.01*abs(Clb))  # TODO
-@test isapprox(Clp, -0.518725, atol=.01*abs(Clp))
-# @test isapprox(Cnp, -0.019846, atol=.01*abs(Cnp))  # TODO
-@test isapprox(CLq, 5.549788, atol=.01*abs(CLq))
-@test isapprox(Cmq, -0.517095, atol=.01*abs(Cmq))
-# @test isapprox(Clr, 0.064243, atol=.01*abs(Clr)) # TODO
-
-# h = 1e-6
-# betap = beta + h
-# fsp = VLM.Freestream(alpha, betap, Omega, vother)
-# outputsp = VLM.vlm(panels, ref, fsp, symmetric)
-# Cl_p, Cm_p, Cn_p = outputsp.CM
-
-# betam = beta - h
-# fsm = VLM.Freestream(alpha, betam, Omega, vother)
-# outputsm = VLM.vlm(panels, ref, fsm, symmetric)
-# Cl_m, Cm_m, Cn_m = outputsm.CM
-# println(Clb)
-# println((Cl_p - Cl_m)/(2*h))
-
-
-# Stability-axis derivatives...
-
-#                              alpha                beta
-#                   ----------------    ----------------
-#  z' force CL |    CLa =   4.638090    CLb =   0.000000
-#  y  force CY |    CYa =   0.000000    CYb =  -0.000007
-#  x' mom.  Cl'|    Cla =   0.000000    Clb =  -0.025749
-#  y  mom.  Cm |    Cma =  -0.429247    Cmb =  -0.000000
-#  z' mom.  Cn'|    Cna =  -0.000000    Cnb =   0.000466
-
-#                      roll rate  p'      pitch rate  q'        yaw rate  r'
-#                   ----------------    ----------------    ----------------
-#  z' force CL |    CLp =  -0.000000    CLq =   5.549788    CLr =   0.000000
-#  y  force CY |    CYp =   0.047000    CYq =  -0.000000    CYr =  -0.000745
-#  x' mom.  Cl'|    Clp =  -0.518725    Clq =   0.000000    Clr =   0.064243
-#  y  mom.  Cm |    Cmp =   0.000000    Cmq =  -0.517095    Cmr =  -0.000000
-#  z' mom.  Cn'|    Cnp =  -0.019846    Cnq =  -0.000000    Cnr =  -0.000898
-
-#  Neutral point  Xnp =   0.685096
-
-
-# ---- simple wing with chordwise panels (run7) -----
-
-duplicate = false
-cpanels = [5]
-cspacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.24454, atol=1e-3)
-@test isapprox(CD, 0.00247, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00248, atol=1e-5)
-@test isapprox(Cm, -0.02091, atol=2e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# ----- simple wing with cosine spacing (run8) -----
-
-
-duplicate = false
-cpanels = [1]
-cspacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.23744, atol=0.01*CL)
-# @test isapprox(CD, 0.00262, atol=0.01*CD)  # TODO: drag seems slightly underpredicted with my cosine spacing
-# @test isapprox(outputs.CDiff, 0.00243, atol=0.01*outputs.CDiff)
-@test isapprox(Cm, -0.02165, atol=1e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-# ----- simple wing with cosine spacing chordwise and spanwise (run9) -----
-
-duplicate = false
-cpanels = [5]
-cspacing = [Cosine()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, [Cosine()], cpanels, cspacing, duplicate)
-
-symmetric = true
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-
-@test isapprox(CL, 0.23879, atol=0.01*CL)
-# @test isapprox(CD, 0.00250, atol=0.01*CD)  # same comments
-# @test isapprox(outputs.CDiff, 0.00246, atol=0.01*outputs.CDiff)
-@test isapprox(Cm, -0.01994, atol=0.01*abs(Cm))
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# -------------------------
-
-# reset
-duplicate = false
-symmetric = true
-
-
-
-# ---- run3 ------  simple wing at higher angle of attack
-
-spacing = [Uniform()]
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-alpha = 8.0*pi/180
-fs = Freestream(alpha, beta, Omega, vother)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.80348, atol=2e-3)
-@test isapprox(CD, 0.02651, atol=2e-5)
-@test isapprox(outputs.CDiff, 0.02696, atol=2.1e-5)
-@test isapprox(Cm, -0.07399, atol=2.5e-4)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-# -----------------------------
-
-
-# ------ run4 -----  simple wing with dihedral
-
-xle = [0.0; 0.4]
-yle = [0.0; 7.5]
-zle = [0.0; 3.0]
-chord = [2.2; 1.8]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [11]
-spacing = [Uniform()]
-duplicate = false
-panels = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-alpha = 1.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
-
-Sref = 30.0
-cref = 2.0
-bref = 15.0
-rcg = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.24787, atol=1e-3)
-@test isapprox(CD, 0.00246, atol=1e-5)
-@test isapprox(outputs.CDiff, 0.00245, atol=1e-5)
-@test isapprox(Cm, -0.02395, atol=2e-3)
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# ------ run5 -----  simple wing with dihedral, high angle of attack.
-
-alpha = 20.0*pi/180  # nonphysical, just testing the numerics
-fs = Freestream(alpha, beta, Omega, vother)
-
-outputs = vlm(panels, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 1.70985, atol=.02*abs(CL))
-@test isapprox(CD, 0.12904, atol=.01*abs(CD))
-# @test isapprox(outputs.CDiff, 0.11502, atol=.001*abs(CD))  # TODO: AVL doesn't project wake (drag-free).  So I actually think what is predicted in this code is more accurate than the AVL value.
-@test isapprox(Cm, -0.45606, atol=.01*abs(Cm))
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
-
-# ------ run 6 ------ wing/tail
-
-Sref = 9.0
-cref = 0.9
-bref = 10.0
-rcg = [0.5, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rcg)
-
-
-xle = [0.0; 0.2]
-yle = [0.0; 5.0]
-zle = [0.0; 1.0]
-chord = [1.0; 0.6]
-theta = [2.0*pi/180; 2.0*pi/180]
-npanels = [11]
-spacing = [Uniform()]
-duplicate = false
-wing = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-
-xle = [0.0; 0.14]
-yle = [0.0; 1.25]
-zle = [0.0; 0.0]
-chord = [0.7; 0.42]
-theta = [0.0; 0.0]
-npanels = [5]
-spacing = [Uniform()]
-duplicate = false
-htail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-VLM.translate!(htail, [4.0; 0.0; 0.0])
-
-xle = [0.0; 0.14]
-yle = [0.0; 0.0]
-zle = [0.0; 1.0]
-chord = [0.7; 0.42]
-theta = [0.0; 0.0]
-npanels = [4]
-spacing = [Uniform()]
-duplicate = false
-vtail = linear_sections(xle, yle, zle, chord, theta, npanels, spacing, [1], [Uniform()], duplicate)
-translate!(vtail, [4.0; 0.0; 0.0])
-
-
-vehicle = [wing; htail; vtail]
-
-
-alpha = 5.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
-
-symmetric = true
-outputs = vlm(vehicle, ref, fs, symmetric)
-CD, CY, CL = outputs.CF
-Cl, Cm, Cn = outputs.CM
-@test isapprox(CL, 0.60563, atol=.01*abs(CL))
-@test isapprox(CD, 0.01049, atol=.01*abs(CD))
-# @test isapprox(Cm, -0.03377, atol=.01*abs(Cm))  # TODO: not passing
-@test CY == 0.0
-@test Cl == 0.0
-@test Cn == 0.0
-
+using VortexLattice
+using LinearAlgebra
+
+ztol = sqrt(eps())
+
+# reflects a vector across the x-z plane
+flipy(x) = [x[1], -x[2], x[3]]
+
+# constructs a normal vector the way AVL does
+function avl_normal_vector(dr, theta)
+    st, ct = sincos(theta)
+    bhat = dr/norm(dr) # bound vortex vector
+    shat = [0, -dr[3], dr[2]]/sqrt(dr[2]^2+dr[3]^2) # chordwise strip normal vector
+    chat = [ct, -st*shat[2], -st*shat[3]] # camberline vector
+    ncp = cross(chat, dr) # normal vector perpindicular to camberline and bound vortex
+    return ncp / norm(ncp) # normal vector used by AVL
+end
+
+@testset "AVL - Run 1" begin
+
+    # Simple Wing with Uniform Spacing
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # horseshoe vortices with symmetry
+    mirror = false
+    symmetric = true
+
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # horseshoe vortices with mirrored geometry
+    mirror = true
+    symmetric = false
+
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s, spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings with symmetry
+    mirror = false
+    symmetric = true
+
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings with mirrored geometry
+    mirror = true
+    symmetric = false
+
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24324, atol=1e-3)
+    @test isapprox(CD, 0.00243, atol=1e-5)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02252, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 2" begin
+
+    # Run 2: Simple Wing with Cosine Spacing
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Cosine()
+    spacing_c = Uniform()
+    mirror = true
+    symmetric = false
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.23744, atol=1e-3)
+    @test isapprox(CD, 0.00254, atol=1e-5)
+    @test isapprox(CDiff, 0.00243, atol=1e-5)
+    @test isapprox(Cm, -0.02165, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.23744, atol=1e-3)
+    @test isapprox(CD, 0.00254, atol=1e-5)
+    @test isapprox(CDiff, 0.00243, atol=1e-5)
+    @test isapprox(Cm, -0.02165, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 3" begin
+
+    # Simple Wing at High Angle of Attack
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = true
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 8.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.80348, atol=1e-5)
+    @test isapprox(CD, 0.02651, atol=1e-5)
+    @test isapprox(CDiff, 0.02696, atol=1e-5)
+    @test isapprox(Cm, -0.07399, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.80348, atol=1e-3)
+    @test isapprox(CD, 0.02651, atol=1e-4)
+    @test isapprox(CDiff, 0.02696, atol=1e-5)
+    @test isapprox(Cm, -0.07399, atol=1e-3)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 4" begin
+
+    # Simple Wing with Dihedral
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 3.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = true
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # also get normal vector as AVL defines it
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+    end
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24787, atol=1e-3)
+    @test isapprox(CD, 0.00246, atol=1e-5)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02395, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+    end
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24787, atol=1e-3)
+    @test isapprox(CD, 0.00246, atol=1e-4)
+    @test isapprox(CDiff, 0.00245, atol=1e-5)
+    @test isapprox(Cm, -0.02395, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+end
+
+@testset "AVL - Run 5" begin
+
+    # Simple Wing with Dihedral at Very High Angle of Attack
+
+    # NOTE: this test case is nonphysical, so it just tests the numerics
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 3.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = true
+
+    # adjust chord length to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 20.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+    end
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 1.70982, rtol=0.01)
+    @test isapprox(CD, 0.12904, rtol=0.01)
+    @test isapprox(CDiff, 0.11502, rtol=0.01)
+    @test isapprox(Cm, -0.45606, rtol=0.01)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings, untwisted geometry
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+    end
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 1.70982, rtol=0.02)
+    @test isapprox(CD, 0.12904, rtol=0.02)
+    @test isapprox(CDiff, 0.11502, rtol=0.02)
+    @test isapprox(Cm, -0.45606, rtol=0.02)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 6" begin
+
+    # Wing and Tail without Finite Core Model
+
+    # NOTE: AVL's finite-core model is turned off for these tests
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices - finite core deactivated
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+    end
+
+    htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 1, 1]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60408, atol=1e-4)
+    @test isapprox(CD, 0.01058, atol=1e-5)
+    @test isapprox(CDiff, 0.010378, atol=1e-4)
+    @test isapprox(Cm, -0.02778, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings - finite core deactivated
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+    end
+
+    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 1, 1]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60408, atol=1e-3)
+    @test isapprox(CD, 0.01058, atol=1e-4)
+    @test isapprox(CDiff, 0.010378, atol=1e-4)
+    @test isapprox(Cm, -0.02778, atol=2e-3)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 7" begin
+
+    # Wing and Tail with Finite Core Model
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
+    end
+
+    htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60562, atol=1e-4)
+    @test isapprox(CD, 0.01058, atol=1e-5)
+    @test isapprox(CDiff, 0.0104855, atol=1e-4)
+    @test isapprox(Cm, -0.03377, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    for (ip, p) in enumerate(wing)
+        # check that our normal vector is approximately the same as AVL's
+        @test isapprox(p.ncp, ncp, rtol=0.01)
+        # replace our normal vector with AVL's normal vector for this test
+        wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+    end
+
+    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
+
+    AIC = influence_coefficients(surfaces, surface_id, symmetric)
+    b = normal_velocity(surfaces, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.60562, atol=1e-3)
+    @test isapprox(CD, 0.01058, atol=1e-4)
+    @test isapprox(CDiff, 0.0104855, atol=1e-4)
+    @test isapprox(Cm, -0.03377, atol=2e-3)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
+
+end
+
+@testset "AVL - Run 8" begin
+
+    # Simple Wing with Chordwise Panels
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # adjust chord length to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+end
+
+@testset "AVL - Run 9" begin
+
+    # Simple Wing with Cosine-Spaced Spanwise and Chordwise Panels
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Cosine()
+    spacing_c = Cosine()
+    mirror = false
+
+    # adjust chord length to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = true
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.23879, atol=1e-3)
+    @test isapprox(CD, 0.00249, atol=1e-5)
+    @test isapprox(CDiff, 0.0024626, atol=1e-5)
+    @test isapprox(Cm, -0.01995, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.23879, atol=1e-3)
+    @test isapprox(CD, 0.00249, atol=1e-5)
+    @test isapprox(CDiff, 0.0024626, atol=1e-5)
+    @test isapprox(Cm, -0.01995, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+end
+
+@testset "AVL - Run 10" begin
+
+    # Simple Wing with Sideslip
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    # adjust chord length to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 15.0*pi/180
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # horseshoe vortices
+    mirror = true
+    symmetric = false
+
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.22695, atol=1e-3)
+    @test isapprox(CD, 0.00227, atol=1e-5)
+    @test isapprox(CDiff, 0.0022852, atol=1e-5)
+    @test isapprox(Cm, -0.02101, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-5)
+    @test isapprox(Cl, 0.00644, atol=1e-4)
+    @test isapprox(Cn, -0.00012, atol=1e-4)
+
+    # vortex rings
+    mirror = true
+    symmetric = false
+
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+    b = normal_velocity(wing, ref, fs)
+    Γ = circulation(AIC, b)
+    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
+    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.22695, atol=1e-3)
+    @test isapprox(CD, 0.00227, atol=1e-5)
+    @test isapprox(CDiff, 0.0022852, atol=1e-5)
+    @test isapprox(Cm, -0.02101, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-5)
+    @test isapprox(Cl, 0.00644, atol=1e-4)
+    @test isapprox(Cn, -0.00012, atol=2e-4)
+
+end
+
+@testset "AVL - Run 11" begin
+
+    # Run 11: Simple Wing Stability Derivatives
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = true
+    symmetric = false
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+
+    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
+
+    CDa, CYa, CLa = dCF.alpha
+    CDb, CYb, CLb = dCF.beta
+    CDp, CYp, CLp = dCF.p
+    CDq, CYq, CLq = dCF.q
+    CDr, CYr, CLr = dCF.r
+    Cla, Cma, Cna = dCM.alpha
+    Clb, Cmb, Cnb = dCM.beta
+    Clp, Cmp, Cnp = dCM.p
+    Clq, Cmq, Cnq = dCM.q
+    Clr, Cmr, Cnr = dCM.r
+
+    @test isapprox(CLa, 4.638088, rtol=0.01)
+    @test isapprox(CLb, 0.0, atol=ztol)
+    @test isapprox(CYa, 0.0, atol=ztol)
+    @test isapprox(CYb, -0.000007, atol=1e-4)
+    @test isapprox(Cla, 0.0, atol=ztol)
+    @test isapprox(Clb, 0.025749, rtol=0.015)
+    @test isapprox(Cma, -0.429247, rtol=0.01)
+    @test isapprox(Cmb, 0.0, atol=ztol)
+    @test isapprox(Cna, 0.0, atol=ztol)
+    @test isapprox(Cnb, -0.000466, atol=1e-4)
+    @test isapprox(Clp, -0.518725, rtol=0.01)
+    @test isapprox(Clq, 0.0, atol=ztol)
+    @test isapprox(Clr, 0.064243, rtol=0.01)
+    @test isapprox(Cmp, 0.0, atol=ztol)
+    @test isapprox(Cmq, -0.517094, rtol=0.01)
+    @test isapprox(Cmr, 0.0, atol=ztol)
+    @test isapprox(Cnp, -0.019846, rtol=0.01)
+    @test isapprox(Cnq, 0.0, atol=ztol)
+    @test isapprox(Cnr, -0.000898, rtol=0.01)
+
+    # vortex rings
+    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    AIC = influence_coefficients(wing, symmetric)
+
+    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
+
+    CDa, CYa, CLa = dCF.alpha
+    Cla, Cma, Cna = dCM.alpha
+    CDb, CYb, CLb = dCF.beta
+    Clb, Cmb, Cnb = dCM.beta
+    CDp, CYp, CLp = dCF.p
+    Clp, Cmp, Cnp = dCM.p
+    CDq, CYq, CLq = dCF.q
+    Clq, Cmq, Cnq = dCM.q
+    CDr, CYr, CLr = dCF.r
+    Clr, Cmr, Cnr = dCM.r
+
+    @test isapprox(CLa, 4.638088, rtol=0.01)
+    @test isapprox(CLb, 0.0, atol=ztol)
+    @test isapprox(CYa, 0.0, atol=ztol)
+    @test isapprox(CYb, -0.000007, atol=1e-4)
+    @test isapprox(Cla, 0.0, atol=ztol)
+    @test isapprox(Clb, 0.025749, rtol=0.015)
+    @test isapprox(Cma, -0.429247, rtol=0.01)
+    @test isapprox(Cmb, 0.0, atol=ztol)
+    @test isapprox(Cna, 0.0, atol=ztol)
+    # @test isapprox(Cnb, -0.000466, atol=1e-4)
+    @test isapprox(Clp, -0.518725, rtol=0.01)
+    @test isapprox(Clq, 0.0, atol=ztol)
+    @test isapprox(Clr, 0.064243, rtol=0.01)
+    @test isapprox(Cmp, 0.0, atol=ztol)
+    @test isapprox(Cmq, -0.517094, rtol=0.01)
+    @test isapprox(Cmr, 0.0, atol=ztol)
+    @test isapprox(Cnp, -0.019846, rtol=0.01)
+    @test isapprox(Cnq, 0.0, atol=ztol)
+    @test isapprox(Cnr, -0.000898, rtol=0.01)
+
+end
 
 # # ---- Veldhius validation case ------
 # b = 0.64*2
@@ -385,8 +1196,8 @@ Cl, Cm, Cn = outputs.CM
 # Sref = 0.30739212
 # cref = 0.24015
 # bref = b
-# rcg = [0.0, 0.0, 0.0]
-# ref = VLM.Reference(Sref, cref, bref, rcg)
+# rref = [0.0, 0.0, 0.0]
+# ref = VLM.Reference(Sref, cref, bref, rref)
 
 # symmetric = true
 # CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(wing, ref, fs, symmetric)

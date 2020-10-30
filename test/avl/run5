@@ -1,5 +1,6 @@
+# Run 5: Simple Wing with Dihedral at Very High Angle of Attack
 echo -e "oper\na a 20\nx\n\nquit\n" > commands
-cat commands - | ./avl3.35 nonplanarwing1.avl > output
+cat commands | avl nonplanarwing1.avl > output
 grep -o "CLtot.*" output
 grep -o "CDtot.*" output
 grep -o "CDff.*" output

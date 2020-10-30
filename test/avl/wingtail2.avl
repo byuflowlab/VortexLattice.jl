@@ -18,9 +18,6 @@ Wing
 YDUPLICATE
 0.0
 #
-COMPONENT
-1
-#
 ANGLE
 2.0
 #-------------------------------------------------------------
@@ -66,9 +63,6 @@ H-stab
 YDUPLICATE
 0.0
 #
-COMPONENT
-1
-#
 TRANSLATE
 4.0 0.0 0.0
 #
@@ -87,9 +81,6 @@ SURFACE
 V-stab
 #Nchordwise  Cspace    Nspanwise  Sspace
 1            1.0       5          0.0
-#
-COMPONENT
-1
 #
 TRANSLATE
 4.0 0.0 0.0

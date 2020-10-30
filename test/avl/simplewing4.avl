@@ -1,6 +1,6 @@
 Simple Wing
 #Mach
- 0.0    
+ 0.0
 #IYsym   IZsym   Zsym
  0       0       0.0
 #Sref    Cref    Bref
@@ -10,10 +10,10 @@ Simple Wing
 #
 #
 #====================================================================
-SURFACE 
-Wing 
+SURFACE
+Wing
 #Nchordwise  Cspace   Nspanwise   Sspace
-1            0.0       12         1.0
+6            1.0       12         1.0
 #
 YDUPLICATE
 0.0

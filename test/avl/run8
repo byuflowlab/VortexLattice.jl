@@ -1,5 +1,6 @@
-echo -e "oper\na a 1\nx\nst\n\n\nquit\n" > commands
-cat commands - | ./avl3.35 simplewing4.avl > output
+# Run 7: Simple Wing with Chordwise Panels
+echo -e "oper\na a 1\nx\n\nquit\n" > commands
+cat commands | avl simplewing3.avl > output
 grep -o "CLtot.*" output
 grep -o "CDtot.*" output
 grep -o "CDff.*" output

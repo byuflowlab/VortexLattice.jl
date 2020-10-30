@@ -1,5 +1,6 @@
+# Run 4: Simple Wing with Dihedral
 echo -e "oper\na a 1\nx\n\nquit\n" > commands
-cat commands - | ./avl3.35 nonplanarwing1.avl > output
+cat commands | avl nonplanarwing1.avl > output
 grep -o "CLtot.*" output
 grep -o "CDtot.*" output
 grep -o "CDff.*" output

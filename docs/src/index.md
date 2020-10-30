@@ -8,14 +8,14 @@
 
 Authors: Taylor McDonnell and Andrew Ning
 
-**VortexLattice** is a comprehensive pure-Julia implementation of the vortex lattice method.  It is designed to be fast, accurate (within theoretical limitations), easy to use, and applicable to arbitrary geometries and velocity fields.  It has been extensively verified against results generated using Mark Drela's AVL, but has also been enhanced to incorporate features and modeling capabilties not present in AVL.
+**VortexLattice** is a comprehensive pure-Julia implementation of the vortex lattice method.  It is designed to be fast, accurate (within theoretical limitations), easy to use, and applicable to arbitrary geometries and velocity fields.  It has been extensively verified against results generated using Mark Drela's AVL, but has also been enhanced to incorporate features and modeling capabilities not present in AVL.
 
-![](docs/src/showoff.png)
+![](showoff.png)
 
 ## Package Features
  - Custom vortex lattice panels
-   - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](#1))
-   - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](#2))
+   - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](@ref References))
+   - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](@ref References))
    - Optional finite-core model
  - Convenient geometry generation
    - From pre-existing grid
@@ -53,8 +53,6 @@ This code has been optimized to be highly performant, primarily by maintaining t
 See the [documentation](https://flow.byu.edu/VortexLattice.jl/dev)
 
 ## References
-<a id="1">[1]</a>
-Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
+[1] Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
 
-<a id="2">[2]</a>
-Katz, J., and Plotkin A. Low-Speed Aerodynamics. Cambridge University Press, 2001.
+[2] Katz, J., and Plotkin A. Low-Speed Aerodynamics. Cambridge University Press, 2001.
