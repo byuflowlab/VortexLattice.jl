@@ -14,5 +14,5 @@ makedocs(;
 )
 
 deploydocs(
-    repo = "github.com/byuflowlab/VortexLattice.jl.git",
+    repo = "github.com/byuflowlab/VLM.jl.git",
 )
