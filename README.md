@@ -1,7 +1,6 @@
 # VortexLattice
 
-[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://flow.byu.edu/VortexLattice.jl/stable)
-[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://flow.byu.edu/VortexLattice.jl/dev)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://flow.byu.edu/VLM.jl/dev)
 ![](https://github.com/byuflowlab/VortexLattice.jl/workflows/Run%20tests/badge.svg)
 
 *A Comprehensive Julia implementation of the Vortex Lattice Method*
