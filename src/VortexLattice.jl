@@ -14,6 +14,9 @@ include("panel.jl")
 export AbstractPanel, Horseshoe, Ring
 export translate, translate!, reflect
 
+include("wake.jl")
+export Wake
+
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_horseshoe_vortices, grid_to_vortex_rings

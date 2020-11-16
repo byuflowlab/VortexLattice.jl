@@ -1,38 +1,7 @@
-# --- reference frames --- #
-
-"""
-    AbstractFrame
-
-Supertype for the different possible reference frames used by this package.
-"""
-abstract type AbstractFrame end
-
-"""
-   Body <: AbstractFrame
-
-Reference frame aligned with the global X-Y-Z axes
-"""
-struct Body <: AbstractFrame end
-
-"""
-    Stability <: AbstractFrame
-
-Reference frame rotated from the body frame about the y-axis to be aligned with
-the freestream `alpha`.
-"""
-struct Stability <: AbstractFrame end
-
-"""
-    Wind <: AbstractFrame
-
-Reference frame rotated to be aligned with the freestream `alpha` and `beta`
-"""
-struct Wind <: AbstractFrame end
-
 # --- near field force calculations --- #
 
 """
-    near_field_forces(surface, reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces(surface, [wake, ] reference, freestream, symmetric, Γ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ`.
@@ -42,26 +11,44 @@ Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
 # Arguments:
  - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
+ - `wake`: Matrix of wake panels of shape (nw, ns) where `nw` is the number of
+    chordwise wake panels and `ns` is the number of spanwise panels
  - `reference`: reference parameters (see `Reference`)
  - `freestream`: freestream parameters (see `Freestream`)
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
  - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
- - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+
+# Keyword Arguments
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
  - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
     `Stability()`, and `Wind()`
+ - `nwake`: number of chordwise wake panels to use from `wake`, defaults to all
+    wake panels
+ - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
+    from the last chordwise panel in `wake`
 """
-function near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ;
-    xhat=SVector(1, 0, 0), frame=Body())
+near_field_forces(surface::AbstractMatrix, args...; kwargs...)
 
-    CF, CM, props = near_field_forces([surface], 1:1, ref, fs, symmetric, Γ;
-        xhat=xhat, frame=frame)
+# without wake
+function near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ; kwargs...)
+
+    CF, CM, props = near_field_forces([surface], 1:1, ref, fs, symmetric, Γ; kwargs...)
+
+    return CF, CM, props[1]
+end
+
+# with wake
+function near_field_forces(surface::AbstractMatrix, wake::AbstractMatrix, ref, fs,
+    symmetric, Γ; kwargs...)
+
+    CF, CM, props = near_field_forces([surface], [wake], 1:1, ref, fs, symmetric, Γ; kwargs...)
 
     return CF, CM, props[1]
 end
 
 """
-    near_field_forces(surfaces, surface_id, reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces(surfaces, [wakes, ] surface_id, reference, freestream, symmetric, Γ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ`.
@@ -72,6 +59,8 @@ Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
  - `surface`: Vector of surfaces, represented by matrices of panels of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
+ - `wake`: (optional) Matrix of wake panels of shape (nw, ns) where `nw` is the
+    number of chordwise wake panels and `ns` is the number of spanwise panels
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
     model by setting all surface ID's to the same value.
  - `reference`: reference parameters (see `Reference`)
@@ -79,12 +68,21 @@ Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
  - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
+
+# Keyword Arguments
  - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
  - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
     `Stability()`, and `Wind()`
+ - `nwake`: number of chordwise wake panels to use from `wake`, defaults to all
+   wake panels
+ - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
+   from the last chordwise panel in `wake`
 """
-function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_id, ref, fs,
-    symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
+near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
+
+# without wake
+function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_id,
+    ref, fs, symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
 
     # float number type
     TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
@@ -98,6 +96,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 
     # initialize storage for panel properties
     props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
+
+    # include trailing vortices since there are no wake panels
+    trailing_vortices = true
 
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
@@ -128,30 +129,16 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 
                 sending = surfaces[jsurf]
                 ns = length(sending)
-                ns1, ns2 = size(sending)
-                cs = CartesianIndices(sending)
 
                 # find out whether surfaces have the same index and/or ID
                 same_surface = isurf == jsurf
                 same_id = surface_id[isurf] == surface_id[jsurf]
 
-                # loop through each sending panel
-                for j = 1:ns
+                vΓ = view(Γ, jΓ+1:jΓ+ns)
 
-                    J = cs[j]
+                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ, same_surface,
+                    same_id, trailing_vortices, symmetric; xhat=xhat, I=I)
 
-                    trailing = J[1] == ns1
-
-                    #TODO: take advantage of shared edges when calculating induced velocity
-                    # (this should speed up the calculations)
-
-                    # calculate induced velocity
-                    Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
-                        same_surface, symmetric, same_id, xhat, trailing)
-
-                    # add contribution to velocity
-                    Vi += Vij*Γ[jΓ+j]
-                end
                 jΓ += ns
             end
 
@@ -243,7 +230,7 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 end
 
 """
-    near_field_forces_derivatives(surface, reference, freestream, symmetric, Γ, dΓ; kwargs...)
+    near_field_forces_derivatives(surface, reference, freestream, trailing_vortices, symmetric, Γ, dΓ; kwargs...)
 
 Compute the forces and moments acting on the aircraft given the circulation
 distribution `Γ` and their derivatives with respect to the variables in `freestream`.
@@ -329,6 +316,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
     # initialize panel outputs
     props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
 
+    # include trailing vortices since there are no wake panels
+    trailing_vortices = true
+
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
@@ -361,38 +351,34 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
                 sending = surfaces[jsurf]
                 ns = length(sending)
-                ns1, ns2 = size(sending)
-                cs = CartesianIndices(sending)
 
                 # find out whether surfaces have the same index and/or ID
                 same_surface = isurf == jsurf
                 same_id = surface_id[isurf] == surface_id[jsurf]
 
-                # loop through each sending panel
-                for j = 1:ns
+                vΓ = view(Γ, jΓ+1:jΓ+ns)
 
-                    J = cs[j]
+                vΓ_a = view(Γ_a, jΓ+1:jΓ+ns)
+                vΓ_b = view(Γ_b, jΓ+1:jΓ+ns)
+                vΓ_p = view(Γ_p, jΓ+1:jΓ+ns)
+                vΓ_q = view(Γ_q, jΓ+1:jΓ+ns)
+                vΓ_r = view(Γ_r, jΓ+1:jΓ+ns)
 
-                    trailing = J[1] == ns1
+                vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
 
-                    #TODO: take advantage of shared edges when calculating induced velocity
-                    # (this should speed up the calculations)
+                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ, same_surface,
+                    same_id, trailing_vortices, symmetric; xhat=xhat, I=I)
 
-                    # calculate induced velocity
-                    Vij = panel_induced_velocity(receiving[I], I, sending[J], J,
-                        same_surface, symmetric, same_id, xhat, trailing)
+                Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
 
-                    # add contribution to velocity
-                    Vi += Vij*Γ[jΓ+j]
+                Vi += Vind
 
-                    # derivatives
-                    Vi_a += Vij*Γ_a[j]
-                    Vi_b += Vij*Γ_b[j]
-                    Vi_p += Vij*Γ_p[j]
-                    Vi_q += Vij*Γ_q[j]
-                    Vi_r += Vij*Γ_r[j]
-                end
-                # increment Γ index
+                Vi_a += Vind_a
+                Vi_b += Vind_b
+                Vi_p += Vind_p
+                Vi_q += Vind_q
+                Vi_r += Vind_r
+
                 jΓ += ns
             end
 

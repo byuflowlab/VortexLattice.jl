@@ -111,47 +111,358 @@ Reflects panels about the y-axis, preserving panel grid-based ordering
 reflect(panels::AbstractMatrix{<:AbstractPanel}) = reflect.(reverse(panels, dims=2))
 
 """
-    induced_velocity(rcp, panel, same_id, symmetric, xhat, args...)
+    panel_induced_velocity(rcp, panel, trailing; kwargs...)
 
-Computes the normalized induced velocity at control point `rcp` from `panel`.
+Compute the normalized induced velocity at point `rcp` induced by the top,
+bottom, left, and right sides of `panel`.
 
 # Arguments
  - `rcp`: Control point for receiving panel
  - `panel`: Sending panel
- - `same_id`: Flag indicating whether the sending and receiving surfaces have the same surface ID
- - `symmetric`: Flag indicating whether sending panel should be mirrored across the y-axis
- - `xhat`: Direction in which to shed trailing vortices
+ - `trailing`: Flag indicating whether `panel` sheds trailing vortices
 
-# Optional Arguments for Horseshoe Vortices
- - `include_bound`: Indicates whether to include the bound vortex in induced velocity
-    calculations, defaults to true
-
-# Optional Arguments for Vortex Rings
- - `trailing`: Flag indicating whether sending panel sheds trailing vortices
- - `include_top`: Indicates whether to include the top bound vortex in induced velocity
-    calculations, defaults to true
- - `include_bottom`: Indicates whether to include the bottom bound vortex in induced velocity
-    calculations, defaults to true
+# Keyword Arguments
+ - `finite_core = false`: Flag indicating whether finite_core model should be applied
+ - `reflect = false`: Flag indicating whether `panel` should be reflected across the
+    y-axis before calculating induced velocities.  Note that left and right are defined
+    prior to performing the reflection
+ - `xhat = [1,0,0]`: Direction in which trailing vortices are shed
+ - `include_top = true`: Flag to disable induced velocity calculations for the top bound vortex
+ - `include_bottom = true`: Flag to disable induced velocity calculations for the bottom bound vortex
+    or trailing vortices
+ - `include_left = true`: Flag to disable induced velocity calculations for the left bound vortex
+ - `include_right = true`: Flag to disable induced velocity calculations for the right bound vortex
 """
-induced_velocity
+panel_induced_velocity(rcp, panel::AbstractPanel, trailing; kwargs...)
 
 """
-    panel_induced_velocity(receiving, Ir, sending, Is, same_surface, same_id, symmetric, xhat, trailing)
+    surface_induced_velocity(rcp, surface, Γ, same_surface, same_id, trailing_vortices,
+        symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
 
-Computes the normalized induced velocity on panel `receiving` from panel `sending`.
+Returns the induced velocity at `rcp` from the panels in `surface`
 
 # Arguments
- - `receiving`: Receiving panel
- - `Ir`: Indices of `receiving` panel
- - `sending`: Sending panel
- - `Is`: Indices of `sending` panel
- - `same_surface`: Flag indicating whether the sending and receiving surfaces are the same
- - `same_id`: Flag indicating whether the sending and receiving surfaces have the same surface ID
- - `symmetric`: Flag indicating whether sending panel should be mirrored across the y-axis
- - `xhat`: Direction in which to shed trailing vortices
- - `trailing`: Indicates whether the panel is on the trailing edge
+ - `rcp`: location where induced velocity is calculated
+ - `surface`: Matrix of surface panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `Γ`: Circulation strengths corresponding to `surface`
+ - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
+    shed from `surface`
+ - `same_surface`: Flag indicating whether `rcp` corresponds to a panel center
+    on `surface`
+ - `same_id`: Flag indicating whether `rcp` is on a surface with the same ID as
+    `surface`
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+
+# Keyword Arguments
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `I`: cartesian index corresponding to the location of `rcp` on `surface`. (1,1)
+    corresponds to the center of the top left panel and (nc, ns) corresponds
+    to the center of the bottom right panel.  By default, `rcp` is not assumed
+    to correspond to a panel center on `surface`.
 """
-panel_induced_velocity
+function surface_induced_velocity(rcp, surface, Γ, same_surface, same_id,
+    trailing_vortices, symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+
+    TF = promote_type(eltype(rcp), eltype(eltype(surface)))
+
+    Ns = length(surface)
+    nc, ns = size(surface)
+    cs = CartesianIndices(surface)
+
+    finite_core = !same_id
+    previous_trailing = false
+
+    Vind = SVector{3, TF}(0, 0, 0)
+    for j = 1:Ns
+        J = cs[j]
+
+        leading_edge = J[1] == 1
+        trailing_edge = J[1] == nc
+        left_side = J[2] == 1
+        right_side = J[2] == ns
+
+        # exclude bound vortices that correspond to the index of `rcp`
+        include_top = !(same_surface && I[1] == J[1] && I[2] == J[2])
+        include_bottom = !(same_surface && I[1] == J[1]+1 && I[2] == J[2])
+
+        # trailing vortices instead of bottom bound vortex?
+        trailing = trailing_vortices && has_trailing_vortices(surface[j], trailing_edge)
+
+        if finite_core
+
+            # induced velocity from the panel
+            vt, vb, vl, vr, vlt, vrt = panel_induced_velocity(rcp, surface[j],
+                trailing; finite_core = finite_core, reflect = false, xhat = xhat,
+                include_top=include_top, include_bottom=include_bottom)
+
+            # add induced velocity from reflected panel if symmetric
+            if symmetric
+                include_top_mirrored = include_top || not_on_symmetry_plane(
+                    top_left(surface[j]), top_right(surface[j]))
+
+                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
+                    bottom_left(surface[j]), bottom_right(surface[j]))
+
+                vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
+                    surface[j], trailing;
+                    finite_core = finite_core, reflect = true, xhat = xhat,
+                    include_top=include_top_mirrored, include_bottom=include_bottom_mirrored)
+
+                # left is right and right is left
+                vt += vt_s
+                vb += vb_s
+                vl += vl_s
+                vr += vr_s
+                vlt += vlt_s
+                vrt += vrt_s
+            end
+
+            # add velocity from this panel
+            Vind += (vt + vb + vl + vr + vlt + vrt) * Γ[j]
+
+        else
+            # use more efficient formulation when finite core is disabled
+
+            # induced velocity from the panel
+            vt, vb, vl, vr, vlt, vrt = panel_induced_velocity(rcp, surface[j],
+                trailing; finite_core = false, reflect = false, xhat = xhat,
+                include_top = include_top && (leading_edge || previous_trailing),
+                include_bottom=include_bottom, include_left=left_side,
+                include_left_trailing=left_side)
+
+            # add induced velocity from reflected panel if symmetric
+            if symmetric
+                include_top_mirrored = include_top || not_on_symmetry_plane(
+                    top_left(surface[j]), top_right(surface[j]))
+
+                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
+                    bottom_left(surface[j]), bottom_right(surface[j]))
+
+                vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
+                    surface[j], trailing;
+                    finite_core = false,  reflect = true, xhat = xhat,
+                    include_top=include_top_mirrored && (leading_edge || previous_trailing),
+                    include_bottom=include_bottom_mirrored,
+                    include_left=left_side, include_left_trailing=left_side)
+
+                vt += vt_s
+                vb += vb_s
+                vl += vl_s
+                vr += vr_s
+                vlt += vlt_s
+                vrt += vrt_s
+            end
+
+            # add velocity from this panel (excluding already computed components)
+            Vind += (vt + vb + vl + vr + vlt + vrt) * Γ[j]
+
+            # additional contribution from bottom shared edge
+            if !(trailing || trailing_edge)
+                Vind -= vb * Γ[j+1]
+            end
+
+            # additional contribution from right shared edge
+            if !right_side
+                Vind -= vr * Γ[j+nc]
+            end
+
+            # additional contribution from right shared trailing vortex
+            if !right_side
+                Vind -= vrt * Γ[j+nc]
+            end
+        end
+        previous_trailing = trailing
+    end
+
+    return Vind
+end
+
+"""
+    surface_induced_velocity(rcp, surface, Γ, same_surface, same_id, trailing_vortices,
+        symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+
+Returns the induced velocity at `rcp` from the panels in `surface` and its
+derivatives with respect to the freestream variables
+
+# Arguments
+ - `rcp`: location where induced velocity is calculated
+ - `surface`: Matrix of surface panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `Γ`: Circulation strengths corresponding to `surface`
+ - `dΓ`: Circulation strength derivatives corresponding to `surface`
+ - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
+    shed from `surface`
+ - `same_surface`: Flag indicating whether `rcp` corresponds to a panel center
+    on `surface`
+ - `same_id`: Flag indicating whether `rcp` is on a surface with the same ID as
+    `surface`
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+
+# Keyword Arguments
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `I`: cartesian index corresponding to the location of `rcp` on `surface`. (1,1)
+    corresponds to the center of the top left panel and (nc, ns) corresponds
+    to the center of the bottom right panel.  By default, `rcp` is not assumed
+    to correspond to a panel center on `surface`.
+"""
+function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, same_surface, same_id,
+    trailing_vortices, symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+
+    TF = promote_type(eltype(rcp), eltype(eltype(surface)))
+
+    Ns = length(surface)
+    nc, ns = size(surface)
+    cs = CartesianIndices(surface)
+
+    finite_core = !same_id
+    previous_trailing = false
+
+    # unpack derivatives
+    Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = dΓ
+
+    Vind = SVector{3, TF}(0, 0, 0)
+
+    Vind_a = SVector{3, TF}(0, 0, 0)
+    Vind_b = SVector{3, TF}(0, 0, 0)
+    Vind_p = SVector{3, TF}(0, 0, 0)
+    Vind_q = SVector{3, TF}(0, 0, 0)
+    Vind_r = SVector{3, TF}(0, 0, 0)
+
+    for j = 1:Ns
+        J = cs[j]
+
+        leading_edge = J[1] == 1
+        trailing_edge = J[1] == nc
+        left_side = J[2] == 1
+        right_side = J[2] == ns
+
+        # exclude bound vortices that correspond to the index of `rcp`
+        include_top = !(same_surface && I[1] == J[1] && I[2] == J[2])
+        include_bottom = !(same_surface && I[1] == J[1]+1 && I[2] == J[2])
+
+        # trailing vortices instead of bottom bound vortex?
+        trailing = trailing_vortices && has_trailing_vortices(surface[j], trailing_edge)
+
+        if finite_core
+
+            # induced velocity from the panel
+            vt, vb, vl, vr, vlt, vrt = panel_induced_velocity(rcp, surface[j],
+                trailing; finite_core = finite_core, reflect = false, xhat = xhat,
+                include_top=include_top, include_bottom=include_bottom)
+
+            # add induced velocity from reflected panel if symmetric
+            if symmetric
+                include_top_mirrored = include_top || not_on_symmetry_plane(
+                    top_left(surface[j]), top_right(surface[j]))
+
+                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
+                    bottom_left(surface[j]), bottom_right(surface[j]))
+
+                vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
+                    surface[j], trailing;
+                    finite_core = finite_core, reflect = true, xhat = xhat,
+                    include_top=include_top_mirrored, include_bottom=include_bottom_mirrored)
+
+                # left is right and right is left
+                vt += vt_s
+                vb += vb_s
+                vl += vl_s
+                vr += vr_s
+                vlt += vlt_s
+                vrt += vrt_s
+            end
+
+            # add velocity from this panel
+            Vind += (vt + vb + vl + vr + vlt + vrt) * Γ[j]
+
+        else
+            # use more efficient formulation when finite core is disabled
+
+            # induced velocity from the panel
+            vt, vb, vl, vr, vlt, vrt = panel_induced_velocity(rcp, surface[j],
+                trailing; finite_core = false, reflect = false, xhat = xhat,
+                include_top = include_top && (leading_edge || previous_trailing),
+                include_bottom=include_bottom, include_left=left_side,
+                include_left_trailing=left_side)
+
+            # add induced velocity from reflected panel if symmetric
+            if symmetric
+                include_top_mirrored = include_top || not_on_symmetry_plane(
+                    top_left(surface[j]), top_right(surface[j]))
+
+                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
+                    bottom_left(surface[j]), bottom_right(surface[j]))
+
+                vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
+                    surface[j], trailing;
+                    finite_core = false,  reflect = true, xhat = xhat,
+                    include_top=include_top_mirrored && (leading_edge || previous_trailing),
+                    include_bottom=include_bottom_mirrored,
+                    include_left=left_side, include_left_trailing=left_side)
+
+                vt += vt_s
+                vb += vb_s
+                vl += vl_s
+                vr += vr_s
+                vlt += vlt_s
+                vrt += vrt_s
+            end
+
+            Vhat = vt + vb + vl + vr + vlt + vrt
+
+            # add velocity from this panel (excluding already computed components)
+            Vind += Vhat * Γ[j]
+
+            # and its derivatives
+            Vind_a += Vhat * Γ_a[j]
+            Vind_b += Vhat * Γ_b[j]
+            Vind_p += Vhat * Γ_p[j]
+            Vind_q += Vhat * Γ_q[j]
+            Vind_r += Vhat * Γ_r[j]
+
+            # additional contribution from bottom shared edge
+            if !(trailing || trailing_edge)
+                Vind -= vb * Γ[j+1]
+
+                Vind_a -= vb * Γ_a[j+1]
+                Vind_b -= vb * Γ_b[j+1]
+                Vind_p -= vb * Γ_p[j+1]
+                Vind_q -= vb * Γ_q[j+1]
+                Vind_r -= vb * Γ_r[j+1]
+            end
+
+            # additional contribution from right shared edge
+            if !right_side
+                Vind -= vr * Γ[j+nc]
+
+                Vind_a -= vr * Γ_a[j+nc]
+                Vind_b -= vr * Γ_b[j+nc]
+                Vind_p -= vr * Γ_p[j+nc]
+                Vind_q -= vr * Γ_q[j+nc]
+                Vind_r -= vr * Γ_r[j+nc]
+            end
+
+            # additional contribution from right shared trailing vortex
+            if !right_side
+                Vind -= vrt * Γ[j+nc]
+
+                Vind_a -= vrt * Γ_a[j+nc]
+                Vind_b -= vrt * Γ_b[j+nc]
+                Vind_p -= vrt * Γ_p[j+nc]
+                Vind_q -= vrt * Γ_q[j+nc]
+                Vind_r -= vrt * Γ_r[j+nc]
+            end
+        end
+        previous_trailing = trailing
+    end
+
+    dVind = (Vind_a, Vind_b, Vind_p, Vind_q, Vind_r)
+
+    return Vind, dVind
+end
 
 """
     panel_circulation(panel, Γ1, Γ2)
@@ -160,16 +471,6 @@ Return the circulation on `panel` given the circulation strength of the previous
 bound vortex Γ1 and the current bound vortex Γ2
 """
 panel_circulation
-
-"""
-    influence_coefficients!(AIC, receiving::AbstractMatrix{<:AbstractPanel},
-        sending::AbstractMatrix{<:AbstractPanel}, same_id, symmetric, xhat)
-
-Compute the AIC coefficients corresponding to the influence of the panels in
-`sending` on the panels in `receiving`.
-"""
-influence_coefficients!(AIC, receiving::AbstractMatrix{<:AbstractPanel},
-    sending::AbstractMatrix{<:AbstractPanel}, same_id, symmetric, xhat)
 
 """
     left_center(panel::AbstractPanel)
@@ -289,92 +590,14 @@ end
 
 @inline get_core_size(panel::Horseshoe) = panel.core_size
 
-@inline function induced_velocity(rcp, panel::Horseshoe, symmetric, same_id,
-    xhat, include_bound)
+@inline has_trailing_vortices(panel::Horseshoe, trailing_edge) = true
 
-    # get distance to control point from each vortex filament vertex
-    rtl = top_left(panel)
-    rtr = top_right(panel)
-    r11 = rcp - rtl
-    r12 = rcp - rtr
-    r21 = rcp - bottom_left(panel)
-    r22 = rcp - bottom_right(panel)
-
-    core_size = get_core_size(panel)
-
-    # add contribution from trailing vortices
-    Vhat = trailing_induced_velocity(r21, r22, xhat, same_id, core_size)
-
-    # add contribution from left bound vortex
-    Vhat += bound_induced_velocity(r21, r11, same_id, core_size)
-
-    # add contribution from right bound vortex
-    Vhat += bound_induced_velocity(r12, r22, same_id, core_size)
-
-    # add contribution from top bound vortex (unless otherwise specified)
-    if include_bound
-        Vhat += bound_induced_velocity(r11, r12, same_id, core_size)
-    end
-
-    # add contribution from other side (if applicable)
-    if symmetric && not_on_symmetry_plane(rtl, rtr)
-        Vhat += induced_velocity(rcp, reflect(panel), false, same_id, xhat, true)
-    end
-
-    return Vhat
-end
-
-@inline function panel_induced_velocity(receiving, Ir, sending::Horseshoe, Is,
-    same_surface, symmetric, same_id, xhat, trailing)
-
-    rc = top_center(receiving)
-
-    include_bound = !(same_surface && Ir == Is)
-
-    return induced_velocity(rc, sending, symmetric, same_id, xhat, include_bound)
-end
+@inline panel_induced_velocity(rcp, panel::Horseshoe, trailing;
+    kwargs...) = horseshoe_induced_velocity(rcp, top_left(panel), top_right(panel),
+    bottom_left(panel), bottom_right(panel), trailing; kwargs...,
+    core_size=get_core_size(panel))
 
 @inline panel_circulation(panel::Horseshoe, Γ1, Γ2) = Γ2
-
-@inline function influence_coefficients!(AIC, receiving::AbstractMatrix{<:AbstractPanel},
-    sending::AbstractMatrix{<:Horseshoe}, symmetric, same_id, xhat)
-
-    Nr = length(receiving)
-    Ns = length(sending)
-
-    cr = CartesianIndices(receiving)
-    cs = CartesianIndices(sending)
-    nchordwise = size(sending,1)
-
-    # always include bound vortices
-    include_bound = true
-
-    # loop over receiving panels
-    for i = 1:Nr
-        I = cr[i]
-
-        # control point location
-        rcp = controlpoint(receiving[I])
-
-        # normal vector body axis
-        nhat = normal(receiving[I])
-
-        # loop over sending panels
-        for j = 1:Ns
-            J = cs[j]
-
-            #TODO: take advantage of shared edges when calculating influence coefficients
-            # (this should speed up the calculations)
-
-            Vhat = induced_velocity(rcp, sending[J], symmetric, same_id,
-                xhat, include_bound)
-
-            AIC[i, j] = dot(Vhat, nhat)
-        end
-    end
-
-    return AIC
-end
 
 @inline function translate(panel::Horseshoe, r)
 
@@ -483,99 +706,14 @@ end
 
 @inline get_core_size(panel::Ring) = panel.core_size
 
-@inline function induced_velocity(rcp, panel::Ring, symmetric, same_id,
-    xhat, trailing, include_top, include_bottom)
+@inline has_trailing_vortices(panel::Ring, trailing_edge) = trailing_edge
 
-    # get distance to control point from each vortex filament vertex
-    rtl = top_left(panel)
-    rtr = top_right(panel)
-    r11 = rcp - rtl
-    r12 = rcp - rtr
-    r21 = rcp - bottom_left(panel)
-    r22 = rcp - bottom_right(panel)
-
-    core_size = get_core_size(panel)
-
-    # add contribution from left bound vortex
-    Vhat = bound_induced_velocity(r21, r11, same_id, core_size)
-
-    # add contribution from right bound vortex
-    Vhat += bound_induced_velocity(r12, r22, same_id, core_size)
-
-    # add contribution from top bound vortex (unless otherwise specified)
-    if include_top
-        Vhat += bound_induced_velocity(r11, r12, same_id, core_size)
-    end
-
-    if trailing
-        # add contribution from trailing vortices
-        Vhat += trailing_induced_velocity(r21, r22, xhat, same_id, core_size)
-    else
-        # add contribution from bottom bound vortex (unless otherwise specified)
-        if include_bottom
-            Vhat += bound_induced_velocity(r22, r21, same_id, core_size)
-        end
-    end
-
-    # add contribution from other side (if applicable)
-    if symmetric && not_on_symmetry_plane(rtl, rtr)
-        Vhat += induced_velocity(rcp, reflect(panel), false, same_id, xhat,
-            trailing, true, true)
-    end
-
-    return Vhat
-end
-
-@inline function panel_induced_velocity(receiving, Ir, sending::Ring, Is,
-    same_surface, symmetric, same_id, xhat, trailing)
-
-    rc = top_center(receiving)
-
-    include_top = !(same_surface && Ir == Is)
-    include_bottom = !(same_surface && (Ir[1] == Is[1]+1 && Ir[2] == Is[2]))
-
-    return induced_velocity(rc, sending, symmetric, same_id, xhat, trailing,
-        include_top, include_bottom)
-end
+@inline panel_induced_velocity(rcp, panel::Ring, trailing; kwargs...) =
+    ring_induced_velocity(rcp, top_left(panel), top_right(panel), bottom_left(panel),
+    bottom_right(panel), trailing; kwargs...,
+    core_size=get_core_size(panel))
 
 @inline panel_circulation(panel::Ring, Γ1, Γ2) = Γ2 - Γ1
-
-@inline function influence_coefficients!(AIC, receiving::AbstractMatrix{<:AbstractPanel},
-    sending::AbstractMatrix{<:Ring}, symmetric, same_id, xhat)
-
-    Nr = length(receiving)
-    Ns = length(sending)
-
-    cr = CartesianIndices(receiving)
-    cs = CartesianIndices(sending)
-    nchordwise = size(sending,1)
-
-    # loop over receiving panels
-    for i = 1:Nr
-        I = cr[i]
-
-        # control point location
-        rcp = controlpoint(receiving[I])
-
-        # normal vector body axis
-        nhat = normal(receiving[I])
-
-        # loop over sending panels
-        for j = 1:Ns
-            J = cs[j]
-
-            trailing = J[1] == nchordwise
-            include_top = true
-            include_bottom = true
-            Vhat = induced_velocity(rcp, sending[J], symmetric, same_id,
-                xhat, trailing, include_top, include_bottom)
-
-            AIC[i, j] = dot(Vhat, nhat)
-        end
-    end
-
-    return AIC
-end
 
 @inline function translate(panel::Ring, r)
 
@@ -653,70 +791,215 @@ Flip sign of y-component of vector `r` (used for symmetry)
 """
     not_on_symmetry_plane(r1, r2, tol=eps())
 
-Test whether points `r1` and `r2` are on the symmetry plane (y = 0)
+Test whether points `r1` and `r2` are not on the symmetry plane (y = 0)
 """
 @inline function not_on_symmetry_plane(r1, r2, tol=eps())
     return !(isapprox(r1[2], 0.0, atol=tol) && isapprox(r2[2], 0.0, atol=tol))
 end
 
 """
-    trailing_induced_velocity(r1, r2, xhat, same_id, core_size)
+    on_symmetry_plane(r1, r2, r3, r4, tol=eps())
 
-Compute the induced velocity (per unit circulation) for two vortices trailing in
-the `xhat` direction, at a control point located at `r1` relative to the start of the
-left trailing vortex and `r2` relative to the start of the right trailing vortex.
+Test whether points `r1`, `r2`, `r3`, and `r4` are on the symmetry plane (y = 0)
 """
-@inline function trailing_induced_velocity(r1, r2, xhat, same_id, core_size)
-
-    nr1 = norm(r1)
-    nr2 = norm(r2)
-
-    r1dot = dot(r1, xhat)
-    r2dot = dot(r2, xhat)
-
-    if same_id || iszero(core_size)
-        # no finite core
-        f1 = cross(r1, xhat)/(nr1 - r1dot)/nr1
-        f2 = cross(r2, xhat)/(nr2 - r2dot)/nr2
-    else
-        # finite core
-        εs = core_size^2
-        tmp1 = εs/(nr1 + r1dot)
-        tmp2 = εs/(nr2 + r2dot)
-        f1 = cross(r1, xhat)/(nr1 - r1dot + tmp1)/nr1
-        f2 = cross(r2, xhat)/(nr2 - r2dot + tmp2)/nr2
-    end
-
-    Vhat = (f1 - f2)/(4*pi)
-
-    return Vhat
+@inline function on_symmetry_plane(r1, r2, r3, r4, tol=eps())
+    return isapprox(r1[2], 0.0, atol=tol) && isapprox(r2[2], 0.0, atol=tol) &&
+        isapprox(r3[2], 0.0, atol=tol) && isapprox(r4[2], 0.0, atol=tol)
 end
 
 """
-    bound_induced_velocity(r1, r2, same_id, core_size)
+    bound_induced_velocity(r1, r2, finite_core, core_size)
 
 Compute the induced velocity (per unit circulation) for a bound vortex, at a
 control point located at `r1` relative to the start of the bound vortex and `r2`
-relative to the end of the bound vortex
+relative to the end of the bound vortex.
 """
-@inline function bound_induced_velocity(r1, r2, same_id, core_size)
+@inline function bound_induced_velocity(r1, r2, finite_core, core_size)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
 
-    if same_id || iszero(core_size)
-        # no finite core
-        f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
-        f2 = (1/nr1 + 1/nr2)
-    else
-        # finite core
+    if finite_core
         rdot = dot(r1, r2)
         r1s, r2s, εs = nr1^2, nr2^2, core_size^2
         f1 = cross(r1, r2)/(r1s*r2s - rdot^2 + εs*(r1s + r2s - 2*nr1*nr2))
         f2 = (r1s - rdot)/sqrt(r1s + εs) + (r2s - rdot)/sqrt(r2s + εs)
+    else
+        f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
+        f2 = (1/nr1 + 1/nr2)
     end
 
     Vhat = (f1*f2)/(4*pi)
 
     return Vhat
+end
+
+"""
+    trailing_induced_velocity(r, xhat, finite_core, core_size)
+
+Compute the induced velocity (per unit circulation) for a vortex trailing in
+the `xhat` direction, at a control point located at `r` relative to the start of the
+trailing vortex.
+"""
+@inline function trailing_induced_velocity(r, xhat, finite_core, core_size)
+
+    nr = norm(r)
+    rdot = dot(r, xhat)
+
+    if finite_core
+        εs = core_size^2
+        tmp = εs/(nr + rdot)
+        f = cross(r, xhat)/(nr - rdot + tmp)/nr
+    else
+        f = cross(r, xhat)/(nr - rdot)/nr
+    end
+
+    Vhat = -f/(4*pi)
+
+    return Vhat
+end
+
+"""
+    horseshoe_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; kwargs...)
+
+Computes the normalized induced velocity at point `rcp` caused by the top, bottom,
+left, right, left trailing, and right trailing sides of a horseshoe vortex.  The
+induced velocity for each side of the bound vortex is normalized by the vortex
+filament strength.
+
+# Arguments
+ - `rcp`: Control point at which induced velocities are calculated
+ - `rtl`: Top left corner of the horseshoe vortex
+ - `rtr`: Top right corner of the horseshoe vortex
+ - `rbl`: Bottom left corner of the horseshoe vortex, the location where the left
+    trailing vortex is shed into the freestream
+ - `rbr`: Bottom right corner of the horseshoe vortex, the location where the right
+    trailing vortex is shed into the freestream
+ - `trailing`: Flag indicating whether trailing vortices are shed from this panel
+
+# Keyword Arguments
+ - `finite_core = false`: Flag indicating whether finite_core model should be applied
+ - `core_size = 0.0`: Finite core size
+ - `reflect = false`: Flag indicating whether `panel` should be reflected across the
+    y-axis before calculating induced velocities.  Note that left and right are defined
+    prior to performing the reflection
+ - `xhat = [1,0,0]`: Direction in which trailing vortices are shed
+ - `include_top`: Flag to disable induced velocity calculations for the top bound vortex
+ - `include_left`: Flag to disable induced velocity calculations for the left bound vortex
+ - `include_right`: Flag to disable induced velocity calculations for the right bound vortex
+ - `include_left_trailing`: Flag to disable induced velocity calculations for the left trailing vortex
+ - `include_right_trailing`: Flag to disable induced velocity calculations for the right trailing vortex
+"""
+@inline horseshoe_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; kwargs...) =
+    ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; kwargs..., include_bottom=true)
+
+"""
+    ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; kwargs...)
+
+Computes the normalized induced velocity at point `rcp` caused by the top, bottom,
+left, right, left trailing, and right trailing sides of a vortex ring panel.  The
+induced velocity for each side of the bound vortex is normalized by the vortex
+filament strength.
+
+# Arguments
+ - `rcp`: Control point at which induced velocities are calculated
+ - `rtl`: Top left corner of the vortex ring
+ - `rtr`: Top right corner of the vortex ring
+ - `rbl`: Bottom left corner of the vortex ring
+ - `rbr`: Bottom right corner of the vortex ring
+ - `trailing`: Flag indicating whether trailing vortices are shed from the panel
+
+# Keyword Arguments
+ - `finite_core = false`: Flag indicating whether finite_core model should be applied
+ - `core_size = 0.0`: Finite core size
+ - `reflect = false`: Flag indicating whether `panel` should be reflected across the
+    y-axis before calculating induced velocities.  Note that left and right are defined
+    prior to performing the reflection
+ - `xhat = [1,0,0]`: Direction in which trailing vortices are shed if `trailing = true`
+ - `include_top`: Flag to disable induced velocity calculations for the top bound vortex
+ - `include_bottom`: Flag to disable induced velocity calculations for the bottom bound vortex
+    (or trailing vortices if `trailing=true`)
+ - `include_left`: Flag to disable induced velocity calculations for the left bound vortex
+ - `include_right`: Flag to disable induced velocity calculations for the right bound vortex
+ - `include_left_trailing`: Flag to disable induced velocity calculations for the left trailing vortex
+ - `include_right_trailing`: Flag to disable induced velocity calculations for the right trailing vortex
+"""
+function ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; finite_core=false,
+    core_size=0.0, reflect=false, xhat=SVector(1, 0, 0),
+    include_top=true, include_bottom=true, include_left=true, include_right=true,
+    include_left_trailing=true, include_right_trailing=true)
+
+    TF = promote_type(eltype(rcp), eltype(rtl), eltype(rtr), eltype(rbl), eltype(rbr))
+
+    if reflect
+        rtl = flipy(rtl)
+        rtr = flipy(rtr)
+        rbl = flipy(rbl)
+        rbr = flipy(rbr)
+
+        # return no contributions if the reflected panel lies on the symmetry plane
+        if on_symmetry_plane(rtl, rtr, rbl, rbr)
+            vt = SVector{3, TF}(0, 0, 0)
+            vb = SVector{3, TF}(0, 0, 0)
+            vl = SVector{3, TF}(0, 0, 0)
+            vr = SVector{3, TF}(0, 0, 0)
+            vlt = SVector{3, TF}(0, 0, 0)
+            vrt = SVector{3, TF}(0, 0, 0)
+            return vt, vb, vl, vr, vlt, vrt
+        end
+    end
+
+    # distance to control point from each corner
+    r11 = rcp - rtl
+    r12 = rcp - rtr
+    r21 = rcp - rbl
+    r22 = rcp - rbr
+
+    if include_top && rtl != rtr
+        vt = bound_induced_velocity(r11, r12, finite_core, core_size)
+    else
+        vt = SVector{3, TF}(0, 0, 0)
+    end
+
+    if include_bottom && !trailing && rbl != rbr
+        vb = bound_induced_velocity(r22, r21, finite_core, core_size)
+    else
+        vb = SVector{3, TF}(0, 0, 0)
+    end
+
+    if include_left && rtl != rbl
+        vl = bound_induced_velocity(r21, r11, finite_core, core_size)
+    else
+        vl = SVector{3, TF}(0, 0, 0)
+    end
+
+    if include_right && rtr != rbr
+        vr = bound_induced_velocity(r12, r22, finite_core, core_size)
+    else
+        vr = SVector{3, TF}(0, 0, 0)
+    end
+
+    if include_left_trailing && trailing && rbl != rbr
+        vlt = -trailing_induced_velocity(r21, xhat, finite_core, core_size)
+    else
+        vlt = SVector{3, TF}(0, 0, 0)
+    end
+
+    if include_right_trailing && trailing && rbl != rbr
+        vrt = trailing_induced_velocity(r22, xhat, finite_core, core_size)
+    else
+        vrt = SVector{3, TF}(0, 0, 0)
+    end
+
+    if reflect
+        # define circulation direction in same direction on both sides
+        vt = -vt
+        vb = -vb
+        vl = -vl
+        vr = -vr
+        vlt = -vlt
+        vrt = -vrt
+    end
+
+    return vt, vb, vl, vr, vlt, vrt
 end

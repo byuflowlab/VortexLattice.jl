@@ -149,11 +149,11 @@ function trefftz_panels(surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
 end
 
 """
-    panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel, same_id, symmetric)
+    trefftz_panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel, same_id, symmetric)
 
 Induced drag on `receiving` panel induced by `sending` panel.
 """
-@inline function panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel,
+@inline function trefftz_panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel,
     symmetric)
 
     rl = sending.rl
@@ -217,7 +217,7 @@ function far_field_drag(receiving, sending, ref, fs, symmetric)
     Di = zero(TF)
     for j = 1:Ns
         for i = 1:Nr
-            Di += panel_induced_drag(receiving[i], sending[j], symmetric)
+            Di += trefftz_panel_induced_drag(receiving[i], sending[j], symmetric)
         end
     end
 
@@ -235,15 +235,15 @@ end
 # --- internal functions --- #
 
 """
-    vortex_induced_drag(rj, Γj, ri, Γi, nhati)
+    vortex_induced_drag(rj, Γj, ri, Γi, ni)
 
 Return induced drag from vortex `j` induced on panel `i`
 """
-@inline function vortex_induced_drag(rj, Γj, ri, Γi, nhati)
+@inline function vortex_induced_drag(rj, Γj, ri, Γi, ni)
 
     rij = ri - rj
     Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*(rij[2]^2 + rij[3]^2))
-    Vn = -dot(Vthetai, nhati)
+    Vn = -dot(Vthetai, ni)
 
     Di = RHO/2.0*Γi*Vn
 
