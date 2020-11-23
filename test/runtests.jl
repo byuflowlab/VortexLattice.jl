@@ -54,11 +54,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -78,11 +78,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s, spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -102,11 +102,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -126,11 +126,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -181,11 +181,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -202,11 +202,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -257,11 +257,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -278,11 +278,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -348,11 +348,11 @@ end
         wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -376,11 +376,11 @@ end
         wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -446,11 +446,11 @@ end
         wing[ip] = Horseshoe(p.rl, p.rc, p.rr, p.rcp, ncp, p.xl_te, p.xc_te, p.xr_te, p.core_size)
     end
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -474,11 +474,11 @@ end
         wing[ip] = Ring(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
     end
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -560,7 +560,7 @@ end
     vother = nothing
     fs = Freestream(alpha, beta, Omega, vother)
 
-    symmetric = true
+    symmetric = [true, true, false]
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -586,11 +586,11 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 1, 1]
 
-    AIC = influence_coefficients(surfaces, surface_id, symmetric)
-    b = normal_velocity(surfaces, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -625,11 +625,11 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 1, 1]
 
-    AIC = influence_coefficients(surfaces, surface_id, symmetric)
-    b = normal_velocity(surfaces, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -709,7 +709,7 @@ end
     vother = nothing
     fs = Freestream(alpha, beta, Omega, vother)
 
-    symmetric = true
+    symmetric = [true, true, false]
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -735,11 +735,11 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
-    AIC = influence_coefficients(surfaces, surface_id, symmetric)
-    b = normal_velocity(surfaces, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -774,11 +774,11 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
-    AIC = influence_coefficients(surfaces, surface_id, symmetric)
-    b = normal_velocity(surfaces, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -830,11 +830,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -851,11 +851,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -907,11 +907,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -928,11 +928,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -986,11 +986,11 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -1010,11 +1010,11 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
-    b = normal_velocity(wing, ref, fs)
-    Γ = circulation(AIC, b)
-    CF, CM, props = near_field_forces(wing, ref, fs, symmetric, Γ; frame=Stability())
-    CDiff = far_field_drag(wing, ref, fs, symmetric, Γ)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -1062,9 +1062,9 @@ end
     wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
 
-    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(system, wing, ref, fs; symmetric=symmetric)
 
     CDa, CYa, CLa = dCF.alpha
     CDb, CYb, CLb = dCF.beta
@@ -1101,9 +1101,9 @@ end
     wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    AIC = influence_coefficients(wing, symmetric)
+    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
 
-    dCF, dCM = stability_derivatives(wing, ref, fs, symmetric, AIC)
+    dCF, dCM = stability_derivatives(system, wing, ref, fs; symmetric=symmetric)
 
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha

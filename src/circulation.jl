@@ -10,8 +10,8 @@ Construct the aerodynamic influence coefficient matrix for a single surface.
     should be used when calculating induced velocities.
 
 # Keyword Arguments
- - `wake_panels`: Flag indicating whether wake panels are used to model the wake,
-    defaults to `false`
+ - `trailing_vortices`: Flag which may be used to enable/disable trailing vortices,
+    trailing vortices are enabled by default
  - `xhat`: direction in which trailing vortices are shed if wake panels are not
     used to model the wake, defaults to [1, 0, 0]
 """
@@ -35,12 +35,12 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
     of spanwise panels
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
     model by setting all surface ID's to the same value.
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+    be used when calculating induced velocities, defaults to `false` for each surface
 
 # Keyword Arguments
- - `wake_panels`: Flag indicating whether wake panels are used to model the wake,
-    defaults to `false`
+ - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
+    for each surface
  - `xhat`: direction in which trailing vortices are shed if wake panels are not
     used to model the wake, defaults to [1, 0, 0]
 """
@@ -76,7 +76,8 @@ end
 Pre-allocated version of `influence_coefficients`
 """
 function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix},
-    surface_id, symmetric; kwargs...)
+    surface_id, symmetric; trailing_vortices=fill(true, length(surfaces)),
+    xhat=SVector(1, 0, 0))
 
     nsurf = length(surfaces)
 
@@ -106,7 +107,8 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
             same_id = surface_id[i] == surface_id[j]
 
             # populate entries in the AIC matrix
-            influence_coefficients!(vAIC, receiving, sending, symmetric, same_id; kwargs...)
+            influence_coefficients!(vAIC, receiving, sending, symmetric[j],
+                same_id; trailing_vortices = trailing_vortices[j], xhat = xhat)
 
             # increment position in AIC matrix
             jAIC += ns
@@ -125,7 +127,7 @@ Compute the AIC coefficients corresponding to the influence of the panels in
 `sending` on the panels in `receiving`.
 """
 @inline function influence_coefficients!(AIC, receiving, sending, symmetric,
-    same_id; wake_panels=false, xhat=SVector(1, 0, 0))
+    same_id; trailing_vortices=true, xhat=SVector(1, 0, 0))
 
     Nr = length(receiving)
     Ns = length(sending)
@@ -135,7 +137,6 @@ Compute the AIC coefficients corresponding to the influence of the panels in
     nchordwise = size(sending, 1)
 
     finite_core = !same_id
-    trailing_vortices = !wake_panels
 
     # loop over receiving panels
     for i = 1:Nr
@@ -390,7 +391,7 @@ function normal_velocity_derivatives!(b, db, surfaces::AbstractVector{<:Abstract
 
         # create view into RHS vector and its derivatives
         vb = view(b, ib+1:ib+n)
-        vdb = view.(b, Ref(ib+1:ib+n))
+        vdb = view.(db, Ref(ib+1:ib+n))
 
         # fill in RHS vector and its derivatives
         normal_velocity_derivatives!(vb, vdb, surfaces[i], ref, fs)
@@ -568,6 +569,8 @@ Solve for the circulation distribution.
 """
 circulation(AIC, b) = AIC\b
 
+circulation!(Γ, AIC, b) = ldiv!(Γ, lu(AIC), b)
+
 """
     circulation_derivatives(AIC, b, db)
 
@@ -593,6 +596,27 @@ function circulation_derivatives(AIC, b, db)
 
     # pack up derivatives
     dΓ = (Γ_a, Γ_b, Γ_pb, Γ_qb, Γ_rb)
+
+    return Γ, dΓ
+end
+
+function circulation_derivatives!(Γ, dΓ, AIC, b, db)
+
+    # unpack derivatives
+    (Γ_a, Γ_b, Γ_p, Γ_q, Γ_r) = dΓ
+    (b_a, b_b, b_p, b_q, b_r) = db
+
+    # factorize AIC matrix (since we'll be reusing it)
+    fAIC = lu(AIC)
+
+    # solve for circulation and its derivatives
+    ldiv!(Γ, fAIC, b)
+
+    ldiv!(Γ_a, fAIC, b_a)
+    ldiv!(Γ_b, fAIC, b_b)
+    ldiv!(Γ_p, fAIC, b_p)
+    ldiv!(Γ_q, fAIC, b_q)
+    ldiv!(Γ_r, fAIC, b_r)
 
     return Γ, dΓ
 end

@@ -55,14 +55,9 @@ end
 
 @inline circulation_strength(panel::Wake) = panel.gamma
 
-@inline induced_velocity(rcp, panel::Wake, trailing; kwargs...) = ring_induced_velocity(
+@inline panel_induced_velocity(rcp, panel::Wake, trailing; kwargs...) = ring_induced_velocity(
     rcp, top_left(panel), top_right(panel), bottom_left(panel), bottom_right(panel),
     trailing; kwargs..., core_size=get_core_size(panel))
-
-# @inline panel_induced_velocity(receiving, Ir, sending::Wake, Is, same_surface, trailing;
-#     kwargs...) = induced_velocity(top_center(receiving), sending, trailing; kwargs...,
-#     include_top = !(same_surface && Ir == Is),
-#     include_bottom = !(same_surface && (Ir[1] == Is[1]+1 && Ir[2] == Is[2])))
 
 @inline function translate(panel::Wake, r)
 
@@ -115,8 +110,8 @@ Returns the induced velocity at `rcp` from the wake panels in `wake`
     right corner.  By default, `rcp` is not assumed to correspond to a panel
     corner on `wake`.
 """
-function wake_induced_velocity(rcp, wake, same_surface, same_id, trailing_vortices;
-    xhat=SVector(1, 0, 0), nwake=size(wake, 1), I=CartesianIndex(-1, -1))
+@inline function wake_induced_velocity(rcp, wake, symmetric, same_surface, same_id,
+    trailing_vortices; xhat=SVector(1, 0, 0), nwake=size(wake, 1), I=CartesianIndex(-1, -1))
 
     TF = promote_type(eltype(rcp), eltype(eltype(wake)))
 
@@ -248,60 +243,23 @@ end
 
 Returns the velocities at the corners of the wake panels in `wake`
 """
-function wake_velocities!(V, surface::AbstractMatrix{<:AbstractPanel},
-    wake::AbstractMatrix{<:Wake}, surface_id, trailing_vortices,
-    symmetric, ref, fs; nwake=size(wakes, 1), xhat=SVector(1, 0, 0))
+wake_velocities!
 
-    nsurf = length(surfaces)
+@inline function wake_velocities!(V, surface::AbstractMatrix{<:AbstractPanel},
+    wake::AbstractMatrix{<:Wake}, trailing_vortices, symmetric, ref, fs;
+    nwake=size(wakes, 1), xhat=SVector(1, 0, 0))
 
+    V = wake_velocities!([V], [surface], [wake], 1:1, trailing_vortices, symmetric,
+        ref, fs; nwake=nwake, xhat=xhat)
 
-    for isurf = 1:nsurf
-        receiving = wake[i]
-
-        nw = nwake[isurf]
-        ns = size(receiving, 2)
-
-        Nr = nw*ns
-        cr = CartesianIndices((nw, ns))
-
-        # loop through all wake panels
-        for i = 1:Nr
-            I = cr[i]
-
-            V[I] = 0.0
-
-            # add contribution from surfaces
-            for jsurf = 1:nsurf
-                sending = surfaces[jsurf]
-
-                # also check if it has the same ID
-                same_id = surface_id[isurf] == surface_id[jsurf]
-
-                # add induced velocity from surface
-                same_surface = false
-                surface_trailing_vortices = false
-                V[isurf][I] += surface_induced_velocity(rcp, wake, same_surface,
-                    same_id, surface_trailing_vortices)
-
-                # add induced velocity from wake
-                same_surface = isurf == jsurf
-                wake_trailing_vortices = trailing_vortices
-                V[isurf][I] += wake_induced_velocity(rcp, wake, same_surface,
-                    same_id, trailing_vortices; xhat=xhat, nwake=nwake[jsurf], I=I)
-
-            end
-        end
-    end
-
-    return V
+    return V[1]
 end
 
-function wake_velocities!(V, surfaces::AbstractVector{<:AbstractMatrix{AbstractPanel}},
+@inline function wake_velocities!(V, surfaces::AbstractVector{<:AbstractMatrix{AbstractPanel}},
     wakes::AbstractVector{<:AbstractMatrix{<:Wake}}, surface_id, trailing_vortices,
     symmetric, ref, fs; nwake=size.(wakes, 1), xhat=SVector(1, 0, 0))
 
     nsurf = length(surfaces)
-
 
     for isurf = 1:nsurf
         receiving = wake[i]
@@ -354,4 +312,108 @@ function wake_velocities!(V, surfaces::AbstractVector{<:AbstractMatrix{AbstractP
     end
 
     return V
+end
+
+"""
+    translate_wake(panel, V, dt)
+
+Return a translated copy of the wake panel `panel` given the corner velocities
+`V` (of shape (3, 2, 2)) and the time step `dt`
+"""
+@inline function translate_wake(panel::Wake, V, dt)
+
+    # extract corners
+    rtl = top_left(wake[i])
+    rtr = top_right(wake[i])
+    rbl = bottom_left(wake[i])
+    rbr = bottom_right(wake[i])
+
+    # get vortex filament length
+    lt = norm(rtr - rtl)
+    lb = norm(rbl - rbr)
+    ll = norm(rtl - rbl)
+    lr = norm(rbr - rtr)
+    l1 = lt + lb + ll + lr
+
+    # translate corners
+    rtl += SVector(V[1,1,1], V[2,1,1], V[3,1,1])*dt
+    rtr += SVector(V[1,1,2], V[2,1,2], V[3,1,2])*dt
+    rbl += SVector(V[1,2,1], V[2,2,1], V[3,2,1])*dt
+    rbr += SVector(V[1,2,2], V[2,2,2], V[3,2,2])*dt
+
+    # get new vortex filament length
+    lt = norm(rtr - rtl)
+    lb = norm(rbl - rbr)
+    ll = norm(rtl - rbl)
+    lr = norm(rbr - rtr)
+    l2 = lt + lb + ll + lr
+
+    # use previous core size
+    core_size = get_core_size(panel)
+
+    # correct vorticity for vortex stretching
+    gamma = circulation_strength(panel)*l2/l1
+
+    return Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+end
+
+"""
+    translate_wake!(wake, V, dt; nwake = size(wake, 1))
+
+Translate the wake panels in `wake` given a the corner velocities `V` and the
+time step `dt`
+"""
+@inline function translate_wake!(wake, V, dt; nwake = size(wake, 1))
+
+    Nw = length(wake)
+    cw = CartesianIndices(wake)
+
+    for i = 1:Nw
+        I = cw[i]
+
+        panel = wake[i]
+
+        vV = view(V, :, I[1]:I[1]+1, I[2]:I[2]+1)
+
+        wake[i] = translate_wake(panel, vV, dt)
+    end
+
+    return wake
+end
+
+
+"""
+    shed_wake!(wake, V, dt, Γ_te; nwake = size(wake, 1))
+
+Sheds the wake from a surface, given the corner velocities of the wake panels `V`,
+the time step `dt`, and the circulation strength at the trailing edge `Γ_te`.
+
+The wake panels in `wake` are shifted chordwise to make room for the newly shed
+wake panel.
+"""
+@inline function shed_wake!(wake, V, dt, Γ_te; nwake = size(wake, 1))
+
+    # replace the last chordwise panels with the newly shed wake panels
+    for j = 1:ns
+        # trailing edge coordinates
+        rtl = top_left(wake[1, j])
+        rtr = top_right(wake[1, j])
+
+        # shed coordinates
+        rbl = rtl + V[1, j]*dt
+        rbr = rtr + V[1, j+1]*dt
+
+        # use core size from previously shed panel
+        core_size = get_core_size(wake[1, j])
+
+        # use circulation strength from the trailing edge
+        gamma = Γ_te[j]
+
+        wake[end,j] = Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+    end
+
+    # shift wake panels to make the newly shed panels first
+    circshift!(wake, (1,0))
+
+    return wake
 end

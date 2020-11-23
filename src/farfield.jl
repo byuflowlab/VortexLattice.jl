@@ -38,18 +38,32 @@ Constructs a set of panels for Trefftz plane calculations
 """
 trefftz_panels
 
-# single surface, horseshow
-function trefftz_panels(surface::AbstractMatrix{<:Horseshoe}, fs, Γ)
+function trefftz_panels(surface::AbstractMatrix, fs, Γ)
 
-    TF = promote_type(eltype(eltype(surface)), eltype(fs), eltype(Γ))
+    TF = eltype(eltype(panels))
+
+    panels = Vector{TrefftzPanel{TF}}(undef, size(surface, 2))
+
+    return trefftz_panels!(panels, surface, fs, Γ)
+end
+
+function trefftz_panels(surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
+
+    TF = eltype(eltype(eltype(surfaces)))
+
+    panels = [Vector{TrefftzPanel{TF}}(undef, size(surfaces[i], 2)) for i = 1:length(surfaces)]
+
+    return trefftz_panels!(panels, surfaces, fs, Γ)
+end
+
+# single surface, horseshoe
+function trefftz_panels!(panels, surface::AbstractMatrix{<:Horseshoe}, fs, Γ)
 
     n1, n2 = size(surface)
 
     rΓ = reshape(Γ, n1, n2)
 
     R = body_to_wind(fs)
-
-    panels = Vector{TrefftzPanel{TF}}(undef, n2)
 
     for j = 1:n2
         # use trailing edge panel for geometry
@@ -80,17 +94,13 @@ function trefftz_panels(surface::AbstractMatrix{<:Horseshoe}, fs, Γ)
 end
 
 # single surface, vortex ring
-function trefftz_panels(surface::AbstractMatrix{<:Ring}, fs, Γ)
-
-    TF = promote_type(eltype(eltype(surface)), eltype(fs), eltype(Γ))
+function trefftz_panels!(panels, surface::AbstractMatrix{<:Ring}, fs, Γ)
 
     n1, n2 = size(surface)
 
     rΓ = reshape(Γ, n1, n2)
 
     R = body_to_wind(fs)
-
-    panels = Vector{TrefftzPanel{TF}}(undef, n2)
 
     for j = 1:n2
         # use trailing edge panel for geometry
@@ -118,16 +128,12 @@ function trefftz_panels(surface::AbstractMatrix{<:Ring}, fs, Γ)
 end
 
 # multiple surfaces
-function trefftz_panels(surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
-
-    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(fs), eltype(Γ))
+function trefftz_panels!(panels, surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
 
     nsurf = length(surfaces)
 
     # indices for keeping track of circulation
     iΓ = 0
-
-    panels = Vector{Vector{TrefftzPanel{TF}}}(undef, nsurf)
 
     # loop through surfaces
     for i = 1:nsurf
@@ -139,7 +145,7 @@ function trefftz_panels(surfaces::AbstractVector{<:AbstractMatrix}, fs, Γ)
         vΓ = view(Γ, iΓ+1:iΓ+n)
 
         # populate vector of Trefftz panels
-        panels[i] = trefftz_panels(surfaces[i], fs, vΓ)
+        trefftz_panels!(panels[i], surfaces[i], fs, vΓ)
 
         # increment position in circulation index
         iΓ += n
@@ -175,31 +181,70 @@ Induced drag on `receiving` panel induced by `sending` panel.
 end
 
 """
-    far_field_drag(surface[s], ref, fs, symmetric, Γ)
+    far_field_drag(system, surface, reference, freestream; kwargs...)
 
 Computes induced drag using the Trefftz plane (far field method).
+
+Note that this function assumes that the circulation distribution has already
+been computed and is present in `system`
+
+# Arguments
+ - `system`: Pre-allocated system properties
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: Reference parameters (see `Reference`)
+ - `freestream`: Freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
+    should be used when calculating induced velocities, defaults to `false`
 """
-far_field_drag
+function far_field_drag(system, surface::AbstractMatrix, ref, fs;
+    symmetric = false)
 
-# one surface
-function far_field_drag(surface::AbstractMatrix, ref, fs, symmetric, Γ)
+    # unpack system
+    Γ = system.gamma
+    trefftz = system.trefftz[1]
 
-    panels = trefftz_panels(surface, fs, Γ)
+    trefftz_panels!(trefftz, surface, fs, Γ)
 
-    return far_field_drag(panels, panels, ref, fs, symmetric)
+    return far_field_drag(trefftz, trefftz, ref, fs, symmetric)
 end
 
-# multiple surfaces
-function far_field_drag(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
-    symmetric, Γ)
+"""
+    far_field_drag(system, surface, reference, freestream; kwargs...)
 
+Computes induced drag using the Trefftz plane (far field method).
+
+Note that this function assumes that the circulation distribution has already
+been computed and is present in `system`
+
+# Arguments
+ - `system`: Pre-allocated system properties
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: Reference parameters (see `Reference`)
+ - `freestream`: Freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
+    should be used when calculating induced velocities, defaults to `false`
+"""
+function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs;
+    symmetric = fill(false, length(surfaces)))
+
+    # unpack system
+    Γ = system.gamma
+    trefftz = system.trefftz
+
+    # construct trefftz panels
+    trefftz_panels!(trefftz, surfaces, fs, Γ)
+
+    # perform far field analysis
     nsurf = length(surfaces)
-
-    panels = trefftz_panels(surfaces, fs, Γ)
-
     CD = zero(eltype(eltype(eltype(surfaces))))
     for i = 1:nsurf, j = 1:nsurf
-        CD += far_field_drag(panels[i], panels[j], ref, fs, symmetric)
+        CD += far_field_drag(trefftz[i], trefftz[j], ref, fs, symmetric[j])
     end
 
     return CD

@@ -1,104 +1,80 @@
-# --- near field force calculations --- #
-
 """
-    near_field_forces(surface, [wake, ] reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces!(system, surface, ref, fs; kwargs...)
 
-Compute the forces and moments acting on the aircraft given the circulation
-distribution `Γ`.
+Perform a near-field analysis to calculate panel forces in the body frame.  Return
+the modified `system` containing the calculated panel forces.
 
-Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
+Note that this function assumes that the circulation distribution has already
+been calculated and stored in `system`.
 
 # Arguments:
+ - `system`: Object of type `System` which holds system properties
  - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
- - `wake`: Matrix of wake panels of shape (nw, ns) where `nw` is the number of
-    chordwise wake panels and `ns` is the number of spanwise panels
  - `reference`: reference parameters (see `Reference`)
  - `freestream`: freestream parameters (see `Freestream`)
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
- - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
 
 # Keyword Arguments
- - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
- - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
-    `Stability()`, and `Wind()`
- - `nwake`: number of chordwise wake panels to use from `wake`, defaults to all
-    wake panels
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
+    Defaults to using all wake panels.
  - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
     from the last chordwise panel in `wake`
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
 """
-near_field_forces(surface::AbstractMatrix, args...; kwargs...)
+@inline function near_field_forces!(system, surface::AbstractMatrix, ref, fs;
+    symmetric = false,
+    nwake = size(system.wakes[1], 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0))
 
-# without wake
-function near_field_forces(surface::AbstractMatrix, ref, fs, symmetric, Γ; kwargs...)
-
-    CF, CM, props = near_field_forces([surface], 1:1, ref, fs, symmetric, Γ; kwargs...)
-
-    return CF, CM, props[1]
-end
-
-# with wake
-function near_field_forces(surface::AbstractMatrix, wake::AbstractMatrix, ref, fs,
-    symmetric, Γ; kwargs...)
-
-    CF, CM, props = near_field_forces([surface], [wake], 1:1, ref, fs, symmetric, Γ; kwargs...)
-
-    return CF, CM, props[1]
+    return near_field_forces!(system, [surface], ref, fs; symmetric=[symmetric],
+        nwake = [nwake], trailing_vortices = [trailing_vortices], xhat = xhat)
 end
 
 """
-    near_field_forces(surfaces, [wakes, ] surface_id, reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces!(system, surfaces, reference, freestream; kwargs...)
 
-Compute the forces and moments acting on the aircraft given the circulation
-distribution `Γ`.
+Perform a near-field analysis to calculate panel forces in the body frame.  Return
+the modified `system` containing the calculated panel forces.
 
-Return `CF`, `CM`, and a vector of panel properties of type `PanelProperties`.
+Note that this function assumes that the circulation distribution has already
+been calculated and stored in `system`.
 
 # Arguments:
- - `surface`: Vector of surfaces, represented by matrices of panels of shape
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `wake`: (optional) Matrix of wake panels of shape (nw, ns) where `nw` is the
-    number of chordwise wake panels and `ns` is the number of spanwise panels
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value.
  - `reference`: reference parameters (see `Reference`)
  - `freestream`: freestream parameters (see `Freestream`)
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
- - `Γ`: Vector of circulation strengths for each panel, calculated by `circulation`
 
 # Keyword Arguments
- - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
- - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
-    `Stability()`, and `Wind()`
- - `nwake`: number of chordwise wake panels to use from `wake`, defaults to all
-   wake panels
- - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
-   from the last chordwise panel in `wake`
+ - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+    be used when calculating induced velocities, defaults to `false` for each surface
+ - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
+    for each surface
+ - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value. By default all surfaces
+    have their own IDs
 """
-near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
+@inline function near_field_forces!(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs;
+    symmetric = fill(false, length(surfaces)),
+    nwake = size.(system.wakes, 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0),
+    surface_id = 1:length(surfaces))
 
-# without wake
-function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_id,
-    ref, fs, symmetric, Γ; xhat=SVector(1, 0, 0), frame=Body())
-
-    # float number type
-    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs), eltype(Γ), eltype(xhat))
+    # unpack system storage
+    Γ = system.gamma
 
     # number of surfaces
     nsurf = length(surfaces)
 
-    # initialize forces/moments in the body frame
-    Fb = @SVector zeros(TF, 3)  # forces
-    Mb = @SVector zeros(TF, 3)  # moments
-
-    # initialize storage for panel properties
-    props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
-
-    # include trailing vortices since there are no wake panels
-    trailing_vortices = true
+    # see if wake panels are being used
+    wake_panels = nwake .> 0
 
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
@@ -109,13 +85,10 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
 
-        # initialize panel outputs for this surface
-        props[isurf] = Matrix{PanelProperties{TF}}(undef, nr1, nr2)
-
         # loop through receiving panels
         for i = 1:length(receiving)
 
-            # --- Calculate forces for the bound vortices --- #
+            # --- Calculate forces on the panel bound vortex -- #
             I = cr[i]
 
             rc = top_center(receiving[I])
@@ -136,10 +109,17 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 
                 vΓ = view(Γ, jΓ+1:jΓ+ns)
 
-                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ, same_surface,
-                    same_id, trailing_vortices, symmetric; xhat=xhat, I=I)
+                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ, symmetric[jsurf],
+                    same_surface, same_id, trailing_vortices[jsurf] && !wake_panels[jsurf];
+                    xhat=xhat, I=I)
 
-                jΓ += ns
+                if wake_panels[jsurf]
+                    Vi += wake_induced_velocity(rc, system.wakes[jsurf], symmetric[jsurf],
+                        same_surface, same_id, trailing_vortices[jsurf]; xhat=xhat,
+                        nwake = nwake[jsurf])
+                end
+
+                jΓ += ns # increment Γ index for sending panels
             end
 
             # circulation of upstream bound vortex
@@ -153,15 +133,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
 
             # now use the Kutta-Joukowski theorem to solve for the panel force
             Δs = top_vector(receiving[I])
-            lenb = norm(Δs)
             Fbi = RHO*Γi*cross(Vi, Δs)
 
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbi
-            Mb += cross(Δr, Fbi)
-
-            # --- Calculate forces for the left bound vortex --- #
+            # --- Calculate forces on the left bound vortex --- #
 
             rc = left_center(receiving[I])
 
@@ -175,15 +149,9 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
             # now use the Kutta-Joukowski theorem to calculate the forces
             Γli = Γ[iΓ+i]
             Δs = left_vector(receiving[I])
-            lenl = norm(Δs)
             Fbli = RHO*Γli*cross(Veff, Δs)
 
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbli
-            Mb += cross(Δr, Fbli)
-
-            # --- Calculate forces for the right bound vortex --- #
+            # --- Calculate forces on the right bound vortex --- #
 
             rc = right_center(receiving[I])
 
@@ -197,127 +165,106 @@ function near_field_forces(surfaces::AbstractVector{<:AbstractMatrix}, surface_i
             # now use the Kutta-Joukowski theorem to calculate the forces
             Γri = Γ[iΓ+i]
             Δs = right_vector(receiving[I])
-            lenr = norm(Δs)
             Fbri = RHO*Γri*cross(Veff, Δs)
 
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbri
-            Mb += cross(Δr, Fbri)
-
-            # assemble normalized panel outputs
-            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
-                Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
+            # store panel circulation, velocity, and forces
+            system.panels[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF,
+                Fbi/(QINF*ref.S), Fbli/(QINF*ref.S), Fbri/(QINF*ref.S))
         end
-        # increment Γ index
+        # increment Γ index for receiving panels
         iΓ += nr
     end
 
-    # adjust body forces to account for symmetry
-    if symmetric
-        Fb = SVector(2*Fb[1], 0.0, 2*Fb[3])
-        Mb = SVector(0.0, 2*Mb[2], 0.0)
-    end
-
-    # normalize body forces
-    reference_length = SVector(ref.b, ref.c, ref.b)
-    CF = Fb./(QINF.*ref.S)
-    CM = Mb./(QINF.*ref.S.*reference_length)
-
-    CF, CM = body_to_frame(CF, CM, ref, fs, frame)
-
-    return CF, CM, props
+    return system
 end
 
 """
-    near_field_forces_derivatives(surface, reference, freestream, trailing_vortices, symmetric, Γ, dΓ; kwargs...)
+    near_field_forces_derivatives!(system, surface, ref, fs; kwargs...)
 
-Compute the forces and moments acting on the aircraft given the circulation
-distribution `Γ` and their derivatives with respect to the variables in `freestream`.
+Perform a near-field analysis to calculate panel forces and their derivatives
+with respect to the freestream variables in the body frame.  Return the modified
+`system` containing the calculated panel forces and their derivatives.
 
-Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type `PanelProperties`.
-`CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
+Note that this function assumes that the circulation distribution has already
+been calculated and stored in `system`.
 
 # Arguments:
+ - `system`: Object of type `System` which holds system properties
  - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
  - `reference`: reference parameters (see `Reference`)
  - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
- - `Γ`: Vector of circulation strengths for each panel
- - `dΓ`: Tuple containing the derivative of the circulation strength with respect
-    to each of the freestream parameters
- - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
+    Defaults to using all wake panels.
+ - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
+    from the last chordwise panel in `wake`
+ - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
 """
-function near_field_forces_derivatives(surface::AbstractMatrix, ref, fs, symmetric, Γ, dΓ;
-    xhat=SVector(1, 0, 0))
+@inline function near_field_forces_derivatives!(system, surface::AbstractMatrix, ref, fs;
+    symmetric = false,
+    nwake = size(system.wakes[1], 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0))
 
-    CF, CM, dCF, dCM, props = near_field_forces_derivatives([surface], 1:1, ref, fs, symmetric, Γ, dΓ;
-        xhat=xhat)
-
-    return CF, CM, dCF, dCM, props[1]
+    return near_field_forces_derivatives!(system, [surface], ref, fs;
+        symmetric = [symmetric],
+        nwake = [nwake],
+        trailing_vortices = [trailing_vortices],
+        xhat = xhat)
 end
 
 """
-    near_field_forces_derivatives(surfaces, surface_id, reference, freestream, symmetric, Γ; kwargs...)
+    near_field_forces_derivatives!(system, surfaces, reference, freestream; kwargs...)
 
-Compute the forces and moments acting on the aircraft given the circulation
-distribution `Γ` and their derivatives with respect to the variables in `freestream`.
+Perform a near-field analysis to calculate panel forces and their derivatives
+with respect to the freestream variables in the body frame.  Return the modified
+`system` containing the calculated panel forces and their derivatives.
 
-Return `CF`, `CM`, `dCF`, `dCM`, and a vector of panel properties of type `PanelProperties`.
-`CF`, `CM`, `dCF`, and `dCM` are returned in the body frame.
+Note that this function assumes that the circulation distribution has already
+been calculated and stored in `system`.
 
 # Arguments:
- - `surface`: Vector of surfaces, represented by matrices of panels of shape
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value.
  - `reference`: reference parameters (see `Reference`)
  - `freestream`: freestream parameters (see `Freestream`)
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
- - `Γ`: Vector of circulation strengths for each panel
- - `dΓ`: Tuple containing the derivative of the circulation strength with respect
-    to each of the freestream parameters
- - `xhat`: (optional) direction in which trailing vortices are shed, defaults to [1, 0, 0]
+
+# Keyword Arguments
+ - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+    be used when calculating induced velocities, defaults to `false` for each surface
+ - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
+    for each surface
+ - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value. By default all surfaces
+    have their own IDs
 """
-function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix},
-        surface_id, ref, fs, symmetric, Γ, dΓ; xhat = SVector(1, 0, 0))
+@inline function near_field_forces_derivatives!(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs;
+    symmetric = fill(false, length(surfaces)),
+    nwake = size.(system.wakes, 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0),
+    surface_id = 1:length(surfaces))
 
-    # unpack derivatives
-    Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = dΓ
+    # unpack system storage
+    Γ = system.gamma
+    Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = system.dgamma
 
-    # float number type
-    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs),
-        eltype(Γ), eltype(Γ_a), eltype(Γ_b), eltype(Γ_p), eltype(Γ_q), eltype(Γ_r))
+    props = system.panels
+    props_a, props_b, props_p, props_q, props_r = system.dpanels
 
     # number of surfaces
     nsurf = length(surfaces)
 
-    # initialize forces/moments in the body frame
-    Fb = @SVector zeros(TF, 3)  # forces
-    Mb = @SVector zeros(TF, 3)  # moments
-
-    # and their derivatives
-    Fb_a = @SVector zeros(TF, 3)
-    Fb_b = @SVector zeros(TF, 3)
-    Fb_p = @SVector zeros(TF, 3)
-    Fb_q = @SVector zeros(TF, 3)
-    Fb_r = @SVector zeros(TF, 3)
-
-    Mb_a = @SVector zeros(TF, 3)
-    Mb_b = @SVector zeros(TF, 3)
-    Mb_p = @SVector zeros(TF, 3)
-    Mb_q = @SVector zeros(TF, 3)
-    Mb_r = @SVector zeros(TF, 3)
-
-    # initialize panel outputs
-    props = Vector{Matrix{PanelProperties{TF}}}(undef, nsurf)
-
-    # include trailing vortices since there are no wake panels
-    trailing_vortices = true
+    # see if wake panels are being used
+    wake_panels = nwake .> 0
 
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
@@ -327,9 +274,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
         nr = length(receiving)
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
-
-        # initialize panel outputs for this surface
-        props[isurf] = Matrix{PanelProperties{TF}}(undef, nr1, nr2)
 
         # loop through receiving panels
         for i = 1:length(receiving)
@@ -366,8 +310,9 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
                 vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
 
-                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ, same_surface,
-                    same_id, trailing_vortices, symmetric; xhat=xhat, I=I)
+                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ, symmetric[jsurf],
+                    same_surface, same_id, trailing_vortices[jsurf] && !wake_panels[jsurf];
+                    xhat=xhat, I=I)
 
                 Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
 
@@ -378,6 +323,13 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
                 Vi_p += Vind_p
                 Vi_q += Vind_q
                 Vi_r += Vind_r
+
+                # assume a frozen wake
+                if wake_panels[jsurf]
+                    Vi += wake_induced_velocity(rc, system.wakes[jsurf], symmetric[jsurf],
+                        same_surface, same_id, trailing_vortices[jsurf]; xhat=xhat,
+                        nwake = nwake[jsurf])
+                end
 
                 jΓ += ns
             end
@@ -417,7 +369,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
 
             # now use the Kutta-Joukowski theorem to calculate the forces at this point
             Δs = top_vector(receiving[I])
-            lenb = norm(Δs)
             tmp = cross(Vi, Δs)
             Fbi = RHO*Γi*tmp
 
@@ -426,24 +377,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             Fbi_p = RHO*(Γi_p*tmp + Γi*cross(Vi_p, Δs))
             Fbi_q = RHO*(Γi_q*tmp + Γi*cross(Vi_q, Δs))
             Fbi_r = RHO*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
-
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbi
-            Mb += cross(Δr, Fbi)
-
-            # also add their derivatives
-            Fb_a += Fbi_a
-            Fb_b += Fbi_b
-            Fb_p += Fbi_p
-            Fb_q += Fbi_q
-            Fb_r += Fbi_r
-
-            Mb_a += cross(Δr, Fbi_a)
-            Mb_b += cross(Δr, Fbi_b)
-            Mb_p += cross(Δr, Fbi_p)
-            Mb_q += cross(Δr, Fbi_q)
-            Mb_r += cross(Δr, Fbi_r)
 
             # --- Calculate forces for the left bound vortex --- #
 
@@ -462,7 +395,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             # now use the Kutta-Joukowski theorem to calculate the forces
             Γli = Γ[iΓ+i]
             Δs = left_vector(receiving[I])
-            lenl = norm(Δs)
             tmp = cross(Veff, Δs)
             Fbli = RHO*Γli*tmp
 
@@ -477,24 +409,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             Fbli_p = RHO*(Γli_p*tmp + Γli*cross(Veff_p, Δs))
             Fbli_q = RHO*(Γli_q*tmp + Γli*cross(Veff_q, Δs))
             Fbli_r = RHO*(Γli_r*tmp + Γli*cross(Veff_r, Δs))
-
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbli
-            Mb += cross(Δr, Fbli)
-
-            # also add their derivatives
-            Fb_a += Fbli_a
-            Fb_b += Fbli_b
-            Fb_p += Fbli_p
-            Fb_q += Fbli_q
-            Fb_r += Fbli_r
-
-            Mb_a += cross(Δr, Fbli_a)
-            Mb_b += cross(Δr, Fbli_b)
-            Mb_p += cross(Δr, Fbli_p)
-            Mb_q += cross(Δr, Fbli_q)
-            Mb_r += cross(Δr, Fbli_r)
 
             # --- Calculate forces for the right bound vortex --- #
 
@@ -513,7 +427,6 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             # now use the Kutta-Joukowski theorem to calculate the forces
             Γri = Γ[iΓ+i]
             Δs = right_vector(receiving[I])
-            lenr = norm(Δs)
             tmp = cross(Veff, Δs)
             Fbri = RHO*Γri*tmp
 
@@ -529,73 +442,360 @@ function near_field_forces_derivatives(surfaces::AbstractVector{<:AbstractMatrix
             Fbri_q = RHO*(Γri_q*tmp + Γri*cross(Veff_q, Δs))
             Fbri_r = RHO*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
 
-            # add the resulting forces and moments to the body forces and moments
-            Δr = rc - ref.r
-            Fb += Fbri
-            Mb += cross(Δr, Fbri)
-
-            # also add their derivatives
-            Fb_a += Fbri_a
-            Fb_b += Fbri_b
-            Fb_p += Fbri_p
-            Fb_q += Fbri_q
-            Fb_r += Fbri_r
-
-            Mb_a += cross(Δr, Fbri_a)
-            Mb_b += cross(Δr, Fbri_b)
-            Mb_p += cross(Δr, Fbri_p)
-            Mb_q += cross(Δr, Fbri_q)
-            Mb_r += cross(Δr, Fbri_r)
-
             # assemble normalized panel outputs
-            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S*lenb),
-                Fbli/(QINF*ref.S*lenl), Fbri/(QINF*ref.S*lenr))
+            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S),
+                Fbli/(QINF*ref.S), Fbri/(QINF*ref.S))
+
+            # also assemble normalized derivative panel outputs
+            props_a[isurf][I] = PanelProperties(Γi_a/VINF, Vi_a/VINF, Fbi_a/(QINF*ref.S),
+                Fbli_a/(QINF*ref.S), Fbri_a/(QINF*ref.S))
+            props_b[isurf][I] = PanelProperties(Γi_b/VINF, Vi_b/VINF, Fbi_b/(QINF*ref.S),
+                Fbli_b/(QINF*ref.S), Fbri_b/(QINF*ref.S))
+            props_p[isurf][I] = PanelProperties(Γi_p/VINF, Vi_p/VINF, Fbi_p/(QINF*ref.S),
+                Fbli_p/(QINF*ref.S), Fbri_p/(QINF*ref.S))
+            props_q[isurf][I] = PanelProperties(Γi_q/VINF, Vi_q/VINF, Fbi_q/(QINF*ref.S),
+                Fbli_q/(QINF*ref.S), Fbri_q/(QINF*ref.S))
+            props_r[isurf][I] = PanelProperties(Γi_r/VINF, Vi_r/VINF, Fbi_r/(QINF*ref.S),
+                Fbli_r/(QINF*ref.S), Fbri_r/(QINF*ref.S))
         end
         # increment Γ index
         iΓ += nr
     end
 
-    # adjust body forces to account for symmetry
-    if symmetric
-        Fb = SVector(2*Fb[1], 0.0, 2*Fb[3])
-        Mb = SVector(0.0, 2*Mb[2], 0.0)
+    return system
+end
 
-        # derivatives
-        Fb_a = SVector(2*Fb_a[1], 0.0, 2*Fb_a[3])
-        Fb_b = SVector(2*Fb_b[1], 0.0, 2*Fb_b[3])
-        Fb_p = SVector(2*Fb_p[1], 0.0, 2*Fb_p[3])
-        Fb_q = SVector(2*Fb_q[1], 0.0, 2*Fb_q[3])
-        Fb_r = SVector(2*Fb_r[1], 0.0, 2*Fb_r[3])
+"""
+    body_forces(system, surface, reference, freestream; kwargs...)
 
-        Mb_a = SVector(0.0, 2*Mb_a[2], 0.0)
-        Mb_b = SVector(0.0, 2*Mb_b[2], 0.0)
-        Mb_p = SVector(0.0, 2*Mb_p[2], 0.0)
-        Mb_q = SVector(0.0, 2*Mb_q[2], 0.0)
-        Mb_r = SVector(0.0, 2*Mb_r[2], 0.0)
+Return the body force coefficients for the `system`
+
+Note that this function assumes that a near-field analysis has already been
+performed to obtain the panel forces.
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Surface, represented by matrices of panels of shape (nc, ns) where
+    `nc` is the number of chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
+   `Stability()`, and `Wind()`
+"""
+function body_forces(system, surface::AbstractMatrix, ref, fs;
+    symmetric=false,
+    frame=Body())
+
+    return body_forces(system, [surface], ref, fs; symmetric=[symmetric], frame)
+end
+
+"""
+    body_forces(system, surface[s], reference, freestream; kwargs...)
+
+Return the body force coefficients for the `system` in the given `frame`.
+
+Note that this function assumes that a near-field analysis has already been
+performed to obtain the panel forces.
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+ # Keyword Arguments
+  - `symmetric`: Flags indicating whether a mirror image of each panel in `surfaces`
+     should be used when calculating induced velocities.
+ - `frame`: frame in which to return `CF` and `CM`, options are `Body()` (default),
+   `Stability()`, and `Wind()`
+"""
+function body_forces(system, surfaces::AbstractVector, ref, fs;
+    symmetric = fill(false, length(surfaces)),
+    frame=Body())
+
+    TF = eltype(system)
+
+    CF = @SVector zeros(TF, 3)
+    CM = @SVector zeros(TF, 3)
+
+    for isurf = 1:length(surfaces)
+
+        CFi = @SVector zeros(TF, 3)
+        CMi = @SVector zeros(TF, 3)
+
+        for i = 1:length(surfaces[isurf])
+
+            # top bound vortex
+            rc = top_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = system.panels[isurf][i].cf
+            CFi += cf
+            CMi += cross(Δr, cf)
+
+            # left bound vortex
+            rc = left_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = system.panels[isurf][i].cfl
+            CFi += cf
+            CMi += cross(Δr, cf)
+
+            # right bound vortex
+            rc = right_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = system.panels[isurf][i].cfr
+            CFi += cf
+            CMi += cross(Δr, cf)
+        end
+
+        # adjust surface forces to account for symmetry
+        if symmetric[isurf]
+            CFi = SVector(2*CFi[1], 0.0, 2*CFi[3])
+            CMi = SVector(0.0, 2*CMi[2], 0.0)
+        end
+
+        # add to body forces
+        CF += CFi
+        CM += CMi
+
     end
 
-    # normalize body forces
+    # add reference length in moment normalization
     reference_length = SVector(ref.b, ref.c, ref.b)
-    CF = Fb/(QINF*ref.S)
-    CM = Mb./(QINF.*ref.S.*reference_length)
+    CM = CM ./ reference_length
 
-    # also normalize derivatives
-    CF_a = Fb_a/(QINF*ref.S)
-    CF_b = Fb_b/(QINF*ref.S)
-    CF_p = Fb_p/(QINF*ref.S)
-    CF_q = Fb_q/(QINF*ref.S)
-    CF_r = Fb_r/(QINF*ref.S)
+    # switch to specified frame
+    CF, CM = body_to_frame(CF, CM, ref, fs, frame)
 
-    CM_a = Mb_a./(QINF.*ref.S.*reference_length)
-    CM_b = Mb_b./(QINF.*ref.S.*reference_length)
-    CM_p = Mb_p./(QINF.*ref.S.*reference_length)
-    CM_q = Mb_q./(QINF.*ref.S.*reference_length)
-    CM_r = Mb_r./(QINF.*ref.S.*reference_length)
+    return CF, CM
+end
+
+"""
+    body_forces_derivatives(system, surface, reference, freestream; kwargs...)
+
+Return the body force coefficients for the `system` and their derivatives with
+respect to the freestream variables
+
+Note that this function assumes that a near-field analysis has already been
+performed to obtain the panel forces.
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Surface, represented by matrices of panels of shape (nc, ns) where
+    `nc` is the number of chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+"""
+@inline function body_forces_derivatives(system, surface::AbstractMatrix, ref, fs;
+    symmetric=false)
+
+    return body_forces_derivatives(system, [surface], ref, fs; symmetric=[symmetric])
+end
+
+"""
+    body_forces_derivatives(system, surfaces, reference, freestream; kwargs...)
+
+Return the body force coefficients for the `system` and their derivatives with
+respect to the freestream variables
+
+Note that this function assumes that a near-field analysis has already been
+performed to obtain the panel forces.
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: Flags indicating whether a mirror image of each panel in `surfaces`
+    should be used when calculating induced velocities.
+"""
+@inline function body_forces_derivatives(system, surfaces::AbstractVector, ref, fs;
+    symmetric = fill(false, length(surfaces)))
+
+    TF = eltype(system)
+
+    props = system.panels
+    props_a, props_b, props_p, props_q, props_r = system.dpanels
+
+    CF = @SVector zeros(TF, 3)
+    CM = @SVector zeros(TF, 3)
+
+    CF_a = @SVector zeros(TF, 3)
+    CF_b = @SVector zeros(TF, 3)
+    CF_p = @SVector zeros(TF, 3)
+    CF_q = @SVector zeros(TF, 3)
+    CF_r = @SVector zeros(TF, 3)
+
+    CM_a = @SVector zeros(TF, 3)
+    CM_b = @SVector zeros(TF, 3)
+    CM_p = @SVector zeros(TF, 3)
+    CM_q = @SVector zeros(TF, 3)
+    CM_r = @SVector zeros(TF, 3)
+
+    for isurf = 1:length(surfaces)
+
+        CFi = @SVector zeros(TF, 3)
+        CMi = @SVector zeros(TF, 3)
+
+        CFi_a = @SVector zeros(TF, 3)
+        CFi_b = @SVector zeros(TF, 3)
+        CFi_p = @SVector zeros(TF, 3)
+        CFi_q = @SVector zeros(TF, 3)
+        CFi_r = @SVector zeros(TF, 3)
+
+        CMi_a = @SVector zeros(TF, 3)
+        CMi_b = @SVector zeros(TF, 3)
+        CMi_p = @SVector zeros(TF, 3)
+        CMi_q = @SVector zeros(TF, 3)
+        CMi_r = @SVector zeros(TF, 3)
+
+        for i = 1:length(surfaces[isurf])
+
+            # top bound vortex
+            rc = top_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = props[isurf][i].cf
+            CFi += cf
+            CMi += cross(Δr, cf)
+
+            cf_a = props_a[isurf][i].cf
+            CFi_a += cf_a
+            CMi_a += cross(Δr, cf_a)
+
+            cf_b = props_b[isurf][i].cf
+            CFi_b += cf_b
+            CMi_b += cross(Δr, cf_b)
+
+            cf_p = props_p[isurf][i].cf
+            CFi_p += cf_p
+            CMi_p += cross(Δr, cf_p)
+
+            cf_q = props_q[isurf][i].cf
+            CFi_q += cf_q
+            CMi_q += cross(Δr, cf_q)
+
+            cf_r = props_r[isurf][i].cf
+            CFi_r += cf_r
+            CMi_r += cross(Δr, cf_r)
+
+            # left bound vortex
+            rc = left_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = props[isurf][i].cfl
+            CFi += cf
+            CMi += cross(Δr, cf)
+
+            cf_a = props_a[isurf][i].cfl
+            CFi_a += cf_a
+            CMi_a += cross(Δr, cf_a)
+
+            cf_b = props_b[isurf][i].cfl
+            CFi_b += cf_b
+            CMi_b += cross(Δr, cf_b)
+
+            cf_p = props_p[isurf][i].cfl
+            CFi_p += cf_p
+            CMi_p += cross(Δr, cf_p)
+
+            cf_q = props_q[isurf][i].cfl
+            CFi_q += cf_q
+            CMi_q += cross(Δr, cf_q)
+
+            cf_r = props_r[isurf][i].cfl
+            CFi_r += cf_r
+            CMi_r += cross(Δr, cf_r)
+
+            # right bound vortex
+            rc = right_center(surfaces[isurf][i])
+            Δr = rc - ref.r
+            cf = props[isurf][i].cfr
+            CFi += cf
+            CMi += cross(Δr, cf)
+
+            cf_a = props_a[isurf][i].cfr
+            CFi_a += cf_a
+            CMi_a += cross(Δr, cf_a)
+
+            cf_b = props_b[isurf][i].cfr
+            CFi_b += cf_b
+            CMi_b += cross(Δr, cf_b)
+
+            cf_p = props_p[isurf][i].cfr
+            CFi_p += cf_p
+            CMi_p += cross(Δr, cf_p)
+
+            cf_q = props_q[isurf][i].cfr
+            CFi_q += cf_q
+            CMi_q += cross(Δr, cf_q)
+
+            cf_r = props_r[isurf][i].cfr
+            CFi_r += cf_r
+            CMi_r += cross(Δr, cf_r)
+        end
+
+        # adjust surface forces to account for symmetry
+        if symmetric[isurf]
+            CFi = SVector(2*CFi[1], 0.0, 2*CFi[3])
+            CMi = SVector(0.0, 2*CMi[2], 0.0)
+
+            CFi_a = SVector(2*CFi_a[1], 0.0, 2*CFi_a[3])
+            CFi_b = SVector(2*CFi_b[1], 0.0, 2*CFi_b[3])
+            CFi_p = SVector(2*CFi_p[1], 0.0, 2*CFi_p[3])
+            CFi_q = SVector(2*CFi_q[1], 0.0, 2*CFi_q[3])
+            CFi_r = SVector(2*CFi_r[1], 0.0, 2*CFi_r[3])
+
+            CMi_a = SVector(0.0, 2*CMi_a[2], 0.0)
+            CMi_b = SVector(0.0, 2*CMi_b[2], 0.0)
+            CMi_p = SVector(0.0, 2*CMi_p[2], 0.0)
+            CMi_q = SVector(0.0, 2*CMi_q[2], 0.0)
+            CMi_r = SVector(0.0, 2*CMi_r[2], 0.0)
+        end
+
+        # add to body forces
+        CF += CFi
+        CM += CMi
+
+        CF_a += CFi_a
+        CF_b += CFi_b
+        CF_p += CFi_p
+        CF_q += CFi_q
+        CF_r += CFi_r
+
+        CM_a += CMi_a
+        CM_b += CMi_b
+        CM_p += CMi_p
+        CM_q += CMi_q
+        CM_r += CMi_r
+
+    end
+
+    # add reference length in moment normalization
+    reference_length = SVector(ref.b, ref.c, ref.b)
+    CM = CM ./ reference_length
+
+    CM_a = CM_a ./ reference_length
+    CM_b = CM_b ./ reference_length
+    CM_p = CM_p ./ reference_length
+    CM_q = CM_q ./ reference_length
+    CM_r = CM_r ./ reference_length
 
     dCF = (CF_a, CF_b, CF_p, CF_q, CF_r)
     dCM = (CM_a, CM_b, CM_p, CM_q, CM_r)
 
-    return CF, CM, dCF, dCM, props
+    return CF, CM, dCF, dCM
 end
 
 """
@@ -606,14 +806,14 @@ to another frame
 """
 body_to_frame
 
-body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
+@inline body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
 
-function body_to_frame(CF, CM, ref, fs, ::Stability)
+@inline function body_to_frame(CF, CM, ref, fs, ::Stability)
     R = body_to_stability(fs)
     return R*CF, R*CM
 end
 
-function body_to_frame(CF, CM, ref, fs, ::Wind)
+@inline function body_to_frame(CF, CM, ref, fs, ::Wind)
     # remove reference lengths
     reflen = SVector(ref.b, ref.c, ref.b)
     CM = CM .* reflen

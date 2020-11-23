@@ -136,8 +136,8 @@ bottom, left, and right sides of `panel`.
 panel_induced_velocity(rcp, panel::AbstractPanel, trailing; kwargs...)
 
 """
-    surface_induced_velocity(rcp, surface, Γ, same_surface, same_id, trailing_vortices,
-        symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+    surface_induced_velocity(rcp, surface, Γ, symmetric, same_surface, same_id,
+        trailing_vortices; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
 
 Returns the induced velocity at `rcp` from the panels in `surface`
 
@@ -146,14 +146,14 @@ Returns the induced velocity at `rcp` from the panels in `surface`
  - `surface`: Matrix of surface panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
  - `Γ`: Circulation strengths corresponding to `surface`
- - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
-    shed from `surface`
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
  - `same_surface`: Flag indicating whether `rcp` corresponds to a panel center
     on `surface`
  - `same_id`: Flag indicating whether `rcp` is on a surface with the same ID as
     `surface`
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
+    shed from `surface`
 
 # Keyword Arguments
  - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
@@ -162,8 +162,8 @@ Returns the induced velocity at `rcp` from the panels in `surface`
     to the center of the bottom right panel.  By default, `rcp` is not assumed
     to correspond to a panel center on `surface`.
 """
-function surface_induced_velocity(rcp, surface, Γ, same_surface, same_id,
-    trailing_vortices, symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+@inline function surface_induced_velocity(rcp, surface, Γ, symmetric, same_surface, same_id,
+    trailing_vortices; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
 
     TF = promote_type(eltype(rcp), eltype(eltype(surface)))
 
@@ -174,7 +174,7 @@ function surface_induced_velocity(rcp, surface, Γ, same_surface, same_id,
     finite_core = !same_id
     previous_trailing = false
 
-    Vind = SVector{3, TF}(0, 0, 0)
+    Vind = @SVector zeros(TF, 3)
     for j = 1:Ns
         J = cs[j]
 
@@ -210,7 +210,6 @@ function surface_induced_velocity(rcp, surface, Γ, same_surface, same_id,
                     finite_core = finite_core, reflect = true, xhat = xhat,
                     include_top=include_top_mirrored, include_bottom=include_bottom_mirrored)
 
-                # left is right and right is left
                 vt += vt_s
                 vb += vb_s
                 vl += vl_s
@@ -280,8 +279,8 @@ function surface_induced_velocity(rcp, surface, Γ, same_surface, same_id,
 end
 
 """
-    surface_induced_velocity(rcp, surface, Γ, same_surface, same_id, trailing_vortices,
-        symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+    surface_induced_velocity_derivatives(rcp, surface, Γ, symmetric, same_surface,
+        same_id, trailing_vortices; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
 
 Returns the induced velocity at `rcp` from the panels in `surface` and its
 derivatives with respect to the freestream variables
@@ -292,14 +291,14 @@ derivatives with respect to the freestream variables
     chordwise panels and `ns` is the number of spanwise panels
  - `Γ`: Circulation strengths corresponding to `surface`
  - `dΓ`: Circulation strength derivatives corresponding to `surface`
- - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
-    shed from `surface`
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
  - `same_surface`: Flag indicating whether `rcp` corresponds to a panel center
     on `surface`
  - `same_id`: Flag indicating whether `rcp` is on a surface with the same ID as
     `surface`
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `trailing_vortices`: Flag that may be used to enable/disable trailing vortices
+    shed from `surface`
 
 # Keyword Arguments
  - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
@@ -308,8 +307,8 @@ derivatives with respect to the freestream variables
     to the center of the bottom right panel.  By default, `rcp` is not assumed
     to correspond to a panel center on `surface`.
 """
-function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, same_surface, same_id,
-    trailing_vortices, symmetric; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
+@inline function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, symmetric,
+    same_surface, same_id, trailing_vortices; xhat=SVector(1, 0, 0), I=CartesianIndex(-1, -1))
 
     TF = promote_type(eltype(rcp), eltype(eltype(surface)))
 
@@ -323,13 +322,13 @@ function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, same_surfac
     # unpack derivatives
     Γ_a, Γ_b, Γ_p, Γ_q, Γ_r = dΓ
 
-    Vind = SVector{3, TF}(0, 0, 0)
+    Vind = @SVector zeros(TF, 3)
 
-    Vind_a = SVector{3, TF}(0, 0, 0)
-    Vind_b = SVector{3, TF}(0, 0, 0)
-    Vind_p = SVector{3, TF}(0, 0, 0)
-    Vind_q = SVector{3, TF}(0, 0, 0)
-    Vind_r = SVector{3, TF}(0, 0, 0)
+    Vind_a = @SVector zeros(TF, 3)
+    Vind_b = @SVector zeros(TF, 3)
+    Vind_p = @SVector zeros(TF, 3)
+    Vind_q = @SVector zeros(TF, 3)
+    Vind_r = @SVector zeros(TF, 3)
 
     for j = 1:Ns
         J = cs[j]
@@ -366,7 +365,6 @@ function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, same_surfac
                     finite_core = finite_core, reflect = true, xhat = xhat,
                     include_top=include_top_mirrored, include_bottom=include_bottom_mirrored)
 
-                # left is right and right is left
                 vt += vt_s
                 vb += vb_s
                 vl += vl_s
@@ -375,8 +373,17 @@ function surface_induced_velocity_derivatives(rcp, surface, Γ, dΓ, same_surfac
                 vrt += vrt_s
             end
 
-            # add velocity from this panel
-            Vind += (vt + vb + vl + vr + vlt + vrt) * Γ[j]
+            Vhat = vt + vb + vl + vr + vlt + vrt
+
+            # add velocity from this panel (excluding already computed components)
+            Vind += Vhat * Γ[j]
+
+            # and its derivatives
+            Vind_a += Vhat * Γ_a[j]
+            Vind_b += Vhat * Γ_b[j]
+            Vind_p += Vhat * Γ_p[j]
+            Vind_q += Vhat * Γ_q[j]
+            Vind_r += Vhat * Γ_r[j]
 
         else
             # use more efficient formulation when finite core is disabled
@@ -745,40 +752,6 @@ end
     return Ring(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
 end
 
-# --- Struct to store panel properties --- #
-
-"""
-    PanelProperties
-
-Panel specific properties calculated during the vortex lattice method analysis.
-
-**Fields**
- - `gamma`: Panel circulation strength (normalized by the freestream velocity)
- - `v`: Local velocity at the panel's center (typically the quarter-chord), normalized
- - `cf`: Bound vortex force per unit length, normalized by `QINF*S` where `QINF`
-    is the dynamic pressure and `S` is the user-provided reference area.
- - `cfl`: Left vortex force per unit length, normalized by `QINF*S`
- - `cfr`: Right vortex force per unit length, normalized by `QINF*S`
-"""
-struct PanelProperties{TF}
-    gamma::TF
-    v::SVector{3, TF}
-    cf::SVector{3, TF}
-    cfl::SVector{3, TF}
-    cfr::SVector{3, TF}
-end
-
-function PanelProperties(gamma, v, cf, cfl, cfr)
-
-    TF = promote_type(typeof(gamma), typeof(v), eltype(cf), eltype(cfl), eltype(cfr))
-
-    return PanelProperties{TF}(gamma, v, cf, cfl, cfr)
-end
-
-Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
-Base.eltype(::PanelProperties{TF}) where TF = TF
-
-
 # --- internal functions --- #
 
 """
@@ -924,7 +897,7 @@ filament strength.
  - `include_left_trailing`: Flag to disable induced velocity calculations for the left trailing vortex
  - `include_right_trailing`: Flag to disable induced velocity calculations for the right trailing vortex
 """
-function ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; finite_core=false,
+@inline function ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; finite_core=false,
     core_size=0.0, reflect=false, xhat=SVector(1, 0, 0),
     include_top=true, include_bottom=true, include_left=true, include_right=true,
     include_left_trailing=true, include_right_trailing=true)
