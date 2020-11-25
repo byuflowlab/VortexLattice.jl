@@ -49,6 +49,7 @@ export System
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
+export unsteady_analysis, unsteady_analysis!
 
 include("visualization.jl")
 export write_vtk

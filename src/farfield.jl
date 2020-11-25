@@ -155,12 +155,16 @@ function trefftz_panels!(panels, surfaces::AbstractVector{<:AbstractMatrix}, fs,
 end
 
 """
-    trefftz_panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel, same_id, symmetric)
+    trefftz_panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel; kwargs...)
 
 Induced drag on `receiving` panel induced by `sending` panel.
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of `sending` should be
+    used when calculating the induced drag
 """
-@inline function trefftz_panel_induced_drag(receiving::TrefftzPanel, sending::TrefftzPanel,
-    symmetric)
+@inline function trefftz_panel_induced_drag(receiving::TrefftzPanel,
+    sending::TrefftzPanel; symmetric)
 
     rl = sending.rl
     rr = sending.rr
@@ -197,10 +201,9 @@ been computed and is present in `system`
 
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
-    should be used when calculating induced velocities, defaults to `false`
+    should be used when calculating induced velocities
 """
-function far_field_drag(system, surface::AbstractMatrix, ref, fs;
-    symmetric = false)
+function far_field_drag(system, surface::AbstractMatrix, ref, fs; symmetric)
 
     # unpack system
     Γ = system.gamma
@@ -208,7 +211,7 @@ function far_field_drag(system, surface::AbstractMatrix, ref, fs;
 
     trefftz_panels!(trefftz, surface, fs, Γ)
 
-    return far_field_drag(trefftz, trefftz, ref, fs, symmetric)
+    return far_field_drag(trefftz, trefftz, ref, fs; symmetric)
 end
 
 """
@@ -228,10 +231,10 @@ been computed and is present in `system`
 
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
-    should be used when calculating induced velocities, defaults to `false`
+    should be used when calculating induced velocities
 """
-function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs;
-    symmetric = fill(false, length(surfaces)))
+function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref,
+    fs; symmetric)
 
     # unpack system
     Γ = system.gamma
@@ -244,14 +247,14 @@ function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref,
     nsurf = length(surfaces)
     CD = zero(eltype(eltype(eltype(surfaces))))
     for i = 1:nsurf, j = 1:nsurf
-        CD += far_field_drag(trefftz[i], trefftz[j], ref, fs, symmetric[j])
+        CD += far_field_drag(trefftz[i], trefftz[j], ref, fs; symmetric = symmetric[j])
     end
 
     return CD
 end
 
 # one surface on another surface
-function far_field_drag(receiving, sending, ref, fs, symmetric)
+function far_field_drag(receiving, sending, ref, fs; symmetric)
 
     TF = promote_type(eltype(eltype(receiving)), eltype(eltype(sending)), eltype(ref), eltype(fs))
 
@@ -262,7 +265,7 @@ function far_field_drag(receiving, sending, ref, fs, symmetric)
     Di = zero(TF)
     for j = 1:Ns
         for i = 1:Nr
-            Di += trefftz_panel_induced_drag(receiving[i], sending[j], symmetric)
+            Di += trefftz_panel_induced_drag(receiving[i], sending[j]; symmetric)
         end
     end
 

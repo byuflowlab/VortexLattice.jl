@@ -45,6 +45,7 @@ Contains the system AIC matrix, R.H.S., circulation distribution, and wake shape
  - `dgamma`: Derivatives of the R.H.S. with respect to the freestream variables
  - `dgamma`: Derivatives of the circulation strength with respect to the freestream variables
  - `dpanels`: Derivatives of the panel properties with respect to the freestream variables
+ - `wake_velocities`: Velocities at the corners of the wake panels for each surface
 """
 struct System{TF}
     AIC::Matrix{TF}
@@ -56,6 +57,7 @@ struct System{TF}
     db::NTuple{5, Vector{TF}}
     dgamma::NTuple{5, Vector{TF}}
     dpanels::NTuple{5, Vector{Matrix{PanelProperties{TF}}}}
+    wake_velocities::Vector{Matrix{SVector{3,TF}}}
 end
 
 @inline Base.eltype(::Type{System{TF}}) where TF = TF
@@ -75,8 +77,10 @@ function System(TF::Type{<:AbstractFloat}, surface::AbstractMatrix; nwake=0)
     db = Tuple(zeros(TF, N) for id = 1:5)
     dgamma = Tuple(zeros(TF, N) for id = 1:5)
     dpanels = Tuple([Matrix{PanelProperties{TF}}(undef, size(surface))] for id = 1:5)
+    wake_velocities = [Matrix{SVector{3, TF}}(undef, nwake+1, size(surface, 2)+1)]
 
-    return System{TF}(AIC, b, gamma, panels, wakes, trefftz, db, dgamma, dpanels)
+    return System{TF}(AIC, b, gamma, panels, wakes, trefftz, db, dgamma, dpanels,
+        wake_velocities)
 end
 
 System(surfaces::AbstractVector{<:AbstractMatrix}; kwargs...) =
@@ -95,6 +99,8 @@ function System(TF::Type{<:AbstractFloat}, surfaces::AbstractVector{<:AbstractMa
     db = Tuple(zeros(TF, N) for id = 1:5)
     dgamma = Tuple(zeros(TF, N) for id = 1:5)
     dpanels = Tuple([Matrix{PanelProperties{TF}}(undef, size(surfaces[i])) for i = 1:length(surfaces)] for id = 1:5)
+    wake_velocities = [Matrix{SVector{3, TF}}(undef, nwake[i]+1, size(surfaces[i], 2)+1) for i = 1:length(surfaces)]
 
-    return System{TF}(AIC, b, gamma, panels, wakes, trefftz, db, dgamma, dpanels)
+    return System{TF}(AIC, b, gamma, panels, wakes, trefftz, db, dgamma, dpanels,
+        wake_velocities)
 end

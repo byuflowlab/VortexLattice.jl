@@ -1,31 +1,30 @@
 """
-    influence_coefficients(surface, symmetric; kwargs...)
+    influence_coefficients(surface; kwargs...)
 
 Construct the aerodynamic influence coefficient matrix for a single surface.
 
 # Arguments:
  - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
 
 # Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities
  - `trailing_vortices`: Flag which may be used to enable/disable trailing vortices,
-    trailing vortices are enabled by default
  - `xhat`: direction in which trailing vortices are shed if wake panels are not
-    used to model the wake, defaults to [1, 0, 0]
+    used to model the wake
 """
-function influence_coefficients(surface::AbstractMatrix, symmetric; kwargs...)
+function influence_coefficients(surface::AbstractMatrix; kwargs...)
 
     N = length(surface)
     TF = eltype(eltype(surface))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, surface, symmetric; kwargs...)
+    return influence_coefficients!(AIC, surface; kwargs...)
 end
 
 """
-    influence_coefficients(surfaces, surface_id, symmetric; kwargs...)
+    influence_coefficients(surfaces; kwargs...)
 
 Construct the aerodynamic influence coefficient matrix for multiple surfaces.
 
@@ -33,51 +32,42 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
  - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value.
- - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
-    be used when calculating induced velocities, defaults to `false` for each surface
 
 # Keyword Arguments
- - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
-    for each surface
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value
+ - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+    be used when calculating induced velocities
+ - `trailing_vortices`: Flags to enable/disable trailing vortices
  - `xhat`: direction in which trailing vortices are shed if wake panels are not
-    used to model the wake, defaults to [1, 0, 0]
+    used to model the wake
 """
-function influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix}, surface_id,
-    symmetric; kwargs...)
+function influence_coefficients(surfaces::AbstractVector{<:AbstractMatrix}; kwargs...)
 
     N = sum(length.(surfaces))
     TF = eltype(eltype(eltype(surfaces)))
     AIC = Matrix{TF}(undef, N, N)
 
-    return influence_coefficients!(AIC, surfaces, surface_id, symmetric; kwargs...)
+    return influence_coefficients!(AIC, surfaces; kwargs...)
 end
 
 """
-    influence_coefficients!(AIC, surface, symmetric; kwargs...)
+    influence_coefficients!(AIC, surface; kwargs...)
 
 Pre-allocated version of `influence_coefficients`
 """
-function influence_coefficients!(AIC, surface::AbstractMatrix, symmetric; kwargs...)
+function influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...)
 
-    receiving = surface
-    sending = surface
-    same_id = true
-
-    influence_coefficients!(AIC, surface, surface, symmetric, same_id; kwargs...)
-
-    return AIC
+    return influence_coefficients!(AIC, surface, surface; kwargs..., same_id = true)
 end
 
 """
-    influence_coefficients!(AIC, surfaces, surface_id, symmetric; kwargs...)
+    influence_coefficients!(AIC, surfaces; kwargs...)
 
 Pre-allocated version of `influence_coefficients`
 """
-function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix},
-    surface_id, symmetric; trailing_vortices=fill(true, length(surfaces)),
-    xhat=SVector(1, 0, 0))
+function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+    surface_id, symmetric, trailing_vortices, xhat)
 
     nsurf = length(surfaces)
 
@@ -107,8 +97,11 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
             same_id = surface_id[i] == surface_id[j]
 
             # populate entries in the AIC matrix
-            influence_coefficients!(vAIC, receiving, sending, symmetric[j],
-                same_id; trailing_vortices = trailing_vortices[j], xhat = xhat)
+            influence_coefficients!(vAIC, receiving, sending;
+                symmetric = symmetric[j],
+                same_id = same_id,
+                trailing_vortices = trailing_vortices[j],
+                xhat = xhat)
 
             # increment position in AIC matrix
             jAIC += ns
@@ -121,13 +114,23 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
 end
 
 """
-    influence_coefficients!(AIC, receiving, sending, symmetric, same_id; kwargs...)
+    influence_coefficients!(AIC, receiving, sending; kwargs...)
 
 Compute the AIC coefficients corresponding to the influence of the panels in
 `sending` on the panels in `receiving`.
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities
+ - `same_id`: Flag indicating whether a `receiving` and `sending` share the same
+    surface ID
+ - `trailing_vortices`: Flag which may be used to enable/disable trailing vortices
+    on `sending`
+ - `xhat`: direction in which trailing vortices are shed if wake panels are not
+    used to model the wake
 """
-@inline function influence_coefficients!(AIC, receiving, sending, symmetric,
-    same_id; trailing_vortices=true, xhat=SVector(1, 0, 0))
+@inline function influence_coefficients!(AIC, receiving, sending;
+    symmetric, same_id, trailing_vortices, xhat)
 
     Nr = length(receiving)
     Ns = length(sending)
@@ -154,7 +157,7 @@ Compute the AIC coefficients corresponding to the influence of the panels in
 
             trailing_edge = J[1] == nchordwise
 
-            trailing = trailing_vortices && has_trailing_vortices(sending[J], trailing_edge)
+            trailing = trailing_vortices && on_trailing_edge(sending[J], trailing_edge)
 
             # get normalized induced velocity for the panel
             Vhat = sum(panel_induced_velocity(rcp, sending[J], trailing;
@@ -406,7 +409,7 @@ end
 # --- wake_normal_velocity --- #
 
 """
-    wake_normal_velocity(surface, wake, trailing_vortices, symmetric; kwargs...)
+    wake_normal_velocity(surface, wake; kwargs...)
 
 Compute the normal component of the velocity induced on a surface by its own
 wake panels
@@ -418,28 +421,26 @@ This forms part of the right hand side of the circulation linear system solve.
     chordwise panels and `ns` is the number of spanwise panels
  - `wake`: Matrix of wake panels of shape (nw, ns) where `nw` is the number of
     chordwise wake panels and `ns` is the number of spanwise panels
- - `trailing_vortices`: flags indicating whether trailing vortices should be shed from
-    the last chordwise panels in `wake`.
- - `symmetric`: Flag indicating whether a mirror image of the panels in `wake`
-    should be used when calculating induced velocities.
 
 # Keyword Arguments
- - `nwake`: number of chordwise wake panels to use from `wake`, defaults to all
-    wake panels
- - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `wake`
+    should be used when calculating induced velocities.
+ - `nwake`: number of chordwise wake panels to use from `wake`
+ - `trailing_vortices`: flags indicating whether trailing vortices should be shed
+    from the last chordwise panels in `wake`
+ - `xhat`: direction in which trailing vortices are shed
 """
-function wake_normal_velocity(surface::AbstractMatrix, wake::AbstractMatrix,
-    trailing_vortices, symmetric; nwake=size(wake,1), xhat=SVector(1,0,0))
+function wake_normal_velocity(surface::AbstractMatrix, wake::AbstractMatrix; kwargs...)
 
     TF = promote_type(eltype(eltype(surface)), eltype(eltype(wake)))
     N = length(surface)
     b = zeros(TF, N)
 
-    return add_wake_normal_velocity!(b, surface, wake, trailing_vortices, symmetric; nwake=nwake, xhat=xhat)
+    return add_wake_normal_velocity!(b, surface, wake; kwargs...)
 end
 
 """
-    wake_normal_velocity(surfaces, wakes, surface_id, trailing_vortices, symmetric; kwargs...)
+    wake_normal_velocity(surfaces, wakes; kwargs...)
 
 Compute the normal component of the velocity induced on multiple surfaces by
 their wake panels
@@ -453,54 +454,36 @@ This forms part of the right hand side of the circulation linear system solve.
  - `wakes`: Vector of wakes, represented by matrices of panels of shape (nw, ns)
     where `nw` is the number of chordwise wake panels and `ns` is the number of
     spanwise panels
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value.
- - `trailing_vortices`: flags indicating whether trailing vortices should be shed from
-    the last chordwise panel of each wake.
- - `symmetric`: Flag indicating whether a mirror image of the panels in `wake`
-    should be used when calculating induced velocities.
 
 # Keyword Arguments
- - `nwake`: number of chordwise wake panels to use from each `wake`, defaults to
-    all wake panels
- - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `wake`
+    should be used when calculating induced velocities
+ - `nwake`: number of chordwise wake panels to use from each `wake`
+ - `trailing_vortices`: flags indicating whether trailing vortices should be shed from
+    the last chordwise panel of each wake
+ - `xhat`: direction in which trailing vortices are shed
 """
 function wake_normal_velocity(surfaces::AbstractVector{<:AbstractMatrix},
-    wakes::AbstractVector{<:AbstractMatrix}, surface_id, trailing_vortices, symmetric;
-    nwake=size.(wakes, 1), xhat = SVector(1, 0, 0))
+    wakes::AbstractVector{<:AbstractMatrix}; kwargs...)
 
-    TF = promote_type(eltype(eltype(eltype(surface))), eltype(eltype(eltype(wake))))
+    TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(eltype(eltype(wakes))))
     N = sum(length.(surfaces))
     b = zeros(TF, N)
 
-    return add_wake_normal_velocity!(b, surfaces, wakes, surface_id, trailing_vortices,
-        symmetric; nwake=nwake, xhat=xhat)
+    return add_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
 end
 
 """
-    add_wake_normal_velocity!(b, surface, wake, trailing_vortices, symmetric; kwargs...)
-
-Pre-allocated version of `wake_normal_velocity` which adds the normal induced
-velocity created by the wake to the existing vector `b`
-"""
-function add_wake_normal_velocity!(b, surface::AbstractMatrix, wake::AbstractMatrix,
-    trailing_vortices, symmetric; nwake=size(wake,1), xhat=SVector(1,0,0))
-
-    same_id = true
-
-    return add_wake_normal_velocity!(b, surface, wake, symmetric, same_id, nwake,
-        trailing_vortices, xhat)
-end
-
-"""
-    add_wake_normal_velocity!(b, surfaces, wakes, surface_id, trailing_vortices, symmetric; kwargs...)
+    add_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
 
 Pre-allocated version of `wake_normal_velocity` which adds the normal induced
 velocity created by the wakes to the existing vector `b`
 """
 function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix},
-    wakes::AbstractVector{<:Wake}, surface_id, trailing_vortices, symmetric;
-    nwake=size.(wakes,1), xhat=SVector(1, 0, 0))
+    wakes::AbstractVector{<:Wake}; surface_id, symmetric, nwake,
+    trailing_vortices, xhat)
 
     nsurf = length(surfaces)
     nwake = length(wakes)
@@ -519,8 +502,13 @@ function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix}
 
         # fill in RHS vector
         for j = 1:nsurf
-            same_id = surface_id[i] == surface_id[j]
-            add_wake_normal_velocity!(vb, surfaces[i], wakes[j], nwake[j], symmetric, same_id, trailing_vortices, xhat)
+            add_wake_normal_velocity!(vb, surfaces[i], wakes[j];
+                same_surface = false,
+                same_id = surface_id[i] == surface_id[j],
+                symmetric = symmetric[j],
+                nwake = nwake[j],
+                trailing_vortices = trailing_vortices[j],
+                xhat = xhat)
         end
 
         # increment position in AIC matrix
@@ -531,27 +519,34 @@ function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix}
 end
 
 """
-    add_wake_normal_velocity!(b, surface, wake, symmetric, same_id,
-        trailing_vortices; xhat=SVector(1, 0, 0), nwake=size(wake, 1))
+    add_wake_normal_velocity!(b, surface, wake; kwargs...)
 
 Adds the normal induced velocity from `wake` onto the control points of `surface`
 to the existing vector `b`
+
+# Keyword Arguments
+ - `same_id`: Flag indicating whether a `surface` and `wake` share the same
+    surface ID, defaults to `true`
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `wake`
+    should be used when calculating induced velocities
+ - `nwake`: number of chordwise wake panels to use from each `wake`
+ - `trailing_vortices`: flags indicating whether trailing vortices should be shed from
+    the last chordwise panel of each wake
+ - `xhat`: direction in which trailing vortices are shed
 """
-@inline function add_wake_normal_velocity!(b, surface, wake, symmetric, same_id,
-    trailing_vortices; xhat=SVector(1, 0, 0), nwake=size(wake, 1))
+@inline function add_wake_normal_velocity!(b, surface, wake; same_id = true, kwargs...)
 
     # loop over receiving panels
     for i = 1:length(surface)
 
         # control point location
-        rcp = controlpoint(receiving[i])
+        rcp = controlpoint(surface[i])
 
         # normal vector body axis
-        nhat = normal(receiving[i])
+        nhat = normal(surface[i])
 
         # get induced velocity at rcp from the wake
-        Vind = wake_induced_velocity(rcp, wake, symmetric, same_id, trailing_vortices;
-            xhat = xhat, nwake = nwake)
+        Vind = wake_induced_velocity(rcp, wake; same_id, kwargs..., same_surface = false)
 
         # add normal velocity
         b[i] += dot(Vind, nhat)

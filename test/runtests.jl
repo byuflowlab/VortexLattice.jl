@@ -1138,6 +1138,46 @@ end
 
 end
 
+@testset "Unsteady Vortex Lattice Method" begin
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = true
+    symmetric = false
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # time
+    dt = 0.1
+    nt = 11
+
+    system, panel_history, wake_history = unsteady_analysis(wing, ref, fs, dt,
+        nt; symmetric=symmetric)
+
+end
+
 # # ---- Veldhius validation case ------
 # b = 0.64*2
 # AR = 5.33

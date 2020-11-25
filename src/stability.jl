@@ -18,14 +18,12 @@ forces must have been previously computed and stored in `system`
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating induced velocities.
 """
-function body_derivatives(system, surface::AbstractMatrix, ref, fs;
-    symmetric = false)
+function body_derivatives(system, surface::AbstractMatrix, ref, fs; symmetric)
 
-    return body_derivatives(system, [surface], ref, fs;
-        symmetric = [symmetric])
+    return body_derivatives(system, [surface], ref, fs; symmetric = [symmetric])
 end
 
 """
@@ -49,11 +47,11 @@ forces must have been previously computed and stored in `system`
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels in `surface`
+    was used when calculating panel induced velocities.
 """
-function body_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs;
-    symmetric = fill(false, length(surfaces)))
+function body_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs; symmetric)
 
     CF, CM, dCF, dCM = body_forces_derivatives(system, surfaces, ref, fs; symmetric)
 
@@ -106,8 +104,8 @@ forces must have been previously computed and stored in `system`
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating panel induced velocities.
 """
 function stability_derivatives(system, surface::AbstractMatrix, ref, fs;
     symmetric = false)
@@ -137,11 +135,11 @@ forces must have been previously computed and stored in `system`
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
-    should be used when calculating induced velocities.
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating panel induced velocities.
 """
-function stability_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs;
-    symmetric = fill(false, length(surfaces)))
+function stability_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs; symmetric)
 
     CFb, CMb, dCFb, dCMb = body_forces_derivatives(system, surfaces, ref, fs; symmetric)
 

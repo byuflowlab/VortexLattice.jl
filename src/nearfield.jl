@@ -18,19 +18,16 @@ been calculated and stored in `system`.
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
  - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
-    Defaults to using all wake panels.
  - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
     from the last chordwise panel in `wake`
- - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `xhat`: direction in which trailing vortices are shed
 """
 @inline function near_field_forces!(system, surface::AbstractMatrix, ref, fs;
-    symmetric = false,
-    nwake = size(system.wakes[1], 1),
-    trailing_vortices = true,
-    xhat = SVector(1, 0, 0))
+    symmetric, nwake, trailing_vortices, xhat)
 
     return near_field_forces!(system, [surface], ref, fs; symmetric=[symmetric],
-        nwake = [nwake], trailing_vortices = [trailing_vortices], xhat = xhat)
+        nwake = [nwake], trailing_vortices = [trailing_vortices], xhat = xhat,
+        surface_id = 1:1)
 end
 
 """
@@ -51,21 +48,15 @@ been calculated and stored in `system`.
 
 # Keyword Arguments
  - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
-    be used when calculating induced velocities, defaults to `false` for each surface
- - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
+    be used when calculating induced velocities
+ - `trailing_vortices`: Flags to enable/disable trailing vortices
     for each surface
- - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+ - `xhat`: Direction in which to shed trailing vortices
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value. By default all surfaces
-    have their own IDs
+    model by setting all surface ID's to the same value.
 """
 @inline function near_field_forces!(system, surfaces::AbstractVector{<:AbstractMatrix},
-    ref, fs;
-    symmetric = fill(false, length(surfaces)),
-    nwake = size.(system.wakes, 1),
-    trailing_vortices = true,
-    xhat = SVector(1, 0, 0),
-    surface_id = 1:length(surfaces))
+    ref, fs; symmetric, surface_id, nwake, trailing_vortices, xhat)
 
     # unpack system storage
     Γ = system.gamma
@@ -109,13 +100,21 @@ been calculated and stored in `system`.
 
                 vΓ = view(Γ, jΓ+1:jΓ+ns)
 
-                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ, symmetric[jsurf],
-                    same_surface, same_id, trailing_vortices[jsurf] && !wake_panels[jsurf];
-                    xhat=xhat, I=I)
+                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ;
+                    symmetric = symmetric[jsurf],
+                    same_surface = same_surface,
+                    same_id = same_id,
+                    trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                    xhat=xhat,
+                    Ib=I)
 
                 if wake_panels[jsurf]
-                    Vi += wake_induced_velocity(rc, system.wakes[jsurf], symmetric[jsurf],
-                        same_surface, same_id, trailing_vortices[jsurf]; xhat=xhat,
+                    Vi += wake_induced_velocity(rc, system.wakes[jsurf];
+                        symmetric = symmetric[jsurf],
+                        same_surface = same_surface,
+                        same_id = same_id,
+                        trailing_vortices = trailing_vortices[jsurf],
+                        xhat=xhat,
                         nwake = nwake[jsurf])
                 end
 
@@ -199,19 +198,16 @@ been calculated and stored in `system`.
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
  - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
-    Defaults to using all wake panels.
  - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
     from the last chordwise panel in `wake`
- - `xhat`: direction in which trailing vortices are shed, defaults to [1, 0, 0]
+ - `xhat`: direction in which trailing vortices are shed
 """
 @inline function near_field_forces_derivatives!(system, surface::AbstractMatrix, ref, fs;
-    symmetric = false,
-    nwake = size(system.wakes[1], 1),
-    trailing_vortices = true,
-    xhat = SVector(1, 0, 0))
+    symmetric, nwake, trailing_vortices, xhat)
 
     return near_field_forces_derivatives!(system, [surface], ref, fs;
         symmetric = [symmetric],
+        surface_id = 1:1,
         nwake = [nwake],
         trailing_vortices = [trailing_vortices],
         xhat = xhat)
@@ -237,21 +233,14 @@ been calculated and stored in `system`.
 
 # Keyword Arguments
  - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
-    be used when calculating induced velocities, defaults to `false` for each surface
- - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
-    for each surface
- - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+    be used when calculating induced velocities
+ - `trailing_vortices`: Flags to enable/disable trailing vortices
+ - `xhat`: Direction in which to shed trailing vortices
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value. By default all surfaces
-    have their own IDs
+    model by setting all surface ID's to the same value
 """
 @inline function near_field_forces_derivatives!(system, surfaces::AbstractVector{<:AbstractMatrix},
-    ref, fs;
-    symmetric = fill(false, length(surfaces)),
-    nwake = size.(system.wakes, 1),
-    trailing_vortices = true,
-    xhat = SVector(1, 0, 0),
-    surface_id = 1:length(surfaces))
+    ref, fs; symmetric, surface_id, nwake, trailing_vortices, xhat)
 
     # unpack system storage
     Γ = system.gamma
@@ -310,9 +299,13 @@ been calculated and stored in `system`.
 
                 vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
 
-                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ, symmetric[jsurf],
-                    same_surface, same_id, trailing_vortices[jsurf] && !wake_panels[jsurf];
-                    xhat=xhat, I=I)
+                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
+                    symmetric = symmetric[jsurf],
+                    same_surface = same_surface,
+                    same_id = same_id,
+                    trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                    xhat=xhat,
+                    I=I)
 
                 Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
 

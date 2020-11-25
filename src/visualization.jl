@@ -166,3 +166,41 @@ function write_vtk(name, panels::AbstractMatrix{<:Ring}; xhat=SVector(1, 0, 0), 
 
     return nothing
 end
+
+function write_vtk(name, panels::AbstractMatrix{<:Wake}; xhat=SVector(1, 0, 0), wake_length=0, mirror=false, metadata=Dict())
+
+    TF = eltype(eltype(panels))
+
+    if mirror
+        panels = vcat(reflect(panels), panels)
+    end
+
+    npanels = length(panels)
+
+    vtk_multiblock(name) do vtmfile
+
+        # --- vortex rings ---
+
+        points_r = Matrix{TF}(undef, 3, 4*npanels)
+        for i = 1:length(panels)
+            ipoint = 4*(i - 1)
+            points_r[:,ipoint+1] = panels[i].rbl
+            points_r[:,ipoint+2] = panels[i].rtl
+            points_r[:,ipoint+3] = panels[i].rtr
+            points_r[:,ipoint+4] = panels[i].rbr
+        end
+
+        cells_r = [MeshCell(PolyData.Polys(), 4*(i-1)+1 : 4*(i-1)+4) for i = 1:npanels]
+
+        vtk_grid(vtmfile, points_r, cells_r) do vtkfile
+
+            # add metadata
+            for (key, value) in pairs(metadata)
+                vtkfile[string(key)] = value
+            end
+
+        end
+    end
+
+    return nothing
+end
