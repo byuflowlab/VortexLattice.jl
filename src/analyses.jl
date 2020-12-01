@@ -62,7 +62,7 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
     for each surface
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+ - `surface_id`: Surface ID for each surface.  May be used to deactivate the finite core
     model by setting all surface ID's to the same value. By default all surfaces
     have their own IDs
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
@@ -214,7 +214,8 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
 
     # add wake's contribution to RHS
     if any(wake_panels)
-        add_wake_normal_velocity!(b, surfaces, wakes,
+        add_wake_normal_velocity!(b, surfaces, wakes;
+            surface_id = surface_id,
             symmetric = symmetric,
             nwake = nwake,
             trailing_vortices = trailing_vortices,
@@ -320,6 +321,9 @@ and wake shape of a group of vortex lattice panels.
  - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `false`
     for each surface
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+ - `surface_id`: Surface ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value. By default all surfaces
+    have their own IDs
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
@@ -334,7 +338,7 @@ and wake shape of a group of vortex lattice panels.
     Defaults to `true`.
 """
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractMatrix}, reference,
-    freestream; nwake = nt-1, kwargs...)
+    freestream, dt, nt; nwake = fill(nt - 1, length(surfaces)), kwargs...)
 
     system = System(surfaces; nwake = nwake)
 
@@ -398,7 +402,7 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
             nwake = iwake,
             trailing_vortices = trailing_vortices,
             xhat = xhat,
-            calculate_influence_matrix = calculate_influence_matrix,
+            calculate_influence_matrix = it == 1 && calculate_influence_matrix,
             near_field_analysis=false,
             derivatives=false)
 
@@ -414,8 +418,8 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
             VortexLattice.get_wake_velocities!(wake_velocities, surface, wake, ref, fs, Γ;
                 symmetric = symmetric,
                 trailing_vortices = trailing_vortices,
-                xhat=xhat,
-                nwake=iwake)
+                xhat = xhat,
+                nwake = iwake)
 
             if iwake < nwake
                 iwake += 1
@@ -423,6 +427,109 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
 
             # translate the wake
             VortexLattice.shed_wake!(wake, wake_velocities, dt, surface, Γ; nwake=iwake)
+        end
+
+    end
+
+    # return the modified system and time history
+    return system, surface_history, wake_history
+end
+
+"""
+    unsteady_analysis!(system, surfaces, reference, freestream, dt, nt; kwargs...)
+
+Pre-allocated version of `unsteady_analysis`.
+"""
+function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, dt, nt;
+    symmetric,
+    trailing_vortices = fill(false, length(surfaces)),
+    xhat = SVector(1, 0, 0),
+    surface_id = 1:length(surfaces),
+    initial_wakes = [Matrix{Wake{Float64}}(undef, 0, size(surfaces[i], 2)) for i = 1:length(surfaces)],
+    nwake = fill(nt - 1, length(surfaces)),
+    calculate_influence_matrix = true,
+    save = 1:nt,
+    near_field_analysis = true,
+    derivatives = true)
+
+    TF = eltype(system)
+    nsurf = length(surfaces)
+
+    # check if existing wake panel storage is sufficient, replace if necessary
+    for isurf = 1:nsurf
+        if size(system.wakes[isurf], 2) < nwake[isurf]
+            # construct new wake panel storage
+            system.wakes[isurf] = Matrix{Wake{TF}}(undef, nwake[isurf], size(surfaces[isurf], 2))
+        end
+    end
+
+    # copy initial wake panels to pre-allocated storage
+    for isurf = 1:nsurf
+        for I in CartesianIndices(initial_wakes[isurf])
+            system.wakes[isurf][I] = initial_wakes[isurf][I]
+        end
+    end
+
+    # unpack pre-allocated storage
+    wakes = system.wakes
+    wake_velocities = system.wake_velocities
+    Γ = system.gamma
+
+    # get edge IDs
+    left_id, right_id = find_shared_edges(surfaces)
+
+    # current number of wake panels
+    iwake = [min(size(initial_wakes[isurf], 1), nwake[isurf]) for isurf = 1:nsurf]
+
+    # initialize solution history for each time step
+    isave = 1
+    surface_history = Vector{Vector{Matrix{PanelProperties{TF}}}}(undef, length(save))
+    wake_history = Vector{Vector{Matrix{Wake{TF}}}}(undef, length(save))
+
+    # # loop through all time steps
+    for it = 1:nt
+
+        # perform a steady analysis
+        steady_analysis!(system, surfaces, ref, fs;
+            symmetric = symmetric,
+            surface_id = surface_id,
+            wakes = wakes,
+            nwake = iwake,
+            trailing_vortices = trailing_vortices,
+            xhat = xhat,
+            calculate_influence_matrix = calculate_influence_matrix,
+            near_field_analysis = near_field_analysis,
+            derivatives = false)
+
+        # save the panel history
+        if it in save
+            surface_history[isave] = deepcopy(system.panels)
+            wake_history[isave] = [wakes[isurf][1:iwake[isurf], :] for isurf = 1:nsurf]
+            isave += 1
+        end
+
+        if it < nt
+            for i = 1:length(wake_velocities)
+                wake_velocities[i] .= Ref(SVector(0.0, 0.0, 0.0))
+            end
+
+            # calculate wake corner point velocities
+            VortexLattice.get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ;
+                symmetric = symmetric,
+                surface_id = surface_id,
+                trailing_vortices = trailing_vortices,
+                xhat=xhat,
+                nwake=iwake)
+
+            # increment wake panel counter
+            for isurf = 1:nsurf
+                if iwake[isurf] < nwake[isurf]
+                    iwake[isurf] += 1
+                end
+            end
+
+            # shed an additional wake panel from each surface
+            VortexLattice.shed_wake!(wakes, wake_velocities, dt, surfaces, Γ; nwake=iwake)
         end
 
     end

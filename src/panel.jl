@@ -226,8 +226,8 @@ Returns the induced velocity at `rcp` from the panels in `surface`
                 include_right_trailing_mirrored = true
             end
         elseif isnothing(Ib) && !isnothing(Ic)
-            vertically_adjacent = same_surface && Ic[1] == J[1] + 1 || Ic[1] == J[1]
-            horizontally_adjacent = same_surface && Ic[2] == J[2] + 1 || Ic[2] == J[2]
+            vertically_adjacent = same_surface && (Ic[1] == J[1] + 1 || Ic[1] == J[1])
+            horizontally_adjacent = same_surface && (Ic[2] == J[2] + 1 || Ic[2] == J[2])
 
             include_top = !(horizontally_adjacent && Ic[1] == J[1])
             if on_trailing_edge(surface[J], trailing_edge)
@@ -243,14 +243,18 @@ Returns the induced velocity at `rcp` from the panels in `surface`
             if symmetric
                 # ignore the reflected vortex filaments if they also intersect
                 # with the control point, otherwise include them
-                include_top_mirrored = include_top || not_on_symmetry_plane(
-                    top_left(surface[J]), top_right(surface[J]))
-                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
-                    bottom_left(surface[J]), bottom_right(surface[J]))
-                include_left_mirrored = include_left || not_on_symmetry_plane(
-                    top_left(surface[J]), bottom_left(surface[J]))
-                include_right_mirrored = include_right || not_on_symmetry_plane(
-                    top_right(surface[J]), bottom_right(surface[J]))
+                include_top_mirrored = include_top ||
+                    (not_on_symmetry_plane(top_left(surface[J])) &&
+                    not_on_symmetry_plane(top_right(surface[J])))
+                include_bottom_mirrored = include_bottom ||
+                    (not_on_symmetry_plane(bottom_left(surface[J])) &&
+                    not_on_symmetry_plane(bottom_right(surface[J])))
+                include_left_mirrored = include_left ||
+                    (not_on_symmetry_plane(top_left(surface[J])) &&
+                    not_on_symmetry_plane(bottom_left(surface[J])))
+                include_right_mirrored = include_right ||
+                    (not_on_symmetry_plane(top_right(surface[J])) &&
+                    not_on_symmetry_plane(bottom_right(surface[J])))
                 include_left_trailing_mirrored = include_left_trailing ||
                     not_on_symmetry_plane(bottom_left(surface[J]))
                 include_right_trailing_mirrored = include_right_trailing ||
@@ -279,7 +283,6 @@ Returns the induced velocity at `rcp` from the panels in `surface`
 
             # add induced velocity from reflected panel if symmetric
             if symmetric
-
                 vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
                     surface[J], trailing;
                     finite_core = finite_core,
@@ -478,8 +481,11 @@ derivatives with respect to the freestream variables
             vt, vb, vl, vr, vlt, vrt = panel_induced_velocity(rcp, surface[J],
                 trailing; finite_core = false, reflect = false, xhat = xhat,
                 include_top = include_top && (leading_edge || previous_trailing),
-                include_bottom=include_bottom, include_left=left_side,
-                include_left_trailing=left_side)
+                include_bottom = include_bottom,
+                include_left = left_side,
+                include_right = true,
+                include_left_trailing = left_side,
+                include_right_trailing = true)
 
             # add induced velocity from reflected panel if symmetric
             if symmetric
@@ -492,9 +498,12 @@ derivatives with respect to the freestream variables
                 vt_s, vb_s, vl_s, vr_s, vlt_s, vrt_s = panel_induced_velocity(rcp,
                     surface[J], trailing;
                     finite_core = false,  reflect = true, xhat = xhat,
-                    include_top=include_top_mirrored && (leading_edge || previous_trailing),
-                    include_bottom=include_bottom_mirrored,
-                    include_left=left_side, include_left_trailing=left_side)
+                    include_top = include_top_mirrored && (leading_edge || previous_trailing),
+                    include_bottom = include_bottom_mirrored,
+                    include_left = left_side,
+                    include_right = true,
+                    include_left_trailing = left_side,
+                    include_right_trailing = true)
 
                 vt += vt_s
                 vb += vb_s
@@ -859,8 +868,6 @@ Flip sign of y-component of vector `r` (used for symmetry)
 """
 @inline flipy(r) = SVector{3}(r[1], -r[2], r[3])
 
-
-
 """
     on_symmetry_plane(args...; tol=eps())
 
@@ -959,6 +966,8 @@ filament strength.
     prior to performing the reflection
  - `xhat = [1,0,0]`: Direction in which trailing vortices are shed
  - `include_top`: Flag to disable induced velocity calculations for the top bound vortex
+ - `include_bottom`: Flag to disable induced velocity calculations for the trailing
+    edge bound vortex (which is used if the wake is not shed into the freestream)
  - `include_left`: Flag to disable induced velocity calculations for the left bound vortex
  - `include_right`: Flag to disable induced velocity calculations for the right bound vortex
  - `include_left_trailing`: Flag to disable induced velocity calculations for the left trailing vortex
@@ -998,10 +1007,9 @@ filament strength.
  - `include_left_trailing`: Flag to disable induced velocity calculations for the left trailing vortex
  - `include_right_trailing`: Flag to disable induced velocity calculations for the right trailing vortex
 """
-@inline function ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing; finite_core=false,
-    core_size=0.0, reflect=false, xhat=SVector(1, 0, 0),
-    include_top=true, include_bottom=true, include_left=true, include_right=true,
-    include_left_trailing=true, include_right_trailing=true)
+@inline function ring_induced_velocity(rcp, rtl, rtr, rbl, rbr, trailing;
+    finite_core, core_size, reflect, xhat, include_top, include_bottom,
+    include_left, include_right, include_left_trailing, include_right_trailing)
 
     TF = promote_type(eltype(rcp), eltype(rtl), eltype(rtr), eltype(rbl), eltype(rbr))
 
@@ -1029,37 +1037,37 @@ filament strength.
     r21 = rcp - rbl
     r22 = rcp - rbr
 
-    if include_top && rtl != rtr
+    if include_top
         vt = bound_induced_velocity(r11, r12, finite_core, core_size)
     else
         vt = SVector{3, TF}(0, 0, 0)
     end
 
-    if include_bottom && !trailing && rbl != rbr
+    if !trailing && include_bottom
         vb = bound_induced_velocity(r22, r21, finite_core, core_size)
     else
         vb = SVector{3, TF}(0, 0, 0)
     end
 
-    if include_left && rtl != rbl
+    if include_left
         vl = bound_induced_velocity(r21, r11, finite_core, core_size)
     else
         vl = SVector{3, TF}(0, 0, 0)
     end
 
-    if include_right && rtr != rbr
+    if include_right
         vr = bound_induced_velocity(r12, r22, finite_core, core_size)
     else
         vr = SVector{3, TF}(0, 0, 0)
     end
 
-    if include_left_trailing && trailing && rbl != rbr
+    if trailing && include_left_trailing
         vlt = -trailing_induced_velocity(r21, xhat, finite_core, core_size)
     else
         vlt = SVector{3, TF}(0, 0, 0)
     end
 
-    if include_right_trailing && trailing && rbl != rbr
+    if trailing && include_right_trailing
         vrt = trailing_induced_velocity(r22, xhat, finite_core, core_size)
     else
         vrt = SVector{3, TF}(0, 0, 0)

@@ -161,14 +161,18 @@ Returns the induced velocity at `rcp` from the wake panels in `wake`
             if symmetric
                 # ignore the reflected vortex filaments if they also intersect
                 # with the control point, otherwise include them
-                include_top_mirrored = include_top || not_on_symmetry_plane(
-                    top_left(wake[J]), top_right(wake[J]))
-                include_bottom_mirrored = include_bottom || not_on_symmetry_plane(
-                    bottom_left(wake[J]), bottom_right(wake[J]))
-                include_left_mirrored = include_left || not_on_symmetry_plane(
-                    top_left(wake[J]), bottom_left(wake[J]))
-                include_right_mirrored = include_right || not_on_symmetry_plane(
-                    top_right(wake[J]), bottom_right(wake[J]))
+                include_top_mirrored = include_top ||
+                    (not_on_symmetry_plane(top_left(wake[J])) &&
+                    not_on_symmetry_plane(top_right(wake[J])))
+                include_bottom_mirrored = include_bottom ||
+                    (not_on_symmetry_plane(bottom_left(wake[J])) &&
+                    not_on_symmetry_plane(bottom_right(wake[J])))
+                include_left_mirrored = include_left ||
+                    (not_on_symmetry_plane(top_left(wake[J])) &&
+                    not_on_symmetry_plane(bottom_left(wake[J])))
+                include_right_mirrored = include_right ||
+                    (not_on_symmetry_plane(top_right(wake[J])) &&
+                    not_on_symmetry_plane(bottom_right(wake[J])))
                 include_left_trailing_mirrored = include_left_trailing ||
                     not_on_symmetry_plane(bottom_left(wake[J]))
                 include_right_trailing_mirrored = include_right_trailing ||
@@ -334,21 +338,23 @@ Returns the velocities at the corners of the wake panels in `wakes`
             jΓ = 0 # index for accessing Γ
             for jsurf = 1:nsurf
 
-                # check if sending and receiving surfaces are the same
+                Ns = length(surfaces[jsurf])
+
+                # check if receiving point is on the sending surface
                 same_surface = isurf == jsurf
 
-                # check if sending and receiving surfaces have the same ID
+                # check if surfaces have the same ID
                 same_id = surface_id[isurf] == surface_id[jsurf]
 
                 # add the induced velocity from the surface, ignoring co-located
                 # bound and trailing vortices
-                vΓ = view(Γ, jΓ+1:jΓ+ns)
+                vΓ = view(Γ, jΓ+1:jΓ+Ns)
                 wake_velocities[isurf][1,is] += surface_induced_velocity(rc, surfaces[jsurf], vΓ;
                     symmetric = symmetric[jsurf],
                     same_surface = same_surface,
                     same_id = same_id,
                     trailing_vortices = false,
-                    xhat = xhat,
+                    xhat = xhat, # not used
                     Ic = CartesianIndex(nc+1, is))
 
                 # add induced velocity from wake, ignoring co-located bound and
@@ -362,7 +368,7 @@ Returns the velocities at the corners of the wake panels in `wakes`
                     nwake = nwake[jsurf],
                     I = CartesianIndex(1, is))
 
-                jΓ += size(surfaces[jsurf], 2) # increment Γ index
+                jΓ += Ns # increment Γ index
             end
         end
 
@@ -388,11 +394,14 @@ Returns the velocities at the corners of the wake panels in `wakes`
             # induced velocity from each surface and wake
             jΓ = 0 # index for accessing Γ
             for jsurf = 1:nsurf
+
+                Ns = length(surfaces[jsurf])
+
                 # also check if it has the same ID
                 same_id = surface_id[isurf] == surface_id[jsurf]
 
                 # add induced velocity from surface
-                vΓ = view(Γ, jΓ+1:jΓ+ns)
+                vΓ = view(Γ, jΓ+1:jΓ+Ns)
                 wake_velocities[isurf][I] += surface_induced_velocity(rc, surfaces[jsurf], vΓ;
                     symmetric = symmetric[jsurf],
                     same_surface = false,
@@ -410,7 +419,7 @@ Returns the velocities at the corners of the wake panels in `wakes`
                     nwake = nwake[jsurf],
                     I = I)
 
-                jΓ += size(surfaces[jsurf], 2) # increment Γ index
+                jΓ += Ns # increment Γ index
             end
         end
     end
@@ -487,7 +496,7 @@ end
 
 
 """
-    shed_wake!(wake, wake_velocities, dt, Γ_te; nwake)
+    shed_wake!(wake, wake_velocities, dt, surface, Γ; nwake)
 
 Sheds the wake from a surface, given the corner velocities of the wake panels `wake_velocities`,
 the time step `dt`, and the circulation strength at the trailing edge `Γ_te`.
@@ -495,7 +504,10 @@ the time step `dt`, and the circulation strength at the trailing edge `Γ_te`.
 The wake panels in `wake` are shifted chordwise to make room for the newly shed
 wake panel.
 """
-@inline function shed_wake!(wake, wake_velocities, dt, surface, Γ; nwake)
+shed_wake!
+
+# single surface and wake
+@inline function shed_wake!(wake::AbstractMatrix, wake_velocities, dt, surface, Γ; nwake)
 
     nc, ns = size(surface)
     nw = size(wake, 1)
@@ -526,6 +538,23 @@ wake panel.
 
     # shift wake panels to make the newly shed panels first
     rowshift!(wake)
+
+    return wake
+end
+
+# multiple surfaces and wakes
+@inline function shed_wake!(wake::AbstractVector{<:AbstractMatrix}, wake_velocities,
+    dt, surfaces, Γ; nwake)
+
+    iΓ = 0
+    for i = 1:length(surfaces)
+
+        N = length(surfaces[i])
+
+        vΓ = view(Γ, iΓ+1:iΓ+N)
+
+        shed_wake!(wake[i], wake_velocities[i], dt, surfaces[i], vΓ; nwake=nwake[i])
+    end
 
     return wake
 end

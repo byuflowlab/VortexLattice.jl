@@ -161,12 +161,28 @@ Compute the AIC coefficients corresponding to the influence of the panels in
 
             # get normalized induced velocity for the panel
             Vhat = sum(panel_induced_velocity(rcp, sending[J], trailing;
-                finite_core = finite_core, xhat = xhat))
+                finite_core = finite_core,
+                reflect = false,
+                xhat = xhat,
+                include_top = true,
+                include_bottom = true,
+                include_left = true,
+                include_right = true,
+                include_left_trailing = true,
+                include_right_trailing = true))
 
             # also get normalized induced velocity for its mirror image
             if symmetric
                 Vhat += sum(panel_induced_velocity(rcp, sending[J], trailing;
-                    finite_core = finite_core, reflect = true, xhat = xhat))
+                    finite_core = finite_core,
+                    reflect = true,
+                    xhat = xhat,
+                    include_top = true,
+                    include_bottom = true,
+                    include_left = true,
+                    include_right = true,
+                    include_left_trailing = true,
+                    include_right_trailing = true))
             end
 
             AIC[i, j] = dot(Vhat, nhat)
@@ -482,11 +498,10 @@ Pre-allocated version of `wake_normal_velocity` which adds the normal induced
 velocity created by the wakes to the existing vector `b`
 """
 function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix},
-    wakes::AbstractVector{<:Wake}; surface_id, symmetric, nwake,
+    wakes::AbstractVector{<:AbstractMatrix}; surface_id, symmetric, nwake,
     trailing_vortices, xhat)
 
     nsurf = length(surfaces)
-    nwake = length(wakes)
 
     # index for keeping track of where we are in the b vector
     ib = 0
@@ -502,6 +517,7 @@ function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix}
 
         # fill in RHS vector
         for j = 1:nsurf
+
             add_wake_normal_velocity!(vb, surfaces[i], wakes[j];
                 same_surface = false,
                 same_id = surface_id[i] == surface_id[j],
@@ -534,7 +550,8 @@ to the existing vector `b`
     the last chordwise panel of each wake
  - `xhat`: direction in which trailing vortices are shed
 """
-@inline function add_wake_normal_velocity!(b, surface, wake; same_id = true, kwargs...)
+@inline function add_wake_normal_velocity!(b, surface::AbstractMatrix, wake::AbstractMatrix;
+    same_id = true, kwargs...)
 
     # loop over receiving panels
     for i = 1:length(surface)

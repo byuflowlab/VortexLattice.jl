@@ -1138,7 +1138,7 @@ end
 
 end
 
-@testset "Unsteady Vortex Lattice Method" begin
+@testset "Unsteady Vortex Lattice Method - Simple Wing" begin
 
     xle = [0.0, 0.4]
     yle = [0.0, 7.5]
@@ -1146,12 +1146,12 @@ end
     chord = [2.2, 1.8]
     theta = [2.0*pi/180, 2.0*pi/180]
     phi = [0.0, 0.0]
-    ns = 12
+    ns = 24
     nc = 1
-    spacing_s = Uniform()
+    spacing_s = Cosine()
     spacing_c = Uniform()
-    mirror = true
-    symmetric = false
+    mirror = false
+    symmetric = true
 
     Sref = 30.0
     cref = 2.0
@@ -1174,6 +1174,93 @@ end
     nt = 11
 
     system, panel_history, wake_history = unsteady_analysis(wing, ref, fs, dt,
+        nt; symmetric=symmetric)
+
+end
+
+
+@testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
+
+    # Unsteady Wing and Tail with Finite Core Model
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = [true, true, false]
+
+    # horseshoe vortices
+    wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
+
+    # time
+    dt = 0.1
+    nt = 11
+
+    system, panel_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt,
         nt; symmetric=symmetric)
 
 end
