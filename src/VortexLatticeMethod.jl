@@ -743,9 +743,16 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
 
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
+    # get cf
+    qinfs = zeros(length(Fp))
+    for i = 1:length(panels)
+        rmid = mid_point(panels[i])  # compute velocity at quarter-quard midpoints (rather than at control points)
+        Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
+        qinfs[i] = 0.5 * RHO * Vext^2
+    end
     
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
-    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*Sref), ds, Vvec/VINF, Gamma/VINF)
+    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinfs*Sref), ds, Vvec/VINF, Gamma/VINF)
 end
 
 
