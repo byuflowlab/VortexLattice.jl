@@ -533,7 +533,8 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         # println("Sherlock! VortexLatticeMethod: 503:")
         # println("\tFbi = ",Fbi)
         # println("\tds[i] = ",ds[i])
-        Fpvec[:, i] = Fbi/ds[i]  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
+        qinf = 0.5 * RHO * norm(Vi)^2
+        Fpvec[:, i] = Fbi/ds[i] / qinf / ref.c # assume constant chord #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
 
         # save in array
         Vtotal[:, i] = Vi
@@ -701,7 +702,7 @@ Run the vortex lattice method.
 function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
 
     Gamma, dGamma = circulation(panels, ref, fs, symmetric)
-    F, M, dF, dM, Fp, ds, Vvec = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
+    F, M, dF, dM, cf, ds, Vvec = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
 
 
     # force and moment coefficients
@@ -743,16 +744,8 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
 
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
-    # get cf
-    qinfs = zeros(length(Fp))
-    for i = 1:length(panels)
-        rmid = mid_point(panels[i])  # compute velocity at quarter-quard midpoints (rather than at control points)
-        Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
-        qinfs[i] = 0.5 * RHO * norm(Vext)^2
-    end
-    
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
-    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinfs*Sref), ds, Vvec/VINF, Gamma/VINF)
+    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, cf, ds, Vvec/VINF, Gamma/VINF)
 end
 
 
