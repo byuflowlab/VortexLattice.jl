@@ -1,6 +1,6 @@
 # Theory
 
-See the theory document located in the repository for this package and/or the following references:
+See the following references:
 
 [1] Drela, M. Flight Vehicle Aerodynamics. MIT Press, 2014.
 

@@ -13,14 +13,15 @@ Authors: Taylor McDonnell and Andrew Ning
 ![](showoff.png)
 
 ## Package Features
- - Custom vortex lattice panels
-   - Horseshoe vortices (see Flight Vehicle Aerodynamics by Mark Drela[[1]](@ref References))
-   - Vortex rings (see Low-Speed Aerodynamics by Katz and Plotkin[[2]](@ref References))
+ - Vortex Ring Panels
+   - Cambered lifting surfaces
+   - Trailing vortices in user-specified direction
    - Optional finite-core model
  - Convenient geometry generation
    - From pre-existing grid
    - From lifting surface parameters
    - Symmetric geometries
+   - Multiple lifting surfaces
  - Multiple discretization schemes
    - Uniform
    - Sine
@@ -28,12 +29,17 @@ Authors: Taylor McDonnell and Andrew Ning
  - General freestream description
    - Freestream flow angles
    - Aircraft rotation components
-   - Additional velocity
+   - Additional velocity as a function of location
+ - Free/Fixed Wakes
+   - Free wakes through unsteady analysis
+   - Fixed wakes through steady analysis
  - Multiple analyses
-   - Near field forces in body, stability, or wind Axes
+   - Steady analysis
+   - Unsteady (time-domain) analysis
+   - Near field forces
    - Far field drag
    - Body and stability derivatives
- - Geometry visualization using [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
+ - Geometry and wake visualization using [WriteVTK](https://github.com/jipolanco/WriteVTK.jl)
  - Extensively verified against computational results generated using AVL.
 
 ## Installation
@@ -46,7 +52,8 @@ pkg> add https://github.com/byuflowlab/VortexLattice.jl
 
 ## Performance
 
-This code has been optimized to be highly performant, primarily by maintaining type stability and minimizing allocations.  It should easily outperform other vortex lattice method codes written in other higher level languages.
+This code has been optimized to be highly performant, primarily by maintaining type stability and minimizing allocations.  It should easily outperform other vortex lattice method codes written in other higher level languages.  However, it does not yet incorporate the fast multipole method to speed up wake computations, so its
+performance can still be improved.
 
 ## Usage
 

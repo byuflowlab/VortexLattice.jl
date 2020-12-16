@@ -27,7 +27,7 @@ function body_derivatives(system, surface::AbstractMatrix, ref, fs; symmetric)
 end
 
 """
-    body_derivatives(system, surface, reference, freestream; kwargs...)
+    body_derivatives(system, surfaces, reference, freestream; kwargs...)
 
 Returns the derivatives of the body forces and moments with respect to the
 freestream velocity components `(u, v, w)` and the angular velocity components

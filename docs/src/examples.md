@@ -41,21 +41,19 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # construct surface
-surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
 
 # declare symmetry
 symmetric = true
 
-# get circulation
-AIC = influence_coefficients(surface, symmetric)
-b = normal_velocity(surface, ref, fs)
-Γ = circulation(AIC, b)
+# perform steady state analysis
+system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-# perform near-field analysis
-CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Wind())
+# retrieve near-field forces
+CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
+CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -99,21 +97,19 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # construct surface (and mirror geometry)
-surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # declare symmetry
 symmetric = false
 
-# get circulation
-AIC = influence_coefficients(surface, symmetric)
-b = normal_velocity(surface, ref, fs)
-Γ = circulation(AIC, b)
+# perform steady state analysis
+system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-# perform near-field analysis
-CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Wind())
+# retrieve near-field forces
+CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
+CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -153,15 +149,20 @@ Omega = [0.0; 0.0; 0.0]
 vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
-# horseshoe vortices
-surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+# declare symmetry
+symmetric = true
 
-AIC = influence_coefficients(surface, symmetric)
-b = normal_velocity(surface, ref, fs)
-Γ = circulation(AIC, b)
-CF, CM, panelprops = near_field_forces(surface, ref, fs, symmetric, Γ; frame=Stability())
-CDiff = far_field_drag(surface, ref, fs, symmetric, Γ)
+# construct surface
+surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+
+# perform steady state analysis
+system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -227,28 +228,28 @@ Omega = [0.0; 0.0; 0.0]
 vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
-symmetric = true
+symmetric = [true, true, false]
 
-# horseshoe vortices
-wing = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+# generate vortex rings
+wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-htail = wing_to_horseshoe_vortices(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
     mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(htail, [4.0, 0.0, 0.0])
 
-vtail = wing_to_horseshoe_vortices(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
     mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vtail, [4.0, 0.0, 0.0])
 
 surfaces = [wing, htail, vtail]
 surface_id = [1, 2, 3]
 
-AIC = influence_coefficients(surfaces, surface_id, symmetric)
-b = normal_velocity(surfaces, ref, fs)
-Γ = circulation(AIC, b)
-CF, CM, panelprops = near_field_forces(surfaces, surface_id, ref, fs, symmetric, Γ; frame=Stability())
-CDiff = far_field_drag(surfaces, ref, fs, symmetric, Γ)
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+
+CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -290,13 +291,13 @@ Omega = [0.0; 0.0; 0.0]
 vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
-# horseshoe vortices
-surface = wing_to_horseshoe_vortices(xle, yle, zle, chord, theta, phi, ns, nc;
+# generate vortex rings
+surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-AIC = influence_coefficients(surface, symmetric)
+system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-dCFb, dCMb = body_derivatives(surface, ref, fs, symmetric, AIC)
+dCFb, dCMb = body_derivatives(system, surface, ref, fs; symmetric = symmetric)
 
 CXu, CYu, CZu = dCFb.u
 CXv, CYv, CZv = dCFb.v
@@ -312,7 +313,7 @@ Clp_b, Cmp_b, Cnp_b = dCMb.p
 Clq_b, Cmq_b, Cnq_b = dCMb.q
 Clr_b, Cmr_b, Cnr_b = dCMb.r
 
-dCFs, dCMs = stability_derivatives(surface, ref, fs, symmetric, AIC)
+dCFs, dCMs = stability_derivatives(system, surface, ref, fs; symmetric = symmetric)
 
 CDa, CYa, CLa = dCFs.alpha
 CDb, CYb, CLb = dCFs.beta

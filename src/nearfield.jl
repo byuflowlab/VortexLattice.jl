@@ -17,17 +17,32 @@ been calculated and stored in `system`.
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
- - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
  - `trailing_vortices`: Flag indicating whether trailing vortices should be shed
     from the last chordwise panel in `wake`
  - `xhat`: direction in which trailing vortices are shed
+ - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
+ - `surface_id`: Surface ID.  The finite core model is disabled when calculating
+    the influence of surfaces/wakes that share the same ID.  Additionally, if a
+    surface/wake's ID is negative, the finite core model will always be enabled,
+    even when calculating the influence of the surface/wake on itself. By default
+    each surface has its own ID.
+ - `wake_id`: Wake ID.  The finite core model is disabled when calculating
+    the influence of surfaces/wakes that share the same ID. Additionally, if a
+    surface/wake's ID is negative, the finite core model will always be enabled,
+    even when calculating the influence of the surface/wake on itself. By default
+    the finite core model for the wakes is always enabled.
 """
 @inline function near_field_forces!(system, surface::AbstractMatrix, ref, fs;
-    symmetric, nwake, trailing_vortices, xhat)
+    symmetric = false,
+    nwake = size(system.wakes[1], 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0),
+    surface_id = 1,
+    wake_id = -1)
 
     return near_field_forces!(system, [surface], ref, fs; symmetric=[symmetric],
         nwake = [nwake], trailing_vortices = [trailing_vortices], xhat = xhat,
-        surface_id = 1:1)
+        surface_id = surface_id:surface_id, wake_id = wake_id:wake_id)
 end
 
 """
@@ -47,16 +62,30 @@ been calculated and stored in `system`.
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
     be used when calculating induced velocities
  - `trailing_vortices`: Flags to enable/disable trailing vortices
     for each surface
  - `xhat`: Direction in which to shed trailing vortices
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value.
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID for each wake.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled.
 """
 @inline function near_field_forces!(system, surfaces::AbstractVector{<:AbstractMatrix},
-    ref, fs; symmetric, surface_id, nwake, trailing_vortices, xhat)
+    ref, fs;
+    symmetric = false,
+    trailing_vortices = fill(false, length(surfaces)),
+    xhat = SVector(1, 0, 0),
+    nwake = size.(system.wakes, 1),
+    surface_id = 1:length(surfaces),
+    wake_id = -1:-1:length(surfaces))
 
     # unpack system storage
     Γ = system.gamma
@@ -95,40 +124,42 @@ been calculated and stored in `system`.
                 ns = length(sending)
 
                 # find out whether surfaces have the same index and/or ID
-                same_surface = isurf == jsurf
-                same_id = surface_id[isurf] == surface_id[jsurf]
-
                 vΓ = view(Γ, jΓ+1:jΓ+ns)
 
-                Vi += surface_induced_velocity(rc, surfaces[jsurf], vΓ;
-                    symmetric = symmetric[jsurf],
-                    same_surface = same_surface,
-                    same_id = same_id,
-                    trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
-                    xhat=xhat,
-                    Ib=I)
+                if isurf == jsurf
+                    # special implementation that ignores chosen bound vortex
+                    Vi += induced_velocity(I, surfaces[jsurf], vΓ;
+                        finite_core = surface_id[jsurf] < 0 || surface_id[isurf] != surface_id[jsurf],
+                        symmetric = symmetric[jsurf],
+                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                        xhat=xhat)
+                else
+                    # normal induced velocity calculation
+                    Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
+                        finite_core = surface_id[jsurf] < 0 || surface_id[isurf] != surface_id[jsurf],
+                        symmetric = symmetric[jsurf],
+                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                        xhat=xhat)
+                end
 
                 if wake_panels[jsurf]
-                    Vi += wake_induced_velocity(rc, system.wakes[jsurf];
+                    Vi += induced_velocity(rc, system.wakes[jsurf];
                         symmetric = symmetric[jsurf],
-                        same_surface = same_surface,
-                        same_id = same_id,
+                        finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
+                        nwake = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
-                        xhat=xhat,
-                        nwake = nwake[jsurf])
+                        xhat = xhat)
                 end
 
                 jΓ += ns # increment Γ index for sending panels
             end
 
-            # circulation of upstream bound vortex
-            Γ1 = isone(I[1]) ? zero(eltype(Γ)) : Γ[iΓ+i-1]
-
-            # circulation of bound vortex on current panel
-            Γ2 = Γ[iΓ+i]
-
             # circulation of current panel
-            Γi = panel_circulation(receiving[I], Γ1, Γ2)
+            if isone(I[1])
+                Γi = Γ[iΓ+i]
+            else
+                Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
+            end
 
             # now use the Kutta-Joukowski theorem to solve for the panel force
             Δs = top_vector(receiving[I])
@@ -195,6 +226,16 @@ been calculated and stored in `system`.
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
+ - `surface_id`: Surface ID.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled.
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
  - `nwake`: number of chordwise wake panels to use from the wake stored in `system`.
@@ -203,11 +244,17 @@ been calculated and stored in `system`.
  - `xhat`: direction in which trailing vortices are shed
 """
 @inline function near_field_forces_derivatives!(system, surface::AbstractMatrix, ref, fs;
-    symmetric, nwake, trailing_vortices, xhat)
+    surface_id = 1,
+    wake_id = -1,
+    symmetric = false,
+    nwake = size(system.wakes[1], 1),
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0))
 
     return near_field_forces_derivatives!(system, [surface], ref, fs;
         symmetric = [symmetric],
-        surface_id = 1:1,
+        surface_id = surface_id:surface_id,
+        wake_id = wake_id:wake_id,
         nwake = [nwake],
         trailing_vortices = [trailing_vortices],
         xhat = xhat)
@@ -232,15 +279,29 @@ been calculated and stored in `system`.
  - `freestream`: freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID for each wake.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled.
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
     be used when calculating induced velocities
  - `trailing_vortices`: Flags to enable/disable trailing vortices
  - `xhat`: Direction in which to shed trailing vortices
- - `surface_id`: ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value
 """
 @inline function near_field_forces_derivatives!(system, surfaces::AbstractVector{<:AbstractMatrix},
-    ref, fs; symmetric, surface_id, nwake, trailing_vortices, xhat)
+    ref, fs;
+    surface_id = 1:length(surfaces),
+    wake_id = -1:-1:-length(surfaces),
+    symmetric = fill(false, length(surfaces)),
+    nwake = size.(system.wakes, 1),
+    trailing_vortices = fill(true, length(surfaces)),
+    xhat = SVector(1, 0, 0))
 
     # unpack system storage
     Γ = system.gamma
@@ -285,10 +346,6 @@ been calculated and stored in `system`.
                 sending = surfaces[jsurf]
                 ns = length(sending)
 
-                # find out whether surfaces have the same index and/or ID
-                same_surface = isurf == jsurf
-                same_id = surface_id[isurf] == surface_id[jsurf]
-
                 vΓ = view(Γ, jΓ+1:jΓ+ns)
 
                 vΓ_a = view(Γ_a, jΓ+1:jΓ+ns)
@@ -299,13 +356,21 @@ been calculated and stored in `system`.
 
                 vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
 
-                Vind, dVind = surface_induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
-                    symmetric = symmetric[jsurf],
-                    same_surface = same_surface,
-                    same_id = same_id,
-                    trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
-                    xhat=xhat,
-                    I=I)
+                if isurf == jsurf
+                    # special implementation that ignores chosen bound vortex
+                    Vind, dVind = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
+                        finite_core = surface_id[jsurf] < 0 || surface_id[isurf] != surface_id[jsurf],
+                        symmetric = symmetric[jsurf],
+                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                        xhat=xhat)
+                else
+                    # normal induced velocity calculation
+                    Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
+                        finite_core = surface_id[jsurf] < 0 || surface_id[isurf] != surface_id[jsurf],
+                        symmetric = symmetric[jsurf],
+                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels[jsurf],
+                        xhat=xhat)
+                end
 
                 Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
 
@@ -319,46 +384,33 @@ been calculated and stored in `system`.
 
                 # assume a frozen wake
                 if wake_panels[jsurf]
-                    Vi += wake_induced_velocity(rc, system.wakes[jsurf], symmetric[jsurf],
-                        same_surface, same_id, trailing_vortices[jsurf]; xhat=xhat,
-                        nwake = nwake[jsurf])
+                    Vi += induced_velocity(rc, system.wakes[jsurf];
+                        symmetric = symmetric[jsurf],
+                        finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
+                        nwake = nwake[jsurf],
+                        trailing_vortices = trailing_vortices[jsurf],
+                        xhat = xhat)
                 end
 
                 jΓ += ns
             end
 
-            # circulation of upstream bound vortex
-            if isone(I[1])
-                Γ1 = zero(eltype(Γ))
-                Γ1_a = zero(eltype(Γ_a))
-                Γ1_b = zero(eltype(Γ_b))
-                Γ1_p = zero(eltype(Γ_p))
-                Γ1_q = zero(eltype(Γ_q))
-                Γ1_r = zero(eltype(Γ_r))
-            else
-                Γ1 = Γ[iΓ+i-1]
-                Γ1_a = Γ_a[iΓ+i-1]
-                Γ1_b = Γ_b[iΓ+i-1]
-                Γ1_p = Γ_p[iΓ+i-1]
-                Γ1_q = Γ_q[iΓ+i-1]
-                Γ1_r = Γ_r[iΓ+i-1]
-            end
-
-            # circulation of bound vortex on current panel
-            Γ2 = Γ[iΓ+i]
-            Γ2_a = Γ_a[iΓ+i]
-            Γ2_b = Γ_b[iΓ+i]
-            Γ2_p = Γ_p[iΓ+i]
-            Γ2_q = Γ_q[iΓ+i]
-            Γ2_r = Γ_r[iΓ+i]
-
             # circulation of current panel
-            Γi = panel_circulation(receiving[I], Γ1, Γ2)
-            Γi_a = panel_circulation(receiving[I], Γ1_a, Γ2_a)
-            Γi_b = panel_circulation(receiving[I], Γ1_b, Γ2_b)
-            Γi_p = panel_circulation(receiving[I], Γ1_p, Γ2_p)
-            Γi_q = panel_circulation(receiving[I], Γ1_q, Γ2_q)
-            Γi_r = panel_circulation(receiving[I], Γ1_r, Γ2_r)
+            if isone(I[1])
+                Γi = Γ[iΓ+i]
+                Γi_a = Γ_a[iΓ+i]
+                Γi_b = Γ_b[iΓ+i]
+                Γi_p = Γ_p[iΓ+i]
+                Γi_q = Γ_q[iΓ+i]
+                Γi_r = Γ_r[iΓ+i]
+            else
+                Γi = Γ[iΓ+i] - Γ[iΓ+i-1]
+                Γi_a = Γ_a[iΓ+i] - Γ_a[iΓ+i-1]
+                Γi_b = Γ_b[iΓ+i] - Γ_b[iΓ+i-1]
+                Γi_p = Γ_p[iΓ+i] - Γ_p[iΓ+i-1]
+                Γi_q = Γ_q[iΓ+i] - Γ_q[iΓ+i-1]
+                Γi_r = Γ_r[iΓ+i] - Γ_r[iΓ+i-1]
+            end
 
             # now use the Kutta-Joukowski theorem to calculate the forces at this point
             Δs = top_vector(receiving[I])
@@ -436,19 +488,19 @@ been calculated and stored in `system`.
             Fbri_r = RHO*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
 
             # assemble normalized panel outputs
-            props[isurf][I] = PanelProperties(Γi/VINF, Vi/VINF, Fbi/(QINF*ref.S),
+            props[isurf][I] = PanelProperties(Γ[iΓ+i]/VINF, Vi/VINF, Fbi/(QINF*ref.S),
                 Fbli/(QINF*ref.S), Fbri/(QINF*ref.S))
 
             # also assemble normalized derivative panel outputs
-            props_a[isurf][I] = PanelProperties(Γi_a/VINF, Vi_a/VINF, Fbi_a/(QINF*ref.S),
+            props_a[isurf][I] = PanelProperties(Γ_a[iΓ+i]/VINF, Vi_a/VINF, Fbi_a/(QINF*ref.S),
                 Fbli_a/(QINF*ref.S), Fbri_a/(QINF*ref.S))
-            props_b[isurf][I] = PanelProperties(Γi_b/VINF, Vi_b/VINF, Fbi_b/(QINF*ref.S),
+            props_b[isurf][I] = PanelProperties(Γ_b[iΓ+i]/VINF, Vi_b/VINF, Fbi_b/(QINF*ref.S),
                 Fbli_b/(QINF*ref.S), Fbri_b/(QINF*ref.S))
-            props_p[isurf][I] = PanelProperties(Γi_p/VINF, Vi_p/VINF, Fbi_p/(QINF*ref.S),
+            props_p[isurf][I] = PanelProperties(Γ_p[iΓ+i]/VINF, Vi_p/VINF, Fbi_p/(QINF*ref.S),
                 Fbli_p/(QINF*ref.S), Fbri_p/(QINF*ref.S))
-            props_q[isurf][I] = PanelProperties(Γi_q/VINF, Vi_q/VINF, Fbi_q/(QINF*ref.S),
+            props_q[isurf][I] = PanelProperties(Γ_q[iΓ+i]/VINF, Vi_q/VINF, Fbi_q/(QINF*ref.S),
                 Fbli_q/(QINF*ref.S), Fbri_q/(QINF*ref.S))
-            props_r[isurf][I] = PanelProperties(Γi_r/VINF, Vi_r/VINF, Fbi_r/(QINF*ref.S),
+            props_r[isurf][I] = PanelProperties(Γ_r[iΓ+i]/VINF, Vi_r/VINF, Fbi_r/(QINF*ref.S),
                 Fbli_r/(QINF*ref.S), Fbri_r/(QINF*ref.S))
         end
         # increment Γ index
@@ -487,7 +539,7 @@ function body_forces(system, surface::AbstractMatrix, ref, fs;
 end
 
 """
-    body_forces(system, surface[s], reference, freestream; kwargs...)
+    body_forces(system, surfaces, reference, freestream; kwargs...)
 
 Return the body force coefficients for the `system` in the given `frame`.
 

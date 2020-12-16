@@ -13,13 +13,23 @@ Perform a steady vortex lattice method analysis.  Return an object of type
 # Keyword Arguments
  - `symmetric`: (required) Flag indicating whether a mirror image of the panels
     in `surface`, should be used when calculating induced velocities
+ - `trailing_vortices`: Flag to enable/disable trailing vortices, defaults to `true`
+ - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
  - `wake`: Matrix of wake panels of shape (nw, ns) where `nw` is the number of
     chordwise wake panels and `ns` is the number of spanwise panels, defaults to
     no wake panels
  - `nwake`: Number of chordwise wake panels to use from `wake`, defaults to all
     specified wake panels
- - `trailing_vortices`: Flag to enable/disable trailing vortices, defaults to `true`
- - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
+ - `surface_id`: Surface ID.  The finite core model is disabled when calculating
+    the influence of surfaces/wakes that share the same ID.  Additionally, if a
+    surface/wake's ID is negative, the finite core model will always be enabled,
+    even when calculating the influence of the surface/wake on itself. By default
+    each surface has its own ID.
+ - `wake_id`: Wake ID.  The finite core model is disabled when calculating
+    the influence of surfaces/wakes that share the same ID. Additionally, if a
+    surface/wake's ID is negative, the finite core model will always be enabled,
+    even when calculating the influence of the surface/wake on itself. By default
+    the finite core model for the wakes is always enabled.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
@@ -52,8 +62,8 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `freestream`: Freestream parameters (see `Freestream`)
 
 # Keyword Arguments
- - `symmetric`: (required) Flags indicating whether a mirror image (across the y-axis) should
-    be used when calculating induced velocities
+ - `symmetric`: (required) Flags indicating whether a mirror image (across the X-Z plane)
+    should be used when calculating induced velocities
  - `wakes`: Vector of wakes corresponding to each surface, represented by matrices
     of panels of shape (nw, ns) where `nw` is the number of chordwise wake panels
     and `ns` is the number of spanwise panels
@@ -62,9 +72,16 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `true`
     for each surface
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
- - `surface_id`: Surface ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value. By default all surfaces
-    have their own IDs
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID for each wake.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
@@ -95,6 +112,8 @@ function steady_analysis!(system, surface::AbstractMatrix, ref, fs;
     nwake = size(wake, 1),
     trailing_vortices = true,
     xhat = SVector(1, 0, 0),
+    surface_id = 1,
+    wake_id = -1,
     calculate_influence_matrix = true,
     near_field_analysis = true,
     derivatives = true)
@@ -117,7 +136,8 @@ function steady_analysis!(system, surface::AbstractMatrix, ref, fs;
         influence_coefficients!(AIC, surface;
             symmetric = symmetric,
             trailing_vortices = trailing_vortices && !wake_panels,
-            xhat=xhat)
+            xhat = xhat,
+            surface_id = surface_id)
     end
 
     # calculate RHS
@@ -133,7 +153,9 @@ function steady_analysis!(system, surface::AbstractMatrix, ref, fs;
             symmetric = symmetric,
             nwake = nwake,
             trailing_vortices = trailing_vortices,
-            xhat = xhat)
+            xhat = xhat,
+            surface_id = surface_id,
+            wake_id = wake_id)
     end
 
     # solve for the circulation distribution
@@ -150,13 +172,17 @@ function steady_analysis!(system, surface::AbstractMatrix, ref, fs;
                 symmetric = symmetric,
                 nwake = nwake,
                 trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                xhat = xhat,
+                surface_id = surface_id,
+                wake_id = wake_id)
         else
             near_field_forces!(system, surface, ref, fs;
                 symmetric = symmetric,
                 nwake = nwake,
                 trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                xhat = xhat,
+                surface_id = surface_id,
+                wake_id = wake_id)
         end
     end
 
@@ -177,6 +203,7 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
     trailing_vortices = fill(true, length(surfaces)),
     xhat = SVector(1, 0, 0),
     surface_id = 1:length(surfaces),
+    wake_id = -1:-1:-length(surfaces),
     calculate_influence_matrix = true,
     near_field_analysis = true,
     derivatives = true)
@@ -199,10 +226,10 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
     # calculate AIC matrix
     if calculate_influence_matrix
         influence_coefficients!(AIC, surfaces;
-            surface_id = surface_id,
             symmetric = symmetric,
             trailing_vortices = trailing_vortices .& .!wake_panels,
-            xhat = xhat)
+            xhat = xhat,
+            surface_id = surface_id)
     end
 
     # calculate RHS
@@ -215,11 +242,12 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
     # add wake's contribution to RHS
     if any(wake_panels)
         add_wake_normal_velocity!(b, surfaces, wakes;
-            surface_id = surface_id,
             symmetric = symmetric,
             nwake = nwake,
             trailing_vortices = trailing_vortices,
-            xhat = xhat)
+            xhat = xhat,
+            surface_id = surface_id,
+            wake_id = wake_id)
     end
 
     # solve for the circulation distribution
@@ -237,14 +265,16 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
                 nwake = nwake,
                 trailing_vortices = trailing_vortices,
                 xhat = xhat,
-                surface_id = surface_id)
+                surface_id = surface_id,
+                wake_id = wake_id)
         else
             near_field_forces!(system, surfaces, ref, fs;
                 symmetric = symmetric,
                 nwake = nwake,
                 trailing_vortices = trailing_vortices,
                 xhat = xhat,
-                surface_id = surface_id)
+                surface_id = surface_id,
+                wake_id = wake_id)
         end
     end
 
@@ -253,7 +283,7 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
 end
 
 """
-    unsteady_analysis(surface, reference, freestream, dt; kwargs...)
+    unsteady_analysis(surface, reference, freestream, time; kwargs...)
 
 Perform a unsteady vortex lattice method analysis.  Return an object of type
 `System` containing the system state.
@@ -263,8 +293,7 @@ Perform a unsteady vortex lattice method analysis.  Return an object of type
     chordwise panels and `ns` is the number of spanwise panels
  - `reference`: Reference parameters (see `Reference`)
  - `freestream`: Freestream parameters (see `Freestream`)
- - `dt`: Step size for each time step, defaults to 0.1
- - `nt`: Total length of the time vector (1 + number of steps)
+ - `time`: Time vector
 
 # Keyword Arguments
  - `symmetric`: (required) Flag indicating whether a mirror image of the panels in `surface`,
@@ -273,14 +302,24 @@ Perform a unsteady vortex lattice method analysis.  Return an object of type
     defaults to `false`
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
  - `nwake`: Maximum number of wake panels in the chordwise direction.  Defaults
-    to `nt-1`.
+    to `length(time)-1`.
  - `initial_wake`: Initial wake panels of the system, defaults to no wake panels
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID for each wake.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
     Defaults to `true`.  Note that this argument is only valid for the pre-allocated
     version of this function.
- - `save`: Time indices at which to save the time history, defaults to `1:nt`
+ - `save`: Time indices at which to save the time history, defaults to `1:length(time)`
  - `near_field_analysis`: Flag indicating whether a near field analysis should be
     performed to obtain panel velocities, circulation, and forces for the last
     time step. Defaults to `true`.
@@ -288,17 +327,17 @@ Perform a unsteady vortex lattice method analysis.  Return an object of type
     to the freestream variables should be calculated for the last time step.
     Defaults to `true`.
 """
-function unsteady_analysis(surface::AbstractMatrix, reference, freestream, dt, nt;
-    nwake = nt-1, kwargs...)
+function unsteady_analysis(surface::AbstractMatrix, reference, freestream, time;
+    nwake = length(time)-1, kwargs...)
 
     system = System(surface, nwake=nwake)
 
-    return unsteady_analysis!(system, surface, reference, freestream, dt, nt;
+    return unsteady_analysis!(system, surface, reference, freestream, time;
         kwargs..., nwake = nwake, calculate_influence_matrix = true)
 end
 
 """
-    unsteady_analysis(surfaces, reference, freestream; kwargs...)
+    unsteady_analysis(surfaces, reference, freestream, time; kwargs...)
 
 Perform a unsteady vortex lattice method analysis to find the unsteady circulation
 and wake shape of a group of vortex lattice panels.
@@ -309,27 +348,34 @@ and wake shape of a group of vortex lattice panels.
     of spanwise panels
  - `reference`: Reference parameters (see `Reference`)
  - `freestream`: Freestream parameters (see `Freestream`)
- - `dt`: Step size for each time step, defaults to 0.1
- - `nt`: Total length of the time vector (1 + number of steps)
+ - `time`: time vector
 
 # Keyword Arguments
  - `nwake`: Maximum number of wake panels in the chordwise direction.  Defaults
-    to `nt-1`.
+    to `length(time)-1`.
  - `initial_wake`: Initial wake panels of the system
- - `symmetric`: Flags indicating whether a mirror image (across the y-axis) should
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
     be used when calculating induced velocities, defaults to `false` for each surface
  - `trailing_vortices`: Flags to enable/disable trailing vortices, defaults to `false`
     for each surface
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
- - `surface_id`: Surface ID for each surface.  May be used to deactivate the finite core
-    model by setting all surface ID's to the same value. By default all surfaces
-    have their own IDs
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default each surface has its own ID.
+ - `wake_id`: Wake ID for each wake.  The finite core model is disabled when
+    calculating the influence of surfaces/wakes that share the same ID.
+    Additionally, if a surface/wake's ID is negative, the finite core model will
+    always be enabled, even when calculating the influence of the surface/wake
+    on itself. By default the finite core model for the wakes is always enabled
+    for wakes.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
     Defaults to `true`.  Note that this argument is only valid for the pre-allocated
     version of this function.
- - `save`: Time indices at which to save the time history, defaults to `1:nt`
+ - `save`: Time indices at which to save the time history, defaults to `1:length(time)`
  - `near_field_analysis`: Flag indicating whether a near field analysis should be
     performed to obtain panel velocities, circulation, and forces for the last
     time step. Defaults to `true`.
@@ -338,27 +384,29 @@ and wake shape of a group of vortex lattice panels.
     Defaults to `true`.
 """
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractMatrix}, reference,
-    freestream, dt, nt; nwake = fill(nt - 1, length(surfaces)), kwargs...)
+    freestream, time; nwake = fill(length(time) - 1, length(surfaces)), kwargs...)
 
     system = System(surfaces; nwake = nwake)
 
-    return unsteady_analysis!(system, surfaces, reference, freestream, dt, nt;
+    return unsteady_analysis!(system, surfaces, reference, freestream, time;
         kwargs..., nwake = nwake, calculate_influence_matrix = true)
 end
 
 """
-    unsteady_analysis!(system, surface, reference, freestream, dt, nt; kwargs...)
+    unsteady_analysis!(system, surface, reference, freestream, time; kwargs...)
 
 Pre-allocated version of `unsteady_analysis`.
 """
-function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
+function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, time;
     symmetric,
     trailing_vortices = false,
     xhat = SVector(1, 0, 0),
     initial_wake = Matrix{Wake{Float64}}(undef, 0, size(surface, 2)),
-    nwake = nt - 1,
+    nwake = length(time) - 1,
+    surface_id = 1,
+    wake_id = -1,
     calculate_influence_matrix = true,
-    save = 1:nt,
+    save = 1:length(time),
     near_field_analysis = true,
     derivatives = true)
 
@@ -373,11 +421,12 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
     end
 
     # copy initial wake panels to pre-allocated storage
-    cw = CartesianIndices(initial_wake)
-    for i = 1:length(initial_wake)
-        I = cw[i]
+    for I in CartesianIndices(initial_wake)
         wake[I] = initial_wake[I]
     end
+
+    # check for trailing edge points that are repeated
+    repeated_points = repeated_trailing_edge_points([surface])
 
     # unpack pre-allocated storage
     wake = system.wakes[1]
@@ -393,18 +442,20 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
     wake_history = Vector{Matrix{Wake{TF}}}(undef, length(save))
 
     # # loop through all time steps
-    for it = 1:nt
+    for it = 1:length(time)
 
         # perform a steady analysis
         steady_analysis!(system, surface, ref, fs;
             symmetric = symmetric,
+            surface_id = surface_id,
+            wake_id = wake_id,
             wake = wake,
             nwake = iwake,
             trailing_vortices = trailing_vortices,
             xhat = xhat,
             calculate_influence_matrix = it == 1 && calculate_influence_matrix,
-            near_field_analysis=false,
-            derivatives=false)
+            near_field_analysis = false,
+            derivatives = false)
 
         # save the panel history
         if it in save
@@ -413,42 +464,49 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dt, nt;
             isave += 1
         end
 
-        if it < nt
+        if it < length(time)
+
             # calculate wake corner point velocities
             VortexLattice.get_wake_velocities!(wake_velocities, surface, wake, ref, fs, Γ;
                 symmetric = symmetric,
+                surface_id = surface_id,
+                wake_id = wake_id,
                 trailing_vortices = trailing_vortices,
                 xhat = xhat,
-                nwake = iwake)
+                nwake = iwake,
+                repeated_points = repeated_points)
 
+            # increment wake panel counter
             if iwake < nwake
                 iwake += 1
             end
 
             # translate the wake
+            dt = time[it+1] - time[it]
             VortexLattice.shed_wake!(wake, wake_velocities, dt, surface, Γ; nwake=iwake)
         end
 
     end
 
-    # return the modified system and time history
+    # return the modified system and the time history
     return system, surface_history, wake_history
 end
 
 """
-    unsteady_analysis!(system, surfaces, reference, freestream, dt, nt; kwargs...)
+    unsteady_analysis!(system, surfaces, reference, freestream, time; kwargs...)
 
 Pre-allocated version of `unsteady_analysis`.
 """
-function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, dt, nt;
+function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, time;
     symmetric,
     trailing_vortices = fill(false, length(surfaces)),
     xhat = SVector(1, 0, 0),
     surface_id = 1:length(surfaces),
+    wake_id = -1:-1:-length(surfaces),
     initial_wakes = [Matrix{Wake{Float64}}(undef, 0, size(surfaces[i], 2)) for i = 1:length(surfaces)],
-    nwake = fill(nt - 1, length(surfaces)),
+    nwake = fill(length(time) - 1, length(surfaces)),
     calculate_influence_matrix = true,
-    save = 1:nt,
+    save = 1:length(time),
     near_field_analysis = true,
     derivatives = true)
 
@@ -470,13 +528,13 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
         end
     end
 
+    # check for trailing edge points that are repeated
+    repeated_points = repeated_trailing_edge_points(surfaces)
+
     # unpack pre-allocated storage
     wakes = system.wakes
     wake_velocities = system.wake_velocities
     Γ = system.gamma
-
-    # get edge IDs
-    left_id, right_id = find_shared_edges(surfaces)
 
     # current number of wake panels
     iwake = [min(size(initial_wakes[isurf], 1), nwake[isurf]) for isurf = 1:nsurf]
@@ -487,18 +545,19 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     wake_history = Vector{Vector{Matrix{Wake{TF}}}}(undef, length(save))
 
     # # loop through all time steps
-    for it = 1:nt
+    for it = 1:length(time)
 
         # perform a steady analysis
         steady_analysis!(system, surfaces, ref, fs;
             symmetric = symmetric,
             surface_id = surface_id,
+            wake_id = wake_id,
             wakes = wakes,
             nwake = iwake,
             trailing_vortices = trailing_vortices,
             xhat = xhat,
-            calculate_influence_matrix = calculate_influence_matrix,
-            near_field_analysis = near_field_analysis,
+            calculate_influence_matrix = it == 1 && calculate_influence_matrix,
+            near_field_analysis = false,
             derivatives = false)
 
         # save the panel history
@@ -508,18 +567,17 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
             isave += 1
         end
 
-        if it < nt
-            for i = 1:length(wake_velocities)
-                wake_velocities[i] .= Ref(SVector(0.0, 0.0, 0.0))
-            end
+        if it < length(time)
 
             # calculate wake corner point velocities
             VortexLattice.get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ;
                 symmetric = symmetric,
                 surface_id = surface_id,
+                wake_id = wake_id,
                 trailing_vortices = trailing_vortices,
-                xhat=xhat,
-                nwake=iwake)
+                xhat = xhat,
+                nwake = iwake,
+                repeated_points = repeated_points)
 
             # increment wake panel counter
             for isurf = 1:nsurf
@@ -529,6 +587,7 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
             end
 
             # shed an additional wake panel from each surface
+            dt = time[it+1] - time[it]
             VortexLattice.shed_wake!(wakes, wake_velocities, dt, surfaces, Γ; nwake=iwake)
         end
 

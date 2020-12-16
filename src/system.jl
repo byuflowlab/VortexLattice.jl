@@ -36,7 +36,15 @@ Base.eltype(::PanelProperties{TF}) where TF = TF
 Contains the system AIC matrix, R.H.S., circulation distribution, and wake shape.
 
 # Fields:
- - `AIC`: System aerodynamic influence coefficient matrix
+ - `Acb`: Aerodynamic influence coefficient matrix on the control points from the body
+ - `Acw`: Aerodynamic influence coefficient matrix on the control points from the wake
+ - `Avb`: Aerodynamic influence coefficient matrix on the wake vertices from the body
+ - `Avw`: Aerodynamic influence coefficient matrix on the wake vertices from the wake
+ - `Γb`: Circulation strength of the body panels
+ - `Γw`: Circulation strength of the wake panels
+ - `w`: Normal velocity at the control points (except induced velocities)
+ - `V`: Velocity at the wake vertices
+
  - `b`: System R.H.S.
  - `gamma`: Circulation strength of each panel
  - `panels`: Panel properties for each surface
@@ -63,6 +71,22 @@ end
 @inline Base.eltype(::Type{System{TF}}) where TF = TF
 @inline Base.eltype(::System{TF}) where TF = TF
 
+"""
+    System([TF], surface; nwake = 0)
+
+Returns an object of type `System` with pre-allocated storage for vortex lattice
+calculations.
+
+# Arguments:
+ - `TF`: Floating point type, defaults to the floating point type used by `surface`
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+
+# Keyword Arguments:
+ - `nwake = 0`: Number of chordwise wake panels in pre-allocated storage
+"""
+System(args...; kwargs...)
+
 System(surface::AbstractMatrix; kwargs...) = System(eltype(eltype(surface)), surface; kwargs...)
 
 function System(TF::Type{<:AbstractFloat}, surface::AbstractMatrix; nwake=0)
@@ -83,6 +107,21 @@ function System(TF::Type{<:AbstractFloat}, surface::AbstractMatrix; nwake=0)
         wake_velocities)
 end
 
+"""
+    System([TF], surfaces; nwake = 0)
+
+Returns an object of type `System` with pre-allocated storage for vortex lattice
+calculations.
+
+# Arguments:
+ - `TF`: Floating point type, defaults to the floating point type used by `surface`
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+
+# Keyword Arguments:
+ - `nwake = 0`: Number of chordwise wake panels in pre-allocated storage
+"""
 System(surfaces::AbstractVector{<:AbstractMatrix}; kwargs...) =
     System(eltype(eltype(eltype(surfaces))), surfaces; kwargs...)
 
@@ -104,3 +143,10 @@ function System(TF::Type{<:AbstractFloat}, surfaces::AbstractVector{<:AbstractMa
     return System{TF}(AIC, b, gamma, panels, wakes, trefftz, db, dgamma, dpanels,
         wake_velocities)
 end
+
+"""
+    panel_properties(system)
+
+Returns panel properties resulting from a near field analysis
+"""
+panel_properties(system) = system.panels
