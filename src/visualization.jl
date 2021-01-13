@@ -27,7 +27,7 @@ Writes geometry to Paraview files for visualization.
 write_vtk(name, surface::AbstractMatrix, args...; kwargs...)
 
 # surface implementation
-function write_vtk(name, surface::AbstractMatrix{<:VortexRing}, properties=nothing; kwargs...)
+function write_vtk(name, surface::AbstractMatrix{<:SurfacePanel}, properties=nothing; kwargs...)
 
     vtk_multiblock(name) do vtmfile
         write_vtk!(vtmfile, surface, properties; kwargs...)
@@ -37,7 +37,7 @@ function write_vtk(name, surface::AbstractMatrix{<:VortexRing}, properties=nothi
 end
 
 # wake implementation
-function write_vtk(name, surface::AbstractMatrix{<:Wake}; kwargs...)
+function write_vtk(name, surface::AbstractMatrix{<:WakePanel}; kwargs...)
 
     vtk_multiblock(name) do vtmfile
         write_vtk!(vtmfile, surface; kwargs...)
@@ -47,12 +47,84 @@ function write_vtk(name, surface::AbstractMatrix{<:Wake}; kwargs...)
 end
 
 # surface + wake implementation
-function write_vtk(name, surface::AbstractMatrix{<:VortexRing},
-    wake::AbstractMatrix{<:Wake}, properties=nothing; kwargs...)
+function write_vtk(name, surface::AbstractMatrix{<:SurfacePanel},
+    wake::AbstractMatrix{<:WakePanel}, properties=nothing; kwargs...)
 
     vtk_multiblock(name) do vtmfile
-        write_vtk!(vtmfile, surface, properties; kwargs..., wake_length=0)
-        write_vtk!(vtmfile, wake; kwargs...)
+
+        # circulation at trailing edge of surface
+        if isnothing(properties)
+            surface_circulation = zeros(size(surface, 2))
+        else
+            surface_circulation = getproperty.(properties[end,:], :gamma)
+        end
+
+        # circulation at leading edge of wake
+        wake_circulation = getproperty.(wake[1,:], :gamma)
+
+        # surface
+        write_vtk!(vtmfile, surface, properties; wake_circulation, trailing_edge = false,
+            kwargs..., trailing_vortices = false)
+
+        # wake
+        write_vtk!(vtmfile, wake; surface_circulation, kwargs...)
+    end
+
+    return nothing
+end
+
+"""
+    write_vtk(name, surface, panel_history, wake_history; kwargs...)
+
+Writes unsteady simulation geometry to Paraview files for visualization.
+
+# Arguments
+ - `name`: Name for generated files
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `panel_history`: Matrices corresponding to the panel properties for each
+    non-wake panel at each time step.
+ - `wake_history`: Matrices corresponding to the wake panels at each time step
+
+# Keyword Arguments:
+ - `mirror`: Flag indicating whether to include a mirror image of the panels in
+    `surface`. Defaults to false.
+ - `trailing_vortices`: Flag indicating whether the model uses trailing vortices.
+    Defaults to `true` when wake panels are absent, `false` otherwise
+ - `xhat`: Direction in which trailing vortices extend if used. Defaults to [1, 0, 0].
+ - `wake_length`: Distance to extend trailing vortices. Defaults to 10
+ - `metadata`: Dictionary of metadata to include in generated files
+"""
+function write_vtk(name, surface::AbstractMatrix,
+    panel_history::AbstractVector{<:AbstractMatrix},
+    wake_history::AbstractVector{<:AbstractMatrix}, time; kwargs...)
+
+    paraview_collection(name) do pvdfile
+        for it = 1:length(time)
+            vtk_multiblock(name*"-step$it") do vtmfile
+
+                surface_circulation = getproperty.(panel_history[it][end,:], :gamma)
+
+                if isempty(wake_history[it])
+                    wake_circulation = zeros(size(surface, 2))
+                else
+                    wake_circulation = getproperty.(wake_history[it][1,:], :gamma)
+                end
+
+                # surface
+                write_vtk!(vtmfile, surface, panel_history[it]; wake_circulation,
+                    trailing_edge = isempty(wake_history[it]), kwargs...,
+                    trailing_vortices = false)
+
+                # wake
+                write_vtk!(vtmfile, wake_history[it]; surface_circulation,
+                    kwargs...)
+
+                # save
+                pvdfile[time[it]] = vtmfile
+            end
+        end
     end
 
     return nothing
@@ -73,8 +145,8 @@ Writes geometry to Paraview files for visualization.
  - `wakes`: (optional) Vector of wakes corresponding to each surface, represented
     by matrices of panels of shape (nw, ns) where `nw` is the number of chordwise
     wake panels and `ns` is the number of spanwise panels
- - `properties`: (optional) Matrix of panel properties for each non-wake panel
-    where each element of the matrix is of type `PanelProperties`.
+ - `properties`: (optional) Vector of matrices corresponding to the panel
+    properties for each non-wake panel.
 
 # Keyword Arguments:
  - `mirror`: Flag indicating whether to include a mirror image of the panels in
@@ -87,7 +159,7 @@ Writes geometry to Paraview files for visualization.
 """
 write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
 
-function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:VortexRing}},
+function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
     properties=nothing; kwargs...) where T
 
     vtk_multiblock(name) do vtmfile
@@ -99,7 +171,7 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:VortexRing}
     return nothing
 end
 
-function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:Wake}}; kwargs...) where T
+function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:WakePanel}}; kwargs...) where T
 
     vtk_multiblock(name) do vtmfile
         for i = 1:length(surfaces)
@@ -115,10 +187,84 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
 
     vtk_multiblock(name) do vtmfile
         for i = 1:length(surfaces)
-            write_vtk!(vtmfile, surfaces[i], properties[i]; kwargs..., wake_length = 0)
+
+            # circulation at trailing edge of surface
+            if isnothing(properties)
+                surface_circulation = zeros(size(surfaces[i], 2))
+            else
+                surface_circulation = getproperty.(properties[i][end,:], :gamma)
+            end
+
+            # circulation at leading edge of wake
+            wake_circulation = getproperty.(wakes[i][1,:], :gamma)
+
+            # surface
+            write_vtk!(vtmfile, surfaces[i], properties[i]; wake_circulation,
+                trailing_edge = isempty(wakes[i]), kwargs..., trailing_vortices = false)
+
+            # wake
+            write_vtk!(vtmfile, wakes[i]; surface_circulation, kwargs...)
         end
-        for i = 1:length(surfaces)
-            write_vtk!(vtmfile, wakes[i]; kwargs...)
+    end
+
+    return nothing
+end
+
+"""
+    write_vtk(name, surfaces, panel_history, wake_history; kwargs...)
+
+Writes unsteady simulation geometry to Paraview files for visualization.
+
+# Arguments
+ - `name`: Name for generated files
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `panel_history`: Matrices corresponding to the panel properties for each
+    non-wake panel for each surface at each time step.
+ - `wake_history`: Matrices corresponding to the wake panels for each surface for
+    each time step
+
+# Keyword Arguments:
+ - `mirror`: Flag indicating whether to include a mirror image of the panels in
+    `surface`. Defaults to false.
+ - `trailing_vortices`: Flag indicating whether the model uses trailing vortices.
+    Defaults to `true` when wake panels are absent, `false` otherwise
+ - `xhat`: Direction in which trailing vortices extend if used. Defaults to [1, 0, 0].
+ - `wake_length`: Distance to extend trailing vortices. Defaults to 10
+ - `metadata`: Dictionary of metadata to include in generated files
+"""
+function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
+    panel_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+    wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, time; kwargs...)
+
+    paraview_collection(name) do pvdfile
+        for it = 1:length(time)
+            vtk_multiblock(name*"-step$it") do vtmfile
+                # generate VTK files
+                for i = 1:length(surfaces)
+
+                    surface_circulation = getproperty.(panel_history[it][i][end,:], :gamma)
+
+                    if isempty(wake_history[it][i])
+                        wake_circulation = zeros(size(surfaces[i], 2))
+                    else
+                        wake_circulation = getproperty.(wake_history[it][i][1,:], :gamma)
+                    end
+
+                    # surface
+                    write_vtk!(vtmfile, surfaces[i], panel_history[it][i];
+                        wake_circulation, trailing_edge = isempty(wake_history[it][i]),
+                        kwargs..., trailing_vortices = false)
+
+                    # wake
+                    write_vtk!(vtmfile, wake_history[it][i]; surface_circulation,
+                        kwargs...)
+                end
+
+                # save
+                pvdfile[time[it]] = vtmfile
+            end
         end
     end
 
@@ -131,7 +277,7 @@ end
 Writes geometry to Paraview files for visualization.
 
 # Arguments
- - `vtmfile`: Object of type WriteVTK.MultiblockFile
+ - `vtmfile`: Paraview file handle
  - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
     chordwise panels and `ns` is the number of spanwise panels
  - `properties`: (optional) Matrix of panel properties for each non-wake panel
@@ -143,12 +289,14 @@ Writes geometry to Paraview files for visualization.
  - `trailing_vortices = true`: Flag indicating whether the model uses trailing vortices
  - `xhat = [1, 0, 0]`: Direction in which trailing vortices extend if used
  - `wake_length = 10`: Distance to extend trailing vortices
+ - `wake_circulation = zeros(size(surfaces, 2))`: Contribution to the trailing
+    edge circulation from the wake attached to this surface
  - `metadata = Dict()`: Dictionary of metadata to include in generated files
 """
 function write_vtk!(vtmfile,
-    surface::AbstractMatrix{<:VortexRing}, properties=nothing;
-    mirror = false, trailing_vortices = true, xhat = SVector(1, 0, 0),
-    wake_length = 10, metadata=Dict())
+    surface::AbstractMatrix{<:SurfacePanel}, properties=nothing;
+    mirror = false, trailing_vortices = true, trailing_edge = true, xhat = SVector(1, 0, 0),
+    wake_length = 10, wake_circulation = zeros(size(surface, 2)), metadata=Dict())
 
     TF = eltype(eltype(surface))
 
@@ -202,13 +350,13 @@ function write_vtk!(vtmfile,
         # horizontal bound vortex local velocity
         v_h = Array{TF}(undef, 3, nc, ns)
         for i = 1:nc, j = 1:ns
-            v_h[:,i,j] = properties[i,j].v
+            v_h[:,i,j] = properties[i,j].velocity
         end
 
         # horizontal bound vortex force coefficient
         cf_h = Array{TF}(undef, 3, nc, ns)
         for i = 1:nc, j = 1:ns
-            cf_h[:,i,j] = properties[i,j].cf
+            cf_h[:,i,j] = properties[i,j].cfb
         end
 
         # vertical bound vortex circulation strength
@@ -285,6 +433,33 @@ function write_vtk!(vtmfile,
         end
     end
 
+    # --- control points ---
+
+    points_cp = Matrix{TF}(undef, 3, N)
+    for i = 1:N
+        ipoint = i
+        points_cp[:,ipoint] = controlpoint(surface[i])
+    end
+
+    cells_cp = [MeshCell(PolyData.Verts(), [i]) for i = 1:N]
+
+    vtk_grid(vtmfile, points_cp, cells_cp) do vtkfile
+
+        # add metadata
+        for (key, value) in pairs(metadata)
+            vtkfile[string(key)] = value
+        end
+
+        # add normal
+        data = Matrix{TF}(undef, 3, N)
+        for i = 1:length(surface)
+            data[:,i] = normal(surface[i])
+        end
+        vtkfile["normal"] = data
+
+    end
+
+    # trailing edge and/or trailing vortices
     if trailing_vortices
 
         # trailing vortices points as a grid
@@ -339,71 +514,53 @@ function write_vtk!(vtmfile,
 
     else
 
-        # generate points
-        points_t = Matrix{TF}(undef, 3, ns+1)
-        for j = 1:ns
-            points_t[:,j] = bottom_left(surface[end,j])
-        end
-        points_t[:,end] = bottom_right(surface[end,j])
+        # only generate if we plane to include the trailing edge
+        if trailing_edge
 
-        # horizontal bound vortices
-        lines_t = [MeshCell(PolyData.Lines(), j:j+1) for j = 1:ns]
-
-        # now extract data (if applicable)
-        if !isnothing(properties)
-            # horizontal bound vortex circulation strength
-            gamma_t = Vector{TF}(undef, ns)
+            # generate points
+            points_t = Matrix{TF}(undef, 3, ns+1)
             for j = 1:ns
-                gamma_t[j] = -properties[end,j].gamma
+                points_t[:,j] = bottom_left(surface[end,j])
+            end
+            points_t[:,end] = bottom_right(surface[end,end])
+
+            # horizontal bound vortices
+            lines_t = [MeshCell(PolyData.Lines(), j:j+1) for j = 1:ns]
+
+            # now extract data (if applicable)
+            if !isnothing(properties)
+                # horizontal bound vortex circulation strength
+                gamma_t = Vector{TF}(undef, ns)
+                for j = 1:ns
+                    gamma_t[j] = wake_circulation[j] - properties[end,j].gamma
+                end
+
+                # mirror across X-Z plane
+                if mirror
+                    gamma_t = vcat(reverse(gamma_t), gamma_t)
+                end
+
             end
 
-            # mirror across X-Z plane
-            if mirror
-                gamma_t = vcat(reverse(gamma_t), gamma_t)
+        end
+
+    end
+
+    if trailing_vortices || trailing_edge
+
+        # trailing edge and trailing vortices
+        vtk_grid(vtmfile, points_t, lines_t) do vtkfile
+
+            # add metadata
+            for (key, value) in pairs(metadata)
+                vtkfile[string(key)] = value
             end
 
+            if !isnothing(properties)
+                # circulation strength
+                vtkfile["circulation"] = gamma_t
+            end
         end
-
-    end
-
-    # trailing edge and trailing vortices
-    vtk_grid(vtmfile, points_t, lines_t) do vtkfile
-
-        # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
-        end
-
-        if !isnothing(properties)
-            # circulation strength
-            vtkfile["circulation"] = gamma_t
-        end
-    end
-
-    # --- control points ---
-
-    points_cp = Matrix{TF}(undef, 3, N)
-    for i = 1:N
-        ipoint = i
-        points_cp[:,ipoint] = controlpoint(surface[i])
-    end
-
-    cells_cp = [MeshCell(PolyData.Verts(), [i]) for i = 1:N]
-
-    vtk_grid(vtmfile, points_cp, cells_cp) do vtkfile
-
-        # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
-        end
-
-        # add normal
-        data = Matrix{TF}(undef, 3, N)
-        for i = 1:length(surface)
-            data[:,i] = normal(surface[i])
-        end
-        vtkfile["normal"] = data
-
     end
 
     return nothing
@@ -415,7 +572,7 @@ end
 Writes geometry to Paraview files for visualization.
 
 # Arguments
- - `vtmfile`: Object of type WriteVTK.MultiblockFile
+ - `vtmfile`: Paraview file handle
  - `wake`: Matrix of wake panels of shape (nw, ns) where `nw` is the number of
     chordwise wake panels and `ns` is the number of spanwise panels,
     defaults to no wake panels
@@ -426,11 +583,17 @@ Writes geometry to Paraview files for visualization.
  - `trailing_vortices = false`: Flag indicating whether the model uses trailing vortices
  - `xhat = [1, 0, 0]`: Direction in which trailing vortices extend if used
  - `wake_length = 10`: Distance to extend trailing vortices
+ - `surface_circulation = zeros(size(wake, 2))`: Contribution to the leading edge
+    circulation from the surface attached to this wake.
  - `metadata = Dict()`: Dictionary of metadata to include in generated files
 """
-function write_vtk!(vtmfile, wake::AbstractMatrix{<:Wake};
-    surface_index = 1, mirror = false, trailing_vortices = false,
-    xhat = SVector(1, 0, 0), wake_length = 10, metadata=Dict(), grid = false)
+function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel}; mirror = false,
+    trailing_vortices = false, xhat = SVector(1, 0, 0), wake_length = 10,
+    surface_circulation = zeros(size(wake, 2)), metadata=Dict())
+
+    if isempty(wake)
+        return vtmfile
+    end
 
     TF = eltype(eltype(wake))
 
@@ -464,17 +627,17 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:Wake};
     lines_h = [MeshCell(PolyData.Lines(), [
         li[i,j],
         li[i,j+1]
-        ]) for j = 1:ns, i = 1:nc]
+        ]) for j = 1:ns for i = 1:nc]
     # vertical bound vortices
     lines_v = [MeshCell(PolyData.Lines(), [
         li[i,j],
         li[i+1,j]
-        ]) for j = 1:ns+1, i = 1:nc]
+        ]) for j = 1:ns+1 for i = 1:nc]
 
     # horizontal bound vortex circulation strength
     gamma_h = Matrix{TF}(undef, nc, ns)
-    for i = 1:nc, j = 1:ns
-        previous_gamma = i == 1 ? 0.0 : wake[i-1, j].gamma
+    for i in 1:nc, j = 1:ns
+        previous_gamma = i == 1 ? surface_circulation[j] : wake[i-1, j].gamma
         current_gamma = wake[i,j].gamma
         gamma_h[i,j] = current_gamma - previous_gamma
     end
@@ -495,7 +658,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:Wake};
 
     # mirror across X-Z plane
     if mirror
-        gamma_h = cat(reverse(gamma_h, dims=2), gamma_v, dims=2)
+        gamma_h = cat(reverse(gamma_h, dims=2), gamma_h, dims=2)
         gamma_v = cat(reverse(gamma_v, dims=2), gamma_v, dims=2)
     end
 
@@ -579,7 +742,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:Wake};
         for j = 1:ns
             points_t[:,j] = bottom_left(wake[end,j])
         end
-        points_t[:,end] = bottom_right(wake[end,j])
+        points_t[:,end] = bottom_right(wake[end,end])
 
         # horizontal bound vortices
         lines_t = [MeshCell(PolyData.Lines(), j:j+1) for j = 1:ns]
@@ -606,7 +769,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:Wake};
         end
 
         # circulation strength
-        vtkfile["circulation"] = gamma_t
+        vtkfile["circulation"] = reshape(gamma_t, :)
     end
 
     return nothing

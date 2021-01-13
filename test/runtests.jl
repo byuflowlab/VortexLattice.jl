@@ -17,7 +17,7 @@ function avl_normal_vector(dr, theta)
     return ncp / norm(ncp) # normal vector used by AVL
 end
 
-@testset "AVL - Run 1" begin
+@testset "AVL - Run 1 - Wing with Uniform Spacing" begin
 
     # Simple Wing with Uniform Spacing
 
@@ -51,14 +51,14 @@ end
     mirror = false
     symmetric = true
 
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -75,14 +75,14 @@ end
     mirror = true
     symmetric = false
 
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -94,10 +94,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 2" begin
+@testset "AVL - Run 2 - Wing with Cosine Spacing" begin
 
     # Run 2: Simple Wing with Cosine Spacing
 
@@ -130,14 +129,14 @@ end
     chord = @. chord/cos(theta)
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -149,10 +148,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 3" begin
+@testset "AVL - Run 3 - Wing at High Angle of Attack" begin
 
     # Simple Wing at High Angle of Attack
 
@@ -185,14 +183,14 @@ end
     chord = @. chord/cos(theta)
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -204,10 +202,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 4" begin
+@testset "AVL - Run 4 - Wing with Dihedral" begin
 
     # Simple Wing with Dihedral
 
@@ -248,21 +245,21 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(wing)
+    for (ip, p) in enumerate(surface)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = VortexRing(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        surface[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
     end
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -276,7 +273,7 @@ end
     @test isapprox(Cn, 0.0, atol=ztol)
 end
 
-@testset "AVL - Run 5" begin
+@testset "AVL - Run 5 - Wing with Dihedral at Very High Angle of Attack" begin
 
     # Simple Wing with Dihedral at Very High Angle of Attack
 
@@ -318,21 +315,21 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     # vortex rings, untwisted geometry
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    for (ip, p) in enumerate(wing)
+    for (ip, p) in enumerate(surface)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = VortexRing(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        surface[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
     end
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -344,10 +341,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 6" begin
+@testset "AVL - Run 6 - Wing and Tail without Finite Core Model" begin
 
     # Wing and Tail without Finite Core Model
 
@@ -419,21 +415,21 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     # vortex rings - finite core deactivated
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = VortexRing(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        wing[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
     end
 
-    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+    hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
         mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
     translate!(htail, [4.0, 0.0, 0.0])
 
-    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+    vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -456,10 +452,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 7" begin
+@testset "AVL - Run 7 - Wing and Tail with Finite Core Model" begin
 
     # Wing and Tail with Finite Core Model
 
@@ -528,22 +523,21 @@ end
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
-    # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = VortexRing(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size)
+        wing[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
     end
 
-    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+    hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
         mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
     translate!(htail, [4.0, 0.0, 0.0])
 
-    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+    vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -566,10 +560,9 @@ end
     @test isapprox(CY, 0.0, atol=ztol)
     @test isapprox(Cl, 0.0, atol=ztol)
     @test isapprox(Cn, 0.0, atol=ztol)
-
 end
 
-@testset "AVL - Run 8" begin
+@testset "AVL - Run 8 - Wing with Chordwise Panels" begin
 
     # Simple Wing with Chordwise Panels
 
@@ -603,14 +596,14 @@ end
     symmetric = true
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -622,10 +615,9 @@ end
     @test isapprox(CY, 0.0, atol=1e-16)
     @test isapprox(Cl, 0.0, atol=1e-16)
     @test isapprox(Cn, 0.0, atol=1e-16)
-
 end
 
-@testset "AVL - Run 9" begin
+@testset "AVL - Run 9 - Wing with Cosine-Spaced Spanwise and Chordwise Panels" begin
 
     # Simple Wing with Cosine-Spaced Spanwise and Chordwise Panels
 
@@ -659,14 +651,14 @@ end
     symmetric = true
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -678,10 +670,9 @@ end
     @test isapprox(CY, 0.0, atol=1e-16)
     @test isapprox(Cl, 0.0, atol=1e-16)
     @test isapprox(Cn, 0.0, atol=1e-16)
-
 end
 
-@testset "AVL - Run 10" begin
+@testset "AVL - Run 10 - Wing with Sideslip" begin
 
     # Simple Wing with Sideslip
 
@@ -717,14 +708,14 @@ end
     mirror = true
     symmetric = false
 
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    CF, CM = body_forces(system, wing, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
 
-    CDiff = far_field_drag(system, wing, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -736,10 +727,9 @@ end
     @test isapprox(CY, 0.0, atol=1e-5)
     @test isapprox(Cl, 0.00644, atol=1e-4)
     @test isapprox(Cn, -0.00012, atol=2e-4)
-
 end
 
-@testset "AVL - Run 11" begin
+@testset "AVL - Run 11 - Wing Stability Derivatives" begin
 
     # Run 11: Simple Wing Stability Derivatives
 
@@ -769,12 +759,12 @@ end
     fs = Freestream(alpha, beta, Omega, vother)
 
     # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(wing, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
 
-    dCF, dCM = stability_derivatives(system, wing, ref, fs; symmetric=symmetric)
+    dCF, dCM = stability_derivatives(system, surface, ref, fs; symmetric=symmetric)
 
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha
@@ -806,45 +796,161 @@ end
     @test isapprox(Cnp, -0.019846, rtol=0.01)
     @test isapprox(Cnq, 0.0, atol=ztol)
     @test isapprox(Cnr, -0.000898, rtol=0.01)
-
 end
 
-@testset "Unsteady Vortex Lattice Method - Simple Wing" begin
+@testset "Equivalent Surface & Wake" begin
 
-    xle = [0.0, 0.4]
-    yle = [0.0, 7.5]
-    zle = [0.0, 0.0]
-    chord = [2.2, 1.8]
-    theta = [2.0*pi/180, 2.0*pi/180]
-    phi = [0.0, 0.0]
-    ns = 36
-    nc = 9
-    spacing_s = Uniform()
-    spacing_c = Uniform()
-    mirror = false
-    symmetric = true
+    # This test constructs two surfaces, one using surface panels,
+    # and one using wake panels.  It then tests that the wake panel
+    # implementations of `induced_velocity` yield identical results to the
+    # surface panel implementations
 
-    Sref = 30.0
-    cref = 2.0
-    bref = 15.0
-    rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    # define the geometry
+    nc = 5
+    ns = 10
 
-    alpha = 1.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    x = range(0, 1, length = nc+1)
+    y = range(0, 1, length = ns+1)
+    z = range(0, 1, length = ns+1)
 
-    # vortex rings
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    surface = Matrix{SurfacePanel{Float64}}(undef, nc, ns)
+    wake = Matrix{WakePanel{Float64}}(undef, nc, ns)
+    Γ = rand(nc, ns)
 
-    # time
-    time = 0.0:0.1:5.0
+    for i = 1:nc, j = 1:ns
+        rtl = [x[i], y[j], z[j]]
+        rtr = [x[i], y[j+1], z[j+1]]
+        rbl = [x[i+1], y[j], z[j]]
+        rbr = [x[i+1], y[j+1], z[j+1]]
+        rcp = [0.0, 0.0, 0.0]
+        ncp = [0.0, 0.0, 1.0]
+        core_size = 0.1
+        area = 0.0 # only used for unsteady simuulations
 
-    system, panel_history, wake_history = unsteady_analysis(wing, ref, fs, time;
-        symmetric=symmetric)
+        surface[i,j] = SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area)
+        wake[i,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, Γ[i, j])
+    end
+
+    # tests for induced velocity at an arbitrary point in space
+    rcp = [-1, -2, -3]
+
+    # test without finite core model, no symmetry, no trailing vortices
+    Vs = VortexLattice.induced_velocity(rcp, surface, Γ[:];
+        finite_core = false,
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    Vw = VortexLattice.induced_velocity(rcp, wake;
+        finite_core = false,
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    @test isapprox(Vs, Vw)
+
+    # test with finite core, symmetry, and trailing vortices
+    Vs = VortexLattice.induced_velocity(rcp, surface, Γ[:];
+        finite_core = true,
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    Vw = VortexLattice.induced_velocity(rcp, wake;
+        finite_core = true,
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    @test isapprox(Vs, Vw)
+
+    # tests for induced velocity at a trailing edge point
+    is = 3 # trailing edge index
+    I = CartesianIndex(nc+1, is) # index on surface
+
+    # test without finite core model, no symmetry, no trailing vortices
+    Vs = VortexLattice.induced_velocity(is, surface, Γ[:];
+        finite_core = false,
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    Vw = VortexLattice.induced_velocity(I, wake;
+        finite_core = false,
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    @test isapprox(Vs, Vw)
+
+    # test with finite core, symmetry, and trailing vortices
+    Vs = VortexLattice.induced_velocity(is, surface, Γ[:];
+        finite_core = true,
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    Vw = VortexLattice.induced_velocity(I, wake;
+        finite_core = true,
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    @test isapprox(Vs, Vw)
+end
+
+@testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
+
+    # Katz and Plotkin: Figures 13.34 and 13.35
+    # AR = [4, 8, 12, 20, ∞]
+    # Uinf*Δt/c = 1/16
+    # α = 5°
+
+    Uinf = 1.0
+
+    for AR in [4, 8, 12, 20, 100]
+
+        # reference parameters
+        cref = 1.0
+        bref = AR
+        Sref = bref*cref
+        rref = [0.0, 0.0, 0.0]
+        ref = Reference(Sref, cref, bref, rref)
+
+        # freestream parameters
+        alpha = 5.0*pi/180
+        beta = 0.0
+        Omega = [0.0; 0.0; 0.0]
+        vother = nothing
+        fs = Freestream(alpha, beta, Omega, vother)
+
+        # geometry
+        xle = [0.0, 0.0]
+        yle = [-bref/2, bref/2]
+        zle = [0.0, 0.0]
+        chord = [cref, cref]
+        theta = [0.0, 0.0]
+        phi = [0.0, 0.0]
+        ns = 13
+        nc = 4
+        spacing_s = Uniform()
+        spacing_c = Uniform()
+        mirror = false
+        symmetric = false
+
+        # non-dimensional time
+        time = range(0.0, step=1/25, length = 100)
+        dt = [time[i+1]-time[i] for i = 1:length(time)-1]
+
+        # create vortex rings
+        grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+        # run analysis
+        system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+            symmetric=symmetric)
+
+    end
 
 end
 
@@ -864,7 +970,7 @@ end
     nc = 1
     spacing_s = Uniform()
     spacing_c = Uniform()
-    mirror = true
+    mirror = false
 
     # horizontal stabilizer
     xle_h = [0.0, 0.14]
@@ -877,7 +983,7 @@ end
     nc_h = 1
     spacing_s_h = Uniform()
     spacing_c_h = Uniform()
-    mirror_h = true
+    mirror_h = false
 
     # vertical stabilizer
     xle_v = [0.0, 0.14]
@@ -909,17 +1015,17 @@ end
     vother = nothing
     fs = Freestream(alpha, beta, Omega, vother)
 
-    # symmetric = [true, true, false]
+    symmetric = [true, true, false]
 
     # horseshoe vortices
-    wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+    hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
         mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
     translate!(htail, [4.0, 0.0, 0.0])
 
-    vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+    vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -927,9 +1033,9 @@ end
     surface_id = [1, 2, 3]
 
     # time
-    time = 0.0:0.1:1.0
+    time = 0.0:0.1:10.0
 
-    system, panel_history, wake_history = unsteady_analysis(surfaces, ref, fs, time)
+    system, panel_history, wake_history = unsteady_analysis(surfaces, ref, fs, time; symmetric)
 
 end
 

@@ -5,8 +5,14 @@
 Returns the velocities at the corners of the wake panels in `wake`
 """
 @inline function get_wake_velocities!(wake_velocities, surface::AbstractMatrix,
-    wake::AbstractMatrix, ref, fs, Γ; symmetric, surface_id, wake_id,
-    trailing_vortices, xhat, nwake, repeated_points)
+    wake::AbstractMatrix, ref, fs, Γ;
+    symmetric,
+    surface_id,
+    wake_id,
+    trailing_vortices,
+    xhat,
+    nwake,
+    repeated_points)
 
     get_wake_velocities!([wake_velocities], [surface], [wake], ref, fs, Γ;
         symmetric = [symmetric],
@@ -27,8 +33,14 @@ end
 Returns the velocities at the corners of the wake panels in `wakes`
 """
 @inline function get_wake_velocities!(wake_velocities, surfaces::AbstractVector{<:AbstractMatrix},
-    wakes::AbstractVector{<:AbstractMatrix}, ref, fs, Γ; symmetric,
-    surface_id, wake_id, trailing_vortices, xhat, nwake, repeated_points)
+    wakes::AbstractVector{<:AbstractMatrix}, ref, fs, Γ;
+    symmetric,
+    surface_id,
+    wake_id,
+    trailing_vortices,
+    xhat,
+    nwake,
+    repeated_points)
 
     nsurf = length(surfaces)
 
@@ -113,7 +125,7 @@ Returns the velocities at the corners of the wake panels in `wakes`
                         CartesianIndex(1, js), wakes[jsurf];
                         symmetric = symmetric[jsurf],
                         finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
-                        nwake = nwake[jsurf],
+                        nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
 
@@ -121,7 +133,7 @@ Returns the velocities at the corners of the wake panels in `wakes`
                     wake_velocities[isurf][1,is] += induced_velocity(rc, wakes[jsurf];
                         symmetric = symmetric[jsurf],
                         finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
-                        nwake = nwake[jsurf],
+                        nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
                 end
@@ -200,26 +212,18 @@ Returns the velocities at the corners of the wake panels in `wakes`
                     tmp = induced_velocity(J, wakes[jsurf];
                         symmetric = symmetric[jsurf],
                         finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
-                        nwake = nwake[jsurf],
+                        nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
-
-                    if any(isnan.(tmp))
-                        error()
-                    end
 
                     wake_velocities[isurf][I] += tmp
                 else
                     tmp = induced_velocity(rc, wakes[jsurf];
                         symmetric = symmetric[jsurf],
                         finite_core = wake_id[jsurf] < 0 || surface_id[isurf] != wake_id[jsurf],
-                        nwake = nwake[jsurf],
+                        nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
-
-                    if any(isnan.(tmp))
-                        error()
-                    end
 
                     wake_velocities[isurf][I] += tmp
                 end
@@ -238,7 +242,7 @@ end
 Return a translated copy of the wake panel `panel` given the wake corner velocities
 `wake_velocities` and the time step `dt`
 """
-@inline function translate_wake(panel::Wake, wake_velocities, dt)
+@inline function translate_wake(panel::WakePanel, wake_velocities, dt)
 
     # extract corners
     rtl = top_left(panel)
@@ -272,7 +276,7 @@ Return a translated copy of the wake panel `panel` given the wake corner velocit
     # correct vorticity for vortex stretching
     gamma = circulation_strength(panel)*l2/l1
 
-    return Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+    return WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
 """
@@ -315,7 +319,6 @@ shed_wake!
 @inline function shed_wake!(wake::AbstractMatrix, wake_velocities, dt, surface, Γ; nwake)
 
     nc, ns = size(surface)
-    nw = size(wake, 1)
     ls = LinearIndices((nc, ns))
 
     # replace the last chordwise panels with the newly shed wake panels
@@ -335,7 +338,7 @@ shed_wake!
         gamma = Γ[ls[end,j]]
 
         # replace the oldest wake panel
-        wake[end,j] = Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+        wake[end,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
     end
 
     # translate all wake panels except the newly shed panels
@@ -359,6 +362,8 @@ end
         vΓ = view(Γ, iΓ+1:iΓ+N)
 
         shed_wake!(wake[i], wake_velocities[i], dt, surfaces[i], vΓ; nwake=nwake[i])
+
+        iΓ += N
     end
 
     return wake

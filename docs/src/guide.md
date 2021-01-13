@@ -32,10 +32,10 @@ spacing_c = Uniform() # chordwise discretization scheme
 nothing #hide
 ```
 
-We generate our lifting surface using `wing_to_vortex_rings`.  We can also generate our lifting surface from a pre-existing grid using `grid_to_vortex_rings`.
+We generate our lifting surface using `wing_to_surface_panels`.  We can also generate our lifting surface from a pre-existing grid using `grid_to_surface_panels`.
 
 ```@example guide
-surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
 spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 nothing #hide
 ```

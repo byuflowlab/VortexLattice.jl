@@ -8,21 +8,23 @@ abstract type AbstractSpacing end
 """
     Uniform()
 
-Uniform discretization scheme
+Uniform discretization scheme.
 """
 struct Uniform <: AbstractSpacing end
 
 """
     Sine()
 
-Sine-spaced discretization scheme.
+Sine-spaced discretization scheme.  Using sine-spacing on the right half of a
+wing effectively results in cosine spacing once symmetry is applied.
 """
 struct Sine <: AbstractSpacing end
 
 """
     Cosine()
 
-Cosine-spaced discretization scheme
+Cosine-spaced discretization scheme.  This is typically one of the most accurate
+spacing schemes for spanwise spacing.
 """
 struct Cosine <: AbstractSpacing end
 
@@ -92,7 +94,7 @@ function chordwise_spacing(n, ::Uniform)
     eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
     eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
-    return eta_qtr, eta_thrqtr
+    return eta, eta_qtr, eta_thrqtr
 end
 
 # sine
@@ -104,7 +106,7 @@ function chordwise_spacing(n, ::Sine)
     eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
     eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
-    return eta, eta_mid
+    return eta, eta_qtr, etq_thrqtr
 end
 
 # cosine
@@ -116,7 +118,7 @@ function chordwise_spacing(n, ::Cosine)
     eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
     eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
-    return eta_qtr, eta_thrqtr
+    return eta, eta_qtr, eta_thrqtr
 end
 
 """
@@ -164,23 +166,25 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 end
 
 """
-    grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
+    grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
 
-Construct a set of vortex ring panels given a potentially curved lifting surface
-defined by a grid with dimensions (3, i, j) where `i` corresponds to the chordwise
-direction (ordered from leading edge to trailing edge) and `j` corresponds to the spanwise
-direction (ordered from left to right).  The leading edge of each ring vortex
-will be placed at the 1/4 chord and the control point will be placed at the 3/4
-chord of each panel.
+Construct a set of panels with associated vortex rings given a potentially curved
+lifting surface defined by a grid with dimensions (3, i, j) where `i` corresponds
+to the chordwise direction (ordered from leading edge to trailing edge) and `j`
+corresponds to the spanwise direction (ordered from left to right).  The leading
+edge of each ring vortex will be placed at the 1/4 chord and the control point
+will be placed at the 3/4 chord of each panel.
 
-The optional argument `mirror` may be used to mirror the geometry across the
-X-Z plane.
+Return a grid with dimensions (3, i, j) containing the panel corners and a matrix
+with dimensions (i, j) containing the generated panels.
 
-The argument `fcore` defines a function for setting the finite core size based
-on the chord length in the x-direction and/or the panel width in the y/z directions.
-The default function is the same as that used by AVL.
+# Keyword Arguments
+- `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
+- `fcore`: function for setting the finite core size based on the chord length
+       (in the x-direction) and/or the panel width (in the y/z directions).
+       Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
 """
-function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
+function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
 
     TF = eltype(xyz)
 
@@ -192,7 +196,8 @@ function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2)
     right_side = sum(xyz[2,:,:]) > 0
 
     # initialize output
-    panels = Matrix{VortexRing{TF}}(undef, nc, (1+mirror)*ns)
+    xyz_panels = copy(xyz)
+    panels = Matrix{SurfacePanel{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -253,8 +258,12 @@ function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2)
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
+            # area of current panel
+            area = bretschneider_area(r1, r2, r3, r4)
+
             ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = VortexRing{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+            panels[ipanel] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
+                ncp, core_size, area)
         end
 
         # grid corners of current panel
@@ -294,13 +303,29 @@ function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2)
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
         core_size = fcore(c, Δs)
 
+        # area of current panel
+        area = bretschneider_area(r1, r2, r3, r4)
+
         ip = i
         jp = mirror*right_side*ns + j
-        panels[ip,jp] = VortexRing{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+        panels[ip,jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp,
+            core_size, area)
     end
 
     # other side
     if mirror
+
+        # first reflect grid
+        if right_side
+            xyz_l = reverse(xyz_panels, dims=3)
+            xyz_r = xyz_panels
+        else
+            xyz_l = xyz_panels
+            xyz_r = reverse(xyz_panels, dims=3)
+        end
+        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+
+        # then populate remaining panels
         for j = 1:ns
             for i = 1:nc
                 ip = i
@@ -311,11 +336,11 @@ function grid_to_vortex_rings(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2)
         end
     end
 
-    return panels
+    return xyz_panels, panels
 end
 
 """
-    grid_to_vortex_rings(xyz, ns, nc; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
+    grid_to_surface_panels(xyz, ns, nc; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
         spacing_s=Cosine(), spacing_c=Uniform(),
         interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
         interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
@@ -323,16 +348,21 @@ end
 Discretize a potentially curved lifting surface defined by a grid with dimensions
 (3, i, j) where `i` corresponds to the chordwise direction (ordered from leading
 edge to trailing edge) and `j` corresponds to the spanwise direction (ordered from
-left to right) into `ns` spanwise and `nc` chordwise vortex ring panels
-according to the spanwise discretization scheme `spacing_s` and chordwise
+left to right) into `ns` spanwise and `nc` chordwise panels with associated vortex
+rings according to the spanwise discretization scheme `spacing_s` and chordwise
 discretization scheme `spacing_c`.  The bound vortex will be placed at the
-1/4 chord and the control point will be placed at the 3/4 chord of each panel
+1/4 chord and the control point will be placed at the 3/4 chord of each panel.
+
+Return a grid with dimensions (3, i, j) containing the interpolated panel corners
+and a matrix with dimensions (i, j) containing the generated panels.
 
 # Arguments
  - `xyz`: grid of dimensions (3, i, j) where where `i` corresponds to the
     chordwise direction and `j` corresponds to the spanwise direction.
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
+
+# Keyword Arguments
  - `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
  - `fcore`: function for setting the finite core size based on the chord length
         (in the x-direction) and/or the panel width (in the y/z directions).
@@ -342,7 +372,7 @@ discretization scheme `spacing_c`.  The bound vortex will be placed at the
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
  - `interp_c`: chordwise interpolation function, defaults to linear interpolation
 """
-function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
+function grid_to_surface_panels(xyz, ns, nc; mirror=false,
     fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
     interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
     interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
@@ -351,12 +381,15 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
-    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
+    etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
 
     # interpolate grid first along `i` then along `j`
+    xyz_edge = interpolate_grid(xyz, etac, interp_c, ydir=1)
+    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s, ydir=2)
+
     xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c, ydir=1)
     xyz_corner = interpolate_grid(xyz_bound, etas, interp_s, ydir=2)
     xyz_center = interpolate_grid(xyz_bound, etabar, interp_s, ydir=2)
@@ -368,7 +401,7 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
     right_side = sum(xyz[2,:,:]) > 0
 
     # initialize output
-    panels = Matrix{VortexRing{TF}}(undef, nc, (1+mirror)*ns)
+    panels = Matrix{SurfacePanel{TF}}(undef, nc, (1+mirror)*ns)
 
     # populate each panel
     for j = 1:ns
@@ -392,14 +425,33 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
+            # set area
+            r1 = xyz_panels[i,j] # top left
+            r2 = xyz_panels[i,j+1] # top right
+            r3 = xyz_panels[i+1, j] # bottom left
+            r4 = xyz_panels[i+1, j+1] # bottom right
+            area = bretschneider_area(r1, r2, r3, r4)
+
             ip = i
             jp = mirror*right_side*ns + j
-            panels[ip, jp] = VortexRing{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+            panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
+                ncp, core_size, area)
         end
     end
 
     # other side
     if mirror
+        # first reflect grid
+        if right_side
+            xyz_l = reverse(xyz_panels, dims=3)
+            xyz_r = xyz_panels
+        else
+            xyz_l = xyz_panels
+            xyz_r = reverse(xyz_panels, dims=3)
+        end
+        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+
+        # then populate remaining panels
         for j = 1:ns
             for i = 1:nc
                 ip = i
@@ -410,18 +462,21 @@ function grid_to_vortex_rings(xyz, ns, nc; mirror=false,
         end
     end
 
-    return panels
+    return xyz_panels, panels
 end
 
 """
-    wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         fc=fill(x->0, length(xle)), mirror=false,
         fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
         interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
-Discretize a wing into `ns` spanwise and `nc` chordwise vortex ring panels
-according to the spanwise discretization scheme `spacing_s` and chordwise
-discretization scheme `spacing_c`.
+Discretize a wing into `ns` spanwise and `nc` chordwise panels with associated
+vortex rings according to the spanwise discretization scheme `spacing_s` and
+chordwise discretization scheme `spacing_c`.
+
+Return a grid with dimensions (3, i, j) containing the panel corners and a matrix
+with dimensions (i, j) containing the generated panels.
 
 # Arguments
  - `xle`: leading edge x-coordinate of each airfoil section
@@ -441,7 +496,7 @@ discretization scheme `spacing_c`.
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
 """
-function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     fc=fill(x->0, length(xle)), mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
     spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
 
@@ -451,7 +506,7 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
 
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
-    eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
+    etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
@@ -461,6 +516,7 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     @assert n == length(yle) == length(zle) == length(chord) == length(theta) == length(phi)
 
     # set bound vortex and control point chordwise locations
+    xyz_edge = Array{TF, 3}(undef, 3, nc+1, n)
     xyz_bound = Array{TF, 3}(undef, 3, nc+2, n)
     xyz_cp = Array{TF, 3}(undef, 3, nc, n)
     for j = 1:n
@@ -476,7 +532,32 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         # location of leading edge
         rle = SVector(xle[j], yle[j], zle[j])
 
-        # bound vortex chordwise locations (and trailing edge)
+        # panel edge chordwise locations
+        for i = 1:nc+1
+            # bound vortex location
+            xc = etac[i]
+            zc = fc[j](xc)
+
+            # location on airfoil
+            r = SVector(xc, 0, zc)
+
+            # scale by chord length
+            r = chord[j] * r
+
+            # apply twist
+            r = Rt * r
+
+            # apply dihedral
+            r = Rp * r
+
+            # add leading edge offset
+            r = r + rle
+
+            # store final location
+            xyz_edge[:,i,j] = r
+        end
+
+        # bound vortex chordwise locations (and leading and trailing edges)
         for i = 1:nc+2
             # bound vortex location
             xc = eta_qtr[i]
@@ -528,12 +609,13 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
     end
 
     # interpolate the grids to match the specified spanwise spacing
+    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s; ydir=2)
     xyz_corner = interpolate_grid(xyz_bound, etas, interp_s; ydir=2)
     xyz_center = interpolate_grid(xyz_bound, etabar, interp_s; ydir=2)
     xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; ydir=2)
 
     # initialize output
-    panels = Matrix{VortexRing{TF}}(undef,  nc, (1+mirror)*ns)
+    panels = Matrix{SurfacePanel{TF}}(undef,  nc, (1+mirror)*ns)
 
     # check which side we're working with
     right_side = sum(yle) > 0
@@ -560,14 +642,33 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
+            # set area
+            r1 = xyz_panels[:,i,j] # top left
+            r2 = xyz_panels[:,i,j+1] # top right
+            r3 = xyz_panels[:,i+1, j] # bottom left
+            r4 = xyz_panels[:,i+1, j+1] # bottom right
+            area = bretschneider_area(r1, r2, r3, r4)
+
             ip = i
             jp = mirror*right_side*ns + j
-            panels[ip, jp] = VortexRing{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+            panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
+                ncp, core_size, area)
         end
     end
 
     # other side
     if mirror
+        # first reflect grid
+        if right_side
+            xyz_l = reverse(xyz_panels, dims=3)
+            xyz_r = xyz_panels
+        else
+            xyz_l = xyz_panels
+            xyz_r = reverse(xyz_panels, dims=3)
+        end
+        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+
+        # then populate remaining panels
         for j = 1:ns
             for i = 1:nc
                 ip = i
@@ -578,25 +679,29 @@ function wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
         end
     end
 
-    return panels
+    return xyz_panels, panels
 end
 
 """
-    trailing_edge_points(surfaces)
+    trailing_edge_points(surface[s])
 
 Return points on the trailing edge of each surface.
 """
-trailing_edge_points(surface) = [bottom_left.(surface[end, :])..., bottom_right(surface[end, end])]
+trailing_edge_points(surfaces) = [bottom_left.(surfaces[end, :])..., bottom_right(surfaces[end, end])]
 
 """
-    repeated_trailing_edge_points(surfaces)
+    repeated_trailing_edge_points(surface[s])
 
 Generates a dictionary of the form `Dict((isurf, i) => [(jsurf1, j1), (jsurf2, j2)...]` which
 defines repeated trailing edge points.  Trailing edge point `i` on surface
 `isurf` is repeated on surface `jsurf1` at point `j1`, `jsurf2` at point `j2`,
 and so forth.
 """
-function repeated_trailing_edge_points(surfaces)
+repeated_trailing_edge_points
+
+repeated_trailing_edge_points(surface::AbstractMatrix) = repeated_trailing_edge_points([surface])
+
+function repeated_trailing_edge_points(surfaces::AbstractVector{<:AbstractMatrix})
 
     nsurf = length(surfaces)
     points = trailing_edge_points.(surfaces)
@@ -619,6 +724,23 @@ function repeated_trailing_edge_points(surfaces)
     end
 
     return repeated_points
+end
+
+"""
+    bretschneider_area(rtl, rtr, rbl, rbr)
+
+Compute the area of a quadrilateral in 3D space.  Note that the calculated area
+is not the true area for curved surfaces.
+"""
+@inline function bretschneider_area(rtl, rtr, rbl, rbr)
+    A = rbr - rtl
+    B = rbl - rtr
+    area = 1/4*sqrt(4*norm(A)^2*norm(B)^2 - (
+        norm(rbr - rbl)^2 + # bottom
+        norm(rtr - rtl)^2 - # top
+        norm(rbl - rtl)^2 - # left
+        norm(rbr - rtr)^2)^2) # right
+    return area
 end
 
 """

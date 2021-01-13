@@ -112,16 +112,16 @@ function normal_velocity_derivatives(surface::AbstractMatrix, ref, fs)
     b = Vector{TF}(undef, N)
 
     # derivatives of RHS wrt freestream variables
-    b_a = Vector{TF}(undef, N)
-    b_b = Vector{TF}(undef, N)
-    b_p = Vector{TF}(undef, N)
-    b_q = Vector{TF}(undef, N)
-    b_r = Vector{TF}(undef, N)
+    w_a = Vector{TF}(undef, N)
+    w_b = Vector{TF}(undef, N)
+    w_p = Vector{TF}(undef, N)
+    w_q = Vector{TF}(undef, N)
+    w_r = Vector{TF}(undef, N)
 
     # pack up derivatives
-    db = (b_a, b_b, b_p, b_q, b_r)
+    dw = (w_a, w_b, w_p, w_q, w_r)
 
-    return normal_velocity_derivatives!(b, db, surface, ref, fs)
+    return normal_velocity_derivatives!(b, dw, surface, ref, fs)
 end
 
 # multiple surfaces
@@ -134,34 +134,34 @@ function normal_velocity_derivatives(surfaces::AbstractVector{<:AbstractMatrix},
     b = Vector{TF}(undef, N)
 
     # derivatives of RHS wrt freestream variables
-    b_a = Vector{TF}(undef, N)
-    b_b = Vector{TF}(undef, N)
-    b_p = Vector{TF}(undef, N)
-    b_q = Vector{TF}(undef, N)
-    b_r = Vector{TF}(undef, N)
+    w_a = Vector{TF}(undef, N)
+    w_b = Vector{TF}(undef, N)
+    w_p = Vector{TF}(undef, N)
+    w_q = Vector{TF}(undef, N)
+    w_r = Vector{TF}(undef, N)
 
     # pack up derivatives
-    db = (b_a, b_b, b_p, b_q, b_r)
+    dw = (w_a, w_b, w_p, w_q, w_r)
 
-    return normal_velocity_derivatives!(b, db, surfaces, ref, fs)
+    return normal_velocity_derivatives!(b, dw, surfaces, ref, fs)
 end
 
 """
-    normal_velocity_derivatives!(b, db, surface[s], ref, fs)
+    normal_velocity_derivatives!(b, dw, surface[s], ref, fs)
 
 Non-allocating version of `normal_velocity_derivatives`
 """
 normal_velocity_derivatives!
 
 # single surface
-function normal_velocity_derivatives!(b, db, surface, ref, fs)
+function normal_velocity_derivatives!(b, dw, surface, ref, fs)
 
     N = length(surface)
 
     c = CartesianIndices(surface)
 
     # unpack derivatives
-    (b_a, b_b, b_p, b_q, b_r) = db
+    (w_a, w_b, w_p, w_q, w_r) = dw
 
     # iterate through surface
     for i = 1:N
@@ -184,26 +184,26 @@ function normal_velocity_derivatives!(b, db, surface, ref, fs)
         b[i] = -dot(Vext, nhat)
 
         # associated derivatives
-        b_a[i] = -dot(Vext_a, nhat)
-        b_b[i] = -dot(Vext_b, nhat)
-        b_p[i] = -dot(Vext_pb, nhat)
-        b_q[i] = -dot(Vext_qb, nhat)
-        b_r[i] = -dot(Vext_rb, nhat)
+        w_a[i] = -dot(Vext_a, nhat)
+        w_b[i] = -dot(Vext_b, nhat)
+        w_p[i] = -dot(Vext_pb, nhat)
+        w_q[i] = -dot(Vext_qb, nhat)
+        w_r[i] = -dot(Vext_rb, nhat)
 
     end
 
-    db = (b_a, b_b, b_p, b_q, b_r)
+    dw = (w_a, w_b, w_p, w_q, w_r)
 
-    return b, db
+    return b, dw
 end
 
 # multiple surfaces
-function normal_velocity_derivatives!(b, db, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+function normal_velocity_derivatives!(b, dw, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
 
     nsurf = length(surfaces)
 
     # unpack derivatives
-    (b_a, b_b, b_p, b_q, b_r) = db
+    (w_a, w_b, w_p, w_q, w_r) = dw
 
     # index for keeping track of where we are in the b vector
     ib = 0
@@ -216,7 +216,7 @@ function normal_velocity_derivatives!(b, db, surfaces::AbstractVector{<:Abstract
 
         # create view into RHS vector and its derivatives
         vb = view(b, ib+1:ib+n)
-        vdb = view.(db, Ref(ib+1:ib+n))
+        vdb = view.(dw, Ref(ib+1:ib+n))
 
         # fill in RHS vector and its derivatives
         normal_velocity_derivatives!(vb, vdb, surfaces[i], ref, fs)
@@ -258,7 +258,7 @@ function wake_normal_velocity(surface::AbstractMatrix, wake::AbstractMatrix; kwa
     N = length(surface)
     b = zeros(TF, N)
 
-    return add_wake_normal_velocity!(b, surface, wake; kwargs...)
+    return -subtract_wake_normal_velocity!(b, surface, wake; kwargs...)
 end
 
 """
@@ -301,13 +301,13 @@ function wake_normal_velocity(surfaces::AbstractVector{<:AbstractMatrix},
     N = sum(length.(surfaces))
     b = zeros(TF, N)
 
-    return add_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
+    return -subtract_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
 end
 
 """
-    add_wake_normal_velocity!(b, surface, wake; kwargs...)
+    subtract_wake_normal_velocity!(b, surface, wake; kwargs...)
 
-Adds the normal induced velocity from `wake` onto the control points of `surface`
+Subtracts the normal induced velocity from `wake` onto the control points of `surface`
 to the existing vector `b`
 
 # Keyword Arguments
@@ -328,8 +328,8 @@ to the existing vector `b`
     the last chordwise panel of each wake
  - `xhat`: direction in which trailing vortices are shed
 """
-@inline function add_wake_normal_velocity!(b, surface::AbstractMatrix, wake::AbstractMatrix;
-    surface_id = 1, wake_id = -1, kwargs...)
+@inline function subtract_wake_normal_velocity!(b, surface::AbstractMatrix, wake::AbstractMatrix;
+    surface_id = 1, wake_id = -1, nwake = size(surface, 1), kwargs...)
 
     finite_core = wake_id < 0 || surface_id != wake_id
 
@@ -343,22 +343,22 @@ to the existing vector `b`
         nhat = normal(surface[i])
 
         # get induced velocity at rcp from the wake
-        Vind = induced_velocity(rcp, wake; finite_core, kwargs...)
+        Vind = induced_velocity(rcp, wake; finite_core, kwargs..., nc = nwake)
 
-        # add normal velocity
-        b[i] += dot(Vind, nhat)
+        # subtract normal velocity
+        b[i] -= dot(Vind, nhat)
     end
 
     return b
 end
 
 """
-    add_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
+    subtract_wake_normal_velocity!(b, surfaces, wakes; kwargs...)
 
 Pre-allocated version of `wake_normal_velocity` which adds the normal induced
 velocity created by the wakes to the existing vector `b`
 """
-function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix},
+function subtract_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix},
     wakes::AbstractVector{<:AbstractMatrix};
     surface_id = 1:length(surfaces),
     wake_id = -1:-1:-length(wakes),
@@ -384,7 +384,7 @@ function add_wake_normal_velocity!(b, surfaces::AbstractVector{<:AbstractMatrix}
         # fill in RHS vector
         for j = 1:nsurf
 
-            add_wake_normal_velocity!(vb, surfaces[i], wakes[j];
+            subtract_wake_normal_velocity!(vb, surfaces[i], wakes[j];
                 finite_core = wake_id[j] < 0 || surface_id[i] != wake_id[j],
                 symmetric = symmetric[j],
                 nwake = nwake[j],
@@ -417,15 +417,15 @@ Pre-allocated version of `circulation`
 circulation!(Γ, AIC, b) = ldiv!(Γ, lu(AIC), b)
 
 """
-    circulation_derivatives(AIC, b, db)
+    circulation_derivatives(AIC, b, dw)
 
 Solve for the circulation distribution and its derivatives with respect to
 (alpha, beta, p, q, r)    .
 """
-function circulation_derivatives(AIC, b, db)
+function circulation_derivatives(AIC, b, dw)
 
     # unpack derivatives
-    (b_a, b_b, b_p, b_q, b_r) = db
+    (w_a, w_b, w_p, w_q, w_r) = dw
 
     # factorize AIC matrix (since we'll be reusing it)
     fAIC = factorize(AIC)
@@ -433,11 +433,11 @@ function circulation_derivatives(AIC, b, db)
     # solve for circulation and its derivatives
     Γ = fAIC\b
 
-    Γ_a = fAIC\b_a
-    Γ_b = fAIC\b_b
-    Γ_pb = fAIC\b_p
-    Γ_qb = fAIC\b_q
-    Γ_rb = fAIC\b_r
+    Γ_a = fAIC\w_a
+    Γ_b = fAIC\w_b
+    Γ_pb = fAIC\w_p
+    Γ_qb = fAIC\w_q
+    Γ_rb = fAIC\w_r
 
     # pack up derivatives
     dΓ = (Γ_a, Γ_b, Γ_pb, Γ_qb, Γ_rb)
@@ -446,15 +446,15 @@ function circulation_derivatives(AIC, b, db)
 end
 
 """
-    circulation_derivatives!(Γ, dΓ, AIC, b, db)
+    circulation_derivatives!(Γ, dΓ, AIC, b, dw)
 
 Pre-allocated version of `circulation_derivatives`
 """
-function circulation_derivatives!(Γ, dΓ, AIC, b, db)
+function circulation_derivatives!(Γ, dΓ, AIC, b, dw)
 
     # unpack derivatives
     (Γ_a, Γ_b, Γ_p, Γ_q, Γ_r) = dΓ
-    (b_a, b_b, b_p, b_q, b_r) = db
+    (w_a, w_b, w_p, w_q, w_r) = dw
 
     # factorize AIC matrix (since we'll be reusing it)
     fAIC = lu(AIC)
@@ -462,11 +462,11 @@ function circulation_derivatives!(Γ, dΓ, AIC, b, db)
     # solve for circulation and its derivatives
     ldiv!(Γ, fAIC, b)
 
-    ldiv!(Γ_a, fAIC, b_a)
-    ldiv!(Γ_b, fAIC, b_b)
-    ldiv!(Γ_p, fAIC, b_p)
-    ldiv!(Γ_q, fAIC, b_q)
-    ldiv!(Γ_r, fAIC, b_r)
+    ldiv!(Γ_a, fAIC, w_a)
+    ldiv!(Γ_b, fAIC, w_b)
+    ldiv!(Γ_p, fAIC, w_p)
+    ldiv!(Γ_q, fAIC, w_q)
+    ldiv!(Γ_r, fAIC, w_r)
 
     return Γ, dΓ
 end

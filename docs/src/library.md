@@ -18,8 +18,8 @@ VortexRing
 VortexRing()
 Wake
 Wake()
-grid_to_vortex_rings
-wing_to_vortex_rings
+grid_to_surface_panels
+wing_to_surface_panels
 translate(surface::AbstractMatrix, r)
 translate!(surface::AbstractMatrix, r)
 reflect(surface::AbstractMatrix)

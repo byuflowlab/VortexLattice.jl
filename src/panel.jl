@@ -1,7 +1,7 @@
 """
-    VortexRing{TF}
+    SurfacePanel{TF}
 
-Vortex ring shaped panel element.
+Lifting surface panel with attached vortex ring
 
 **Fields**
  - `rtl`: position of the left side of the top bound vortex
@@ -12,9 +12,12 @@ Vortex ring shaped panel element.
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `core_size`: finite core size
+ - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
+ - `area`: panel area (for defining transient forces using the unsteady part
+    of Bernoulli's equation). Note that this value is not the same as the area
+    enclosed by the vortex ring.
 """
-struct VortexRing{TF}
+struct SurfacePanel{TF}
     rtl::SVector{3, TF}
     rtc::SVector{3, TF}
     rtr::SVector{3, TF}
@@ -24,106 +27,120 @@ struct VortexRing{TF}
     rcp::SVector{3, TF}
     ncp::SVector{3, TF}
     core_size::TF
+    area::TF
 end
 
 """
-    VortexRing(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc, rbc)
+    SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area; kwargs...)
 
 Construct and return a vortex ring panel.
 
-**Arguments**
+# Arguments
  - `rtl`: position of the left side of the top bound vortex
  - `rtr`: position of the right side of the top bound vortex
  - `rbl`: position of the left side of the bottom bound vortex
  - `rbr`: position of the right side of the bottom bound vortex
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
- - `core_size`: core_size length for finite core calculations
- - `rtc`: (optional) position of the center of the top bound vortex, defaults to `(rtl+rtr)/2`
- - `rbc`: (optional) position of the center of the bottom bound vortex, defaults to `(rbl+rbr)/2`
+ - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
+ - `area`: panel area (for defining transient forces using the unsteady part
+    of Bernoulli's equation). Note that this value is not the same as the area
+    enclosed by the vortex ring.
+
+# Keyword Arguments
+ - `rtc`: position of the center of the top bound vortex, defaults to `(rtl+rtr)/2`
+ - `rbc`: position of the center of the bottom bound vortex, defaults to `(rbl+rbr)/2`
 """
-VortexRing(args...; kwargs...)
+SurfacePanel(args...; kwargs...)
 
-VortexRing(rtl, rtr, rbl, rbr, rcp, ncp, core_size; rtc=(rtl+rtr)/2, rbc=(rbl+rbr)/2) =
-    VortexRing(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+function SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area;
+    rtc = (rtl+rtr)/2, # default to average of corners
+    rbc = (rbl+rbr)/2) # default to average of corners
 
-function VortexRing(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
-    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc), eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size))
-    return VortexRing{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
 end
 
-@inline Base.eltype(::Type{VortexRing{TF}}) where TF = TF
-@inline Base.eltype(::VortexRing{TF}) where TF = TF
+function SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+
+    TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc),
+        eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size), typeof(area))
+
+    return SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+end
+
+@inline Base.eltype(::Type{SurfacePanel{TF}}) where TF = TF
+@inline Base.eltype(::SurfacePanel{TF}) where TF = TF
 
 """
-    top_left(panel::VortexRing)
+    top_left(panel::SurfacePanel)
 
-Return the top left vertex of `panel`
+Return the top left vertex of the vortex ring associated with `panel`
 """
-@inline top_left(panel::VortexRing) = panel.rtl
-
-"""
-    top_center(panel::VortexRing)
-
-Return the top center vertex of `panel`
-"""
-@inline top_center(panel::VortexRing) = panel.rtc
+@inline top_left(panel::SurfacePanel) = panel.rtl
 
 """
-    top_right(panel::VortexRing)
+    top_center(panel::SurfacePanel)
 
-Return the top right vertex of `panel`
+Return the top center vertex of the vortex ring associated with `panel`
 """
-@inline top_right(panel::VortexRing) = panel.rtr
-
-"""
-    bottom_left(panel::VortexRing)
-
-Return the bottom left vertex of `panel`
-"""
-@inline bottom_left(panel::VortexRing) = panel.rbl
+@inline top_center(panel::SurfacePanel) = panel.rtc
 
 """
-    bottom_center(panel::VortexRing)
+    top_right(panel::SurfacePanel)
 
-Return the bottom center vertex of `panel`
+Return the top right vertex of the vortex ring associated with `panel`
 """
-@inline bottom_center(panel::VortexRing) = panel.rbc
-
-"""
-    bottom_right(panel::VortexRing)
-
-Return the bottom right vertex of `panel`
-"""
-@inline bottom_right(panel::VortexRing) = panel.rbr
+@inline top_right(panel::SurfacePanel) = panel.rtr
 
 """
-    controlpoint(panel::VortexRing)
+    bottom_left(panel::SurfacePanel)
+
+Return the bottom left vertex of the vortex ring associated with `panel`
+"""
+@inline bottom_left(panel::SurfacePanel) = panel.rbl
+
+"""
+    bottom_center(panel::SurfacePanel)
+
+Return the bottom center vertex of the vortex ring associated with `panel`
+"""
+@inline bottom_center(panel::SurfacePanel) = panel.rbc
+
+"""
+    bottom_right(panel::SurfacePanel)
+
+Return the bottom right vertex of the vortex ring associated with `panel`
+"""
+@inline bottom_right(panel::SurfacePanel) = panel.rbr
+
+"""
+    controlpoint(panel::SurfacePanel)
 
 Return the control point of `panel` (typically located at the 3/4 chord)
 """
-@inline controlpoint(panel::VortexRing) = panel.rcp
+@inline controlpoint(panel::SurfacePanel) = panel.rcp
 
 """
-    normal(panel::VortexRing)
+    normal(panel::SurfacePanel)
 
-Return the normal vector of `panel`
+Return the normal vector of `panel` at the panel control point
 """
-@inline normal(panel::VortexRing) = panel.ncp
-
-"""
-    get_core_size(panel::VortexRing)
-
-Return the panel core size
-"""
-@inline get_core_size(panel::VortexRing) = panel.core_size
+@inline normal(panel::SurfacePanel) = panel.ncp
 
 """
-    translate(panel::VortexRing, r)
+    get_core_size(panel::SurfacePanel)
+
+Return the core size (smoothing parameter) corresponding to the vortex ring
+associated with `panel`
+"""
+@inline get_core_size(panel::SurfacePanel) = panel.core_size
+
+"""
+    translate(panel::SurfacePanel, r)
 
 Return a copy of `panel` translated the distance specified by vector `r`
 """
-@inline function translate(panel::VortexRing, r)
+@inline function translate(panel::SurfacePanel, r)
 
     rtl = panel.rtl + r
     rtc = panel.rtc + r
@@ -134,14 +151,15 @@ Return a copy of `panel` translated the distance specified by vector `r`
     rcp = panel.rcp + r
     ncp = panel.ncp
     core_size = panel.core_size
+    area = panel.area
 
-    return VortexRing(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
 end
 
 """
     translate(surface, r)
 
-Return a copy of `surface` translated the distance specified by vector `r`
+Return a copy of the panels in `surface` translated the distance specified by vector `r`
 """
 translate(surface::AbstractMatrix, r) = translate.(surface, Ref(r))
 
@@ -160,11 +178,11 @@ function translate!(surface, r)
 end
 
 """
-    reflect(panel::VortexRing)
+    reflect(panel::SurfacePanel)
 
-Reflects a panel across the X-Z plane.
+Reflect `panel` across the X-Z plane.
 """
-@inline function reflect(panel::VortexRing)
+@inline function reflect(panel::SurfacePanel)
 
     rtl = flipy(panel.rtr)
     rtc = flipy(panel.rtc)
@@ -175,73 +193,74 @@ Reflects a panel across the X-Z plane.
     rcp = flipy(panel.rcp)
     ncp = flipy(panel.ncp)
     core_size = panel.core_size
+    area = panel.area
 
-    return VortexRing(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
 end
 
 """
     reflect(surface)
 
-Reflects `surface` about the X-Z plane
+Reflects the panels in `surface` across the X-Z plane
 """
 reflect(surface::AbstractMatrix) = reflect.(reverse(surface, dims=2))
 
 """
-    left_center(panel::VortexRing)
+    left_center(panel::SurfacePanel)
 
-Return the center of the left bound vortex on `panel`
+Return the center of the left bound vortex of the vortex ring associated with `panel`
 """
-@inline left_center(panel::VortexRing) = (top_left(panel) + bottom_left(panel))/2
-
-"""
-    right_center(panel::VortexRing)
-
-Return the center of the right bound vortex on `panel`
-"""
-@inline right_center(panel::VortexRing) = (top_right(panel) + bottom_right(panel))/2
+@inline left_center(panel::SurfacePanel) = (top_left(panel) + bottom_left(panel))/2
 
 """
-    top_vector(panel::VortexRing)
+    right_center(panel::SurfacePanel)
 
-Returns the path of the top bound vortex for `panel`
+Return the center of the right bound vortex of the vortex ring associated with `panel`
 """
-@inline top_vector(panel::VortexRing) = top_right(panel) - top_left(panel)
+@inline right_center(panel::SurfacePanel) = (top_right(panel) + bottom_right(panel))/2
+
+"""
+    top_vector(panel::SurfacePanel)
+
+Return the path of the top bound vortex of the vortex ring associated with `panel`
+"""
+@inline top_vector(panel::SurfacePanel) = top_right(panel) - top_left(panel)
 
 """
     left_vector(panel)
 
-Return the path of the left bound vortex for `panel`
+Return the path of the left bound vortex of the vortex ring associated with `panel`
 """
-@inline left_vector(panel::VortexRing) = top_left(panel) - bottom_left(panel)
+@inline left_vector(panel::SurfacePanel) = top_left(panel) - bottom_left(panel)
 
 """
     right_vector(panel)
 
-Return the path of the right bound vortex for `panel`
+Return the path of the right bound vortex of the vortex ring associated with `panel`
 """
-@inline right_vector(panel::VortexRing) = bottom_right(panel) - top_right(panel)
+@inline right_vector(panel::SurfacePanel) = bottom_right(panel) - top_right(panel)
 
 """
     bottom_vector(panel)
 
-Return the path of the bottom bound vortex for `panel`
+Return the path of the bottom bound vortex of the vortex ring associated with `panel`
 """
-@inline bottom_vector(panel::VortexRing) = bottom_left(panel) - bottom_right(panel)
+@inline bottom_vector(panel::SurfacePanel) = bottom_left(panel) - bottom_right(panel)
 
 """
-    Wake{TF}
+    WakePanel{TF}
 
-Wake panel element.
+SurfacePanel used for modeling wakes.
 
 **Fields**
  - `rtl`: position of the left side of the top bound vortex
  - `rtr`: position of the right side of the top bound vortex
  - `rbl`: position of the left side of the bottom bound vortex
  - `rbr`: position of the right side of the bottom bound vortex
- - `core_size`: finite core size
+ - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
  - `gamma`: circulation strength of the panel
 """
-struct Wake{TF}
+struct WakePanel{TF}
     rtl::SVector{3, TF}
     rtr::SVector{3, TF}
     rbl::SVector{3, TF}
@@ -251,9 +270,9 @@ struct Wake{TF}
 end
 
 """
-    Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+    WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 
-Construct and return a wake panel element.
+Construct and return a wake panel.
 
 **Arguments**
  - `rtl`: position of the left side of the top bound vortex
@@ -263,36 +282,36 @@ Construct and return a wake panel element.
  - `core_size`: finite core size
  - `gamma`: circulation strength of the panel
 """
-Wake(args...; kwargs...)
+WakePanel(args...; kwargs...)
 
-function Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+function WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 
     TF = promote_type(eltype(rtl), eltype(rtr), eltype(rbl), eltype(rbr), typeof(core_size), typeof(gamma))
 
-    return Wake{TF}(rtl, rtr, rbl, rbr, core_size, gamma)
+    return WakePanel{TF}(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
-@inline Base.eltype(::Type{Wake{TF}}) where TF = TF
-@inline Base.eltype(::Wake{TF}) where TF = TF
+@inline Base.eltype(::Type{WakePanel{TF}}) where TF = TF
+@inline Base.eltype(::WakePanel{TF}) where TF = TF
 
-@inline top_left(panel::Wake) = panel.rtl
+@inline top_left(panel::WakePanel) = panel.rtl
 
-@inline top_right(panel::Wake) = panel.rtr
+@inline top_right(panel::WakePanel) = panel.rtr
 
-@inline bottom_left(panel::Wake) = panel.rbl
+@inline bottom_left(panel::WakePanel) = panel.rbl
 
-@inline bottom_right(panel::Wake) = panel.rbr
+@inline bottom_right(panel::WakePanel) = panel.rbr
 
-@inline get_core_size(panel::Wake) = panel.core_size
+@inline get_core_size(panel::WakePanel) = panel.core_size
 
 """
-    circulation_strength(panel::Wake)
+    circulation_strength(panel::WakePanel)
 
-Return circulation strength of the wake panel.
+Return the circulation strength of the wake panel.
 """
-@inline circulation_strength(panel::Wake) = panel.gamma
+@inline circulation_strength(panel::WakePanel) = panel.gamma
 
-@inline function translate(panel::Wake, r)
+@inline function translate(panel::WakePanel, r)
 
     rtl = panel.rtl + r
     rtr = panel.rtr + r
@@ -301,10 +320,10 @@ Return circulation strength of the wake panel.
     core_size = panel.core_size
     gamma = panel.gamma
 
-    return Wake(rtl, rtr, rbl, rbr, core_size, gamma)
+    return WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
-@inline function reflect(panel::Wake)
+@inline function reflect(panel::WakePanel)
 
     rtl = flipy(panel.rtr)
     rtr = flipy(panel.rtl)

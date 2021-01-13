@@ -41,7 +41,7 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # construct surface
-surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+surface = wing_to_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
 
 # declare symmetry
 symmetric = true
@@ -97,7 +97,7 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # construct surface (and mirror geometry)
-surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+surface = wing_to_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # declare symmetry
 symmetric = false
@@ -153,7 +153,7 @@ fs = Freestream(alpha, beta, Omega, vother)
 symmetric = true
 
 # construct surface
-surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+surface = wing_to_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
 
 # perform steady state analysis
 system = steady_analysis(surface, ref, fs; symmetric=symmetric)
@@ -231,14 +231,14 @@ fs = Freestream(alpha, beta, Omega, vother)
 symmetric = [true, true, false]
 
 # generate vortex rings
-wing = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+wing = wing_to_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-htail = wing_to_vortex_rings(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+htail = wing_to_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
     mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(htail, [4.0, 0.0, 0.0])
 
-vtail = wing_to_vortex_rings(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+vtail = wing_to_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
     mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -292,7 +292,7 @@ vother = nothing
 fs = Freestream(alpha, beta, Omega, vother)
 
 # generate vortex rings
-surface = wing_to_vortex_rings(xle, yle, zle, chord, theta, phi, ns, nc;
+surface = wing_to_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
 system = steady_analysis(surface, ref, fs; symmetric=symmetric)

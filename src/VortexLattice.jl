@@ -10,14 +10,8 @@ const RHO = 1.0
 const VINF = 1.0
 const QINF = 0.5*RHO*VINF^2
 
-# useful functions for dealing with tuples
-tuple_len(::NTuple{N,Any}) where N = N
-tuple_len(::Type{<:NTuple{N,Any}}) where N = N
-tuple_type_param(t::Tuple, ::Val{i}) where {T <: Tuple, i} = typeof(t[i])
-tuple_type_param(::Type{T}, ::Val{i}) where {T <: Tuple, i} = T.parameters[i]
-
 include("panel.jl")
-export VortexRing
+export SurfacePanel, WakePanel, TrefftzPanel
 export translate, translate!, reflect
 
 include("wake.jl")
@@ -25,7 +19,7 @@ export Wake
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
-export grid_to_vortex_rings, wing_to_vortex_rings
+export grid_to_surface_panels, wing_to_surface_panels
 export translate, translate!, reflect
 
 include("reference.jl")

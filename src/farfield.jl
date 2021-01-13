@@ -22,7 +22,7 @@ been computed and is present in `system`
 function far_field_drag(system, surface::AbstractMatrix, ref, fs; symmetric)
 
     # unpack system
-    Γ = system.gamma
+    Γ = system.Γ
     trefftz = system.trefftz[1]
 
     trefftz_panels!(trefftz, surface, fs, Γ)
@@ -54,7 +54,7 @@ function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref,
     fs; symmetric)
 
     # unpack system
-    Γ = system.gamma
+    Γ = system.Γ
     trefftz = system.trefftz
 
     # construct trefftz panels
