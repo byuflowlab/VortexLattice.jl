@@ -1,5 +1,5 @@
-# Run 9: Simple Wing - Stability Derivatives
-echo -e "oper\na a 1\nb b 5\nx\nsb\n\n\nquit\n" > commands
+# Run 11: Simple Wing - Stability Derivatives
+echo -e "oper\na a 1\nx\nst\n\n\nquit\n" > commands
 cat commands | avl simplewing1.avl > output
 grep -o "CLa =.*" output
 grep -o "CYa =.*" output

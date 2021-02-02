@@ -1,5 +1,5 @@
 # Run 1: Simple Wing with Uniform Spacing
-echo -e "oper\na a 1\nb b 5\nx\n\nquit\n" > commands
+echo -e "oper\na a 1\nx\n\nquit\n" > commands
 cat commands | avl simplewing1.avl > output
 grep -o "CLtot.*" output
 grep -o "CDtot.*" output
