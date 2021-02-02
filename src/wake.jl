@@ -498,7 +498,6 @@ end
                         nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
-
                 else
                     # induced velocity from wake on another wake's vertex
                     wake_velocities[isurf][I] += induced_velocity(rc, wakes[jsurf];
@@ -630,6 +629,7 @@ wake panels.
     wake_velocities, dt, surface, Γ; nwake)
 
     nc, ns = size(surface)
+    nw = size(wake, 1)
     ls = LinearIndices((nc, ns))
 
     # replace the last chordwise panels with the newly shed wake panels
@@ -653,8 +653,8 @@ wake panels.
         wake[end,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
     end
 
-    # translate all wake panels except the most recently shed panels
-    translate_wake!(wake, wake_velocities, dt; nwake = nwake)
+    # translate all existing wake panels except the most recently shed panels
+    translate_wake!(wake, wake_velocities, dt; nwake = min(nwake, nw-1))
 
     # shift wake panels to make newly shed wake panel first
     rowshift!(wake)

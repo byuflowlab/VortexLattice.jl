@@ -929,7 +929,7 @@ performed to obtain the panel forces.
 end
 
 """
-    body_force_history(surface, surface_history, ref, fs; symmetric, frame=Body())
+    body_forces_history(surface, surface_history, ref, fs; symmetric, frame=Body())
 
 Return the body force coefficients `CF`, `CM` at each time step in `surface_history`.
 
@@ -953,14 +953,14 @@ rather than a common freestream velocity**
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
    [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
 """
-function body_force_history(surface::AbstractMatrix, surface_history, ref, fs;
+function body_forces_history(surface::AbstractMatrix, surface_history, ref, fs;
     symmetric, frame=Body())
 
     # float type
-    TF = eltype(eltype(surface_history))
+    TF = eltype(eltype(eltype(surface_history)))
 
     # number of time steps
-    nt = length(surface_properties)
+    nt = length(surface_history)
 
     # convert single freestream input to vector
     if isa(fs, Freestream)
@@ -973,14 +973,14 @@ function body_force_history(surface::AbstractMatrix, surface_history, ref, fs;
 
     # populate time history coefficients
     for it = 1:nt
-        CF[it], CM[it] = body_forces(surfaces, surface_properties[it], ref, fs[it]; symmetric, frame)
+        CF[it], CM[it] = body_forces(surface, surface_history[it], ref, fs[it]; symmetric, frame)
     end
 
     return CF, CM
 end
 
 """
-    body_force_history(surfaces, surface_history, ref, fs; symmetric, frame=Body())
+    body_forces_history(surfaces, surface_history, ref, fs; symmetric, frame=Body())
 
 Return the body force coefficients `CF`, `CM` at each time step in `surface_history`.
 
@@ -1004,14 +1004,14 @@ rather than a common freestream velocity**
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
    [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
 """
-function body_forces_over_time(surfaces::AbstractVector{<:AbstractMatrix},
+function body_forces_history(surfaces::AbstractVector{<:AbstractMatrix},
     surface_history, ref, fs; symmetric, frame=Body())
 
     # float type
-    TF = eltype(eltype(eltype(surface_properties)))
+    TF = eltype(eltype(eltype(eltype(surface_history))))
 
     # number of time steps
-    nt = length(surface_properties)
+    nt = length(surface_history)
 
     # convert single freestream input to vector
     if isa(fs, Freestream)
@@ -1024,7 +1024,7 @@ function body_forces_over_time(surfaces::AbstractVector{<:AbstractMatrix},
 
     # populate time history coefficients
     for it = 1:nt
-        CF[it], CM[it] = body_forces(surfaces, surface_properties[it], ref, fs[it]; symmetric, frame)
+        CF[it], CM[it] = body_forces(surfaces, surface_history[it], ref, fs[it]; symmetric, frame)
     end
 
     return CF, CM
