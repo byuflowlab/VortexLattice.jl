@@ -39,8 +39,8 @@ export PanelProperties, get_panel_properties
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
-export unsteady_analysis, unsteady_analysis!
 export prescribed_motion
+export unsteady_analysis, unsteady_analysis!
 
 include("nearfield.jl")
 export body_forces

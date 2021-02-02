@@ -319,7 +319,7 @@ function prescribed_motion(dt;
     end
 
     # get common floating point type
-    TF = promote_type(eltype(t), typeof(c), eltype(Xdot), eltype(Ydot), eltype(Zdot),
+    TF = promote_type(eltype(dt), eltype(Xdot), eltype(Ydot), eltype(Zdot),
         eltype(p), eltype(q), eltype(r), typeof(phi0), typeof(theta0), typeof(psi0))
 
     # number of discrete time steps
@@ -358,7 +358,7 @@ function prescribed_motion(dt;
         # assemble freestream parameters
         fs[it] = Freestream(α, β, Ω)
 
-        if it < length(t)
+        if it < length(dt)
             # update orientation
             ϕ += p[it]*dt[it]
             θ += q[it]*dt[it]

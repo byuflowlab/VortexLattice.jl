@@ -1028,10 +1028,6 @@ end
 
     @test isapprox(w_surface, w_wake)
 
-    # Test wake velocity calculations:
-
-
-
 end
 
 @testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
@@ -1043,49 +1039,47 @@ end
 
     Uinf = 1.0
 
-    for AR in [4, 8, 12, 20, 100]
+    AR = 4
 
-        # reference parameters
-        cref = 1.0
-        bref = AR
-        Sref = bref*cref
-        rref = [0.0, 0.0, 0.0]
-        ref = Reference(Sref, cref, bref, rref)
+    # reference parameters
+    cref = 1.0
+    bref = AR
+    Sref = bref*cref
+    rref = [0.0, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
 
-        # freestream parameters
-        alpha = 5.0*pi/180
-        beta = 0.0
-        Omega = [0.0; 0.0; 0.0]
-        vother = nothing
-        fs = Freestream(alpha, beta, Omega, vother)
+    # freestream parameters
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
 
-        # geometry
-        xle = [0.0, 0.0]
-        yle = [-bref/2, bref/2]
-        zle = [0.0, 0.0]
-        chord = [cref, cref]
-        theta = [0.0, 0.0]
-        phi = [0.0, 0.0]
-        ns = 13
-        nc = 4
-        spacing_s = Uniform()
-        spacing_c = Uniform()
-        mirror = false
-        symmetric = false
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [-bref/2, bref/2]
+    zle = [0.0, 0.0]
+    chord = [cref, cref]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = false
 
-        # non-dimensional time
-        time = range(0.0, step=1/25, length = 100)
-        dt = [time[i+1]-time[i] for i = 1:length(time)-1]
+    # non-dimensional time
+    time = range(0.0, step=1/16)
+    dt = [time[i+1]-time[i] for i = 1:length(time)-1]
 
-        # create vortex rings
-        grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-            mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    # create vortex rings
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-        # run analysis
-        system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
-            symmetric=symmetric)
-
-    end
+    # run analysis
+    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+        symmetric=symmetric)
 
 end
 

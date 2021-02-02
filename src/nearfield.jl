@@ -247,10 +247,10 @@ end
 """
     near_field_forces_derivatives!(system, surface[s], ref, fs; kwargs...)
 
-Version of [`near_field_forces`](@ref) that also calculates the derivatives of
+Version of [`near_field_forces!`](@ref) that also calculates the derivatives of
 the panel forces with respect to the freestream variables.
 """
-near_field_forces_derivatives
+near_field_forces_derivatives!
 
 # single surface
 @inline function near_field_forces_derivatives!(system, surface::AbstractMatrix, ref, fs;
@@ -542,8 +542,8 @@ performed to obtain the panel forces.**
 # Keyword Arguments
  - `symmetric`: (required) Flag indicating whether a mirror image (across the X-Z plane) of
     the panels in `surface` should be used when calculating induced velocities.
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
 function body_forces(system::System, surface::AbstractMatrix, ref, fs; symmetric,
     frame = Body())
@@ -572,8 +572,8 @@ performed to obtain `surface_properties`.**
 # Keyword Arguments
  - `symmetric`: (required) Flag indicating whether a mirror image (across the X-Z plane) of
     the panels in `surface` should be used when calculating induced velocities.
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
 function body_forces(surface::AbstractMatrix, surface_properties, ref, fs; symmetric,
     frame = Body())
@@ -600,8 +600,8 @@ performed to obtain the panel forces.**
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror image
    (across the X-Z plane) should be used when calculating induced velocities
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
 function body_forces(system::System, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs;
     symmetric = fill(false, length(surfaces)),
@@ -632,8 +632,8 @@ performed to obtain the panel forces.
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror image
    (across the X-Z plane) should be used when calculating induced velocities
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
 function body_forces(surfaces::AbstractVector, surface_properties, ref, fs; symmetric,
     frame = Body())
@@ -950,8 +950,8 @@ rather than a common freestream velocity**
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror image
    (across the X-Z plane) should be used when calculating induced velocities
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)
 """
 function body_forces_history(surface::AbstractMatrix, surface_history, ref, fs;
     symmetric, frame=Body())
@@ -1001,8 +1001,8 @@ rather than a common freestream velocity**
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror image
    (across the X-Z plane) should be used when calculating induced velocities
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref Body) (default),
-   [`Stability()`](@ref Stability), and [`Wind()](@ref Wind)`
+ - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
+   [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
 function body_forces_history(surfaces::AbstractVector{<:AbstractMatrix},
     surface_history, ref, fs; symmetric, frame=Body())
