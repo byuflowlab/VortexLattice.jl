@@ -1,8 +1,6 @@
 # Guide
 
-This guide demonstrates the basic steady analysis capabilities of VortexLattice.
-See the examples for more advanced uses of VortexLattice, including unsteady
-simulations.
+This guide demonstrates the basic steady analysis capabilities of VortexLattice. See the examples for more advanced uses of VortexLattice, including unsteady simulations.
 
 We start by loading the package.
 
@@ -105,10 +103,10 @@ Cl, Cm, Cn = CM
 nothing #hide
 ```
 
-We can also extract the forces on the panels on each surface using the `panel_properties` function.
+We can also extract the forces on the panels on each surface using the `get_panel_properties` function.
 
-```
-properties = panel_properties(system)
+```@example guide
+properties = get_panel_properties(system, surface)
 nothing #hide
 ```
 

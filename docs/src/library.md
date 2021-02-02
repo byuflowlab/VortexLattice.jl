@@ -48,6 +48,7 @@ System
 System()
 steady_analysis
 steady_analysis!
+prescribed_motion
 unsteady_analysis
 unsteady_analysis!
 ```
@@ -55,9 +56,9 @@ unsteady_analysis!
 ### Near Field Forces and Moments
 ```@docs
 PanelProperties
-panel_properties
+get_panel_properties
 body_forces
-body_forces_over_time
+body_forces_history
 ```
 
 ### Far Field Drag
@@ -89,7 +90,6 @@ VortexLattice.repeated_trailing_edge_points
 VortexLattice.flipy
 VortexLattice.on_symmetry_plane
 VortexLattice.not_on_symmetry_plane
-VortexLattice.bretschneider_area
 ```
 
 ### Surface Panels
@@ -115,6 +115,8 @@ VortexLattice.bottom_vector
 
 ### Wake Panels
 ```@docs
+VortexLattice.update_wake_shedding_locations!
+VortexLattice.set_circulation_strength
 VortexLattice.circulation_strength
 VortexLattice.get_wake_velocities!
 VortexLattice.translate_wake
@@ -129,6 +131,7 @@ VortexLattice.bound_induced_velocity
 VortexLattice.trailing_induced_velocity
 VortexLattice.ring_induced_velocity
 VortexLattice.influence_coefficients!
+VortexLattice.update_trailing_edge_coefficients!
 VortexLattice.induced_velocity
 VortexLattice.induced_velocity_derivatives
 ```

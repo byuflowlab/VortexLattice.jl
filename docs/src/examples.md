@@ -95,7 +95,7 @@ Markdown.parse(str) #hide
 We can also generate files to visualize the results in Paraview using the function `write_vtk`.
 
 ```julia
-properties = panel_properties(system)
+properties = get_panel_properties(system, surface)
 
 write_vtk("symmetric-planar-wing", surface, properties; symmetric)
 ```
@@ -246,7 +246,7 @@ Markdown.parse(str) #hide
 Visualizing the geometry now shows the circulation distribution across the entire wing.
 
 ```julia
-properties = panel_properties(system)
+properties = get_panel_properties(system, surface)
 
 write_vtk("mirrored-planar-wing", surface, properties; symmetric)
 ```
@@ -404,7 +404,7 @@ Markdown.parse(str) #hide
 ```
 
 ```julia
-properties = panel_properties(system)
+properties = get_panel_properties(system, surface)
 
 write_vtk("wing-with-dihedral", surface, properties; symmetric)
 ```
@@ -730,7 +730,7 @@ Markdown.parse(str) #hide
 By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.
 
 ```julia
-properties = panel_properties(system)
+properties = get_panel_properties(system, surface)
 
 write_vtk("wing-tail", surfaces, properties; symmetric)
 ```
@@ -803,11 +803,11 @@ for i = 1:length(AR)
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # run analysis
-    system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
         symmetric=symmetric, wake_finite_core = false)
 
     # extract forces at each time step
-    CF[i], CM[i] = body_forces_history(surface, panel_history, ref, fs;     
+    CF[i], CM[i] = body_forces_history(surface, surface_history, ref, fs;     
         symmetric=symmetric, frame=Wind())
 end
 
@@ -990,6 +990,7 @@ This example shows how to predict the transient forces and moments for a heaving
 # Katz and Plotkin: Figures 13.38a
 # AR = 4
 # k = ω*c/(2*Uinf) = [0.5, 0.3, 0.1]
+# c = [1.0, 0.6, 0.2]
 # α = -5°
 
 using VortexLattice
@@ -1003,88 +1004,84 @@ alpha = -5*pi/180
 # aspect ratio
 AR = 4
 
-# chord length
-c = 1
+# chord lengths
+c = [1.0, 0.6, 0.2]
 
-# span length
-b = AR*c
-
-# geometry
-xle = [0.0, 0.0]
-yle = [0.0, b/2]
-zle = [0.0, 0.0]
-chord = [c, c]
-theta = [0.0, 0.0]
-phi = [0.0, 0.0]
-ns = 13
-nc = 4
-spacing_s = Uniform()
-spacing_c = Uniform()
-mirror = false
-symmetric = true
-
-# reference parameters
-cref = c
-bref = b
-Sref = b*c
-rref = [0.0, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
-
-# create surface panels
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
-
-k = [0.1]#[0.5, 0.3, 0.1]
+# reduced frequency
+k = [0.5, 0.3, 0.1]
 
 t = Vector{Vector{Float64}}(undef, length(k))
-CF = Vector{Matrix{Float64}}(undef, length(k))
-CM = Vector{Matrix{Float64}}(undef, length(k))
+CF = Vector{Vector{Vector{Float64}}}(undef, length(k))
+CM = Vector{Vector{Vector{Float64}}}(undef, length(k))
 
-#for i = 1:length(k)
-i = 1
+for i = 1:length(k)
+
+    # span length
+    b = AR*c[i]
+
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [0.0, b/2]
+    zle = [0.0, 0.0]
+    chord = [c[i], c[i]]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = true
+
+    # reference parameters
+    cref = c[i]
+    bref = b
+    Sref = b*c[i]
+    rref = [0.0, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    # surface panels
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # angular frequency
-    ω = 2*k[i]*Uinf/c
+    ω = 2*Uinf*k[i]/c[i]
 
     # time
-    t[i] = range(0.0, 10*pi/ω, length = 500)
+    t[i] = range(0.0, 9*pi/ω, length = 100)
+    dt = t[i][2:end] - t[i][1:end-1]
+    dx = Uinf*dt
 
     # heaving amplitude
-    h = 0.1*c
+    h = 0.1*c[i]
 
-    # forward and vertical velocity
+    # use forward and vertical velocity at beginning of each time step
     Xdot = Uinf*cos(alpha)
-    Zdot = Uinf*sin(alpha) .- h*cos.(ω*t[i])
+    Zdot = Uinf*sin(alpha) .- h*cos.(ω*t[i][1:end-1])
 
-    # reference velocity for each time step
-    Vinf = sqrt.(Xdot.^2 .+ Zdot.^2)
-
-    # freestream parameters for each time step
-    dt, fs = prescribed_motion(t[i], c; Xdot, Zdot)
+    # instantaneous velocity and freestream parameters for each time step
+    Vinf, fs = prescribed_motion(dt; Xdot, Zdot)
 
     # run analysis
-    system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
         symmetric=symmetric, nwake = 50)
 
     # extract forces at each time step (uses instantaneous velocity as reference)
-    CF[i], CM[i] = body_forces_over_time(panel_history, surface, ref, fs;     
+    CF[i], CM[i] = body_forces_history(surface, surface_history, ref, fs;     
         symmetric=symmetric, frame=Wind())
 
     # adjust coefficients to use reference velocity rather than instantaneous velocity
-    for it = 1:length(t[i])
-        CF[i][:,it] *= Vinf[it]^2/Uinf^2
-        CM[i][:,it] *= Vinf[it]^2/Uinf^2
+    for it = 1:length(dt)
+        CF[i][it] *= Vinf[it]^2/Uinf^2
+        CM[i][it] *= Vinf[it]^2/Uinf^2
     end
 
-    # write visualization file
-    write_vtk("heaving-wing", surface, panel_history, wake_history, t[i]; symmetric)
-
-#end
+end
 
 nothing #hide
 ```
 
-Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin.  Differences between the two sets of results can be attributed to the different theoretical formulations of the unsteady vortex lattice method and (possibly) the placement of the starting vortex in each implementation.
+Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.
 
 ```@example heaving-rectangular-wing
 using Plots
@@ -1092,10 +1089,10 @@ pyplot()
 
 # lift coefficient plot
 plot(
-    xlim = (8*pi, 10*pi),
-    xticks = ([8*pi, 17*pi/2, 10*pi, 19*pi/2, 10*pi], ["\$ 0 \$", "\$ \\frac{\\pi}{2} \$", "\$ \\pi \$", "\$ \\frac{3\\pi}{2} \$", "\$ 2\\pi \$"]),
+    xlim = (6*pi, 8*pi),
+    xticks = ([6*pi, 13*pi/2, 7*pi, 15*pi/2, 8*pi], ["\$ 0 \$", "\$ \\frac{\\pi}{2} \$", "\$ \\pi \$", "\$ \\frac{3\\pi}{2} \$", "\$ 2\\pi \$"]),
     xlabel = "\$ ω \\cdot t \$",
-    ylim = (-1.0, 0.2),
+    ylim = (-1.0, 0.1),
     yticks = -1.0:0.2:0.0,
     yflip = true,
     ylabel = "\$ C_{L} \$",
@@ -1103,35 +1100,23 @@ plot(
     )
 
 for i = 1:length(k)
-    ω = 2*k[i]*Uinf/c
-    plot!(ω*t[i], CF[i][3,:], label="\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$")
+    # extract ω
+    ω = 2*Uinf*k[i]/c[i]
+
+    # extract ω*t (use time at the beginning of the time step)
+    ωt = ω*t[i][1:end-1]
+
+    # extract CL
+    CL = [CF[i][it][3] for it = 1:length(t[i])-1]
+
+    plot!(ωt, CL, label="\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$")
 end
 
 plot!(show=true)
 
-savefig("rectangular-wing-sudden-acceleration-cl.svg") #hide
-```
-
-![](rectangular-wing-sudden-acceleration-cl.svg)
-
-```@example rectangular-wing-sudden-acceleration
-# drag coefficient plot
-plot(
-    xlim = (0.0, 10.0),
-    xticks = 0.0:1.0:10.0,
-    xlabel = "\$ \\frac{U_\\infty t}{c} \$",
-    ylim = (0.0, 0.030),
-    yticks = 0.0:0.005:0.03,
-    ylabel = "\$ C_{D} \$",
-    grid = false,
-    overwrite_figure=false
-    )
-
-for i = 1:length(AR)
-    plot!(t, CF[i][1,:], label="AR = $(AR[i])")
-end
-
-savefig(rectangular-wing-sudden-acceleration-cd.svg) #hide
+savefig("heaving-rectangular-wing.svg") #hide
 
 nothing #hide
 ```
+
+![](heaving-rectangular-wing.svg)
