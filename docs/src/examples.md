@@ -754,8 +754,8 @@ t = range(0.0, 10.0, step=1/16)
 
 AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
 
-CF = Vector{Matrix{Float64}}(undef, length(AR))
-CM = Vector{Matrix{Float64}}(undef, length(AR))
+CF = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+CM = Vector{Vector{Vector{Float64}}}(undef, length(AR))
 
 for i = 1:length(AR)
 
@@ -804,16 +804,17 @@ for i = 1:length(AR)
 
     # run analysis
     system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
-        symmetric=symmetric, nwake = 50)
+        symmetric=symmetric, wake_finite_core = false)
 
     # extract forces at each time step
-    CF[i], CM[i] = body_forces_over_time(panel_history, surface, ref, fs;     
+    CF[i], CM[i] = body_forces_history(surface, panel_history, ref, fs;     
         symmetric=symmetric, frame=Wind())
-
 end
+
+nothing #hide
 ```
 
-Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamics by Katz and Plotkin.  Differences between the two sets of results can be attributed to the different theoretical formulations of the unsteady vortex lattice method and (possibly) the placement of the starting vortex in each implementation.
+Plotting the results reveals that the results predicted by VortexLattice are similar to those shown in Figures 13.34 and 13.35 of Low-Speed Aerodynamics by Katz and Plotkin.
 
 ```@example rectangular-wing-sudden-acceleration
 using Plots
@@ -832,7 +833,8 @@ plot(
     )
 
 for i = 1:length(AR)
-    plot!(t[2:end], CF[i][3,:], label="AR = $(AR[i])")
+    CL = [CF[i][j][3] for j = 1:length(CF[i])]
+    plot!(t[2:end], CL, label="AR = $(AR[i])")
 end
 
 plot!(show=true)
@@ -842,38 +844,45 @@ savefig("rectangular-wing-sudden-acceleration-cl.svg") #hide
 nothing #hide
 ```
 
+![](rectangular-wing-sudden-acceleration-cl.svg)
+
 ```@example rectangular-wing-sudden-acceleration
 # drag coefficient plot
 plot(
     xlim = (0.0, 10.0),
     xticks = 0.0:1.0:10.0,
     xlabel = "\$ \\frac{U_\\infty t}{c} \$",
-#    ylim = (0.0, 0.030),
-#    yticks = 0.0:0.005:0.03,
+    ylim = (0.0, 0.030),
+    yticks = 0.0:0.005:0.03,
     ylabel = "\$ C_{D} \$",
     grid = false,
     overwrite_figure=false
     )
 
 for i = 1:length(AR)
-    plot!(t, CF[i][1,:], label="AR = $(AR[i])")
+    CD = [CF[i][j][1] for j = 1:length(CF[i])]
+    plot!(t[2:end], CD, label="AR = $(AR[i])")
 end
+
+plot!(show = true)
 
 savefig("rectangular-wing-sudden-acceleration-cd.svg") #hide
 
 nothing #hide
 ```
 
+![](rectangular-wing-sudden-acceleration-cd.svg)
+
 For infinite aspect ratios, the problem degenerates into the analysis of the sudden acceleration of a 2D flat plate, for which we have an analytical solution through the work of Herbert Wagner.
 
 ```@example rectangular-wing-sudden-acceleration
-# Katz and Plotkin: Figure 13.37
-# AR = [6, ∞]
-# Uinf*Δt/c = 0.2
+# See Katz and Plotkin: Figure 13.37
+# AR = ∞
+# Uinf*Δt/c = 1/16
 # α = 5°
 
 # essentially infinite aspect ratio
-AR = 100
+AR = 1e3
 
 # chord length
 c = 1
@@ -912,7 +921,7 @@ rref = [0.0, 0.0, 0.0]
 ref = Reference(Sref, cref, bref, rref)
 
 # non-dimensional time (t*Vinf/c)
-t = range(0.0, 7.0, step=1/32)
+t = range(0.0, 7.0, step=1/8)
 
 # time step (in meters)
 dx = [(t[i+1]-t[i]) for i = 1:length(t)-1]
@@ -928,18 +937,17 @@ system = steady_analysis(surface, ref, fs; symmetric)
 CFs, CMs = body_forces(system, surface, ref, fs; symmetric, frame = Wind())
 
 # run transient analysis
-system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
     symmetric=symmetric)
 
 # extract transient forces
-CF, CM = body_forces_over_time(panel_history, surface, ref, fs;     
+CF, CM = body_forces_history(surface, surface_history, ref, fs;     
     symmetric=symmetric, frame=Wind())
-
-# Computational Results
-plot!(t[2:end], CF[3,:]/CFs[3], label="VortexLattice")
 
 nothing #hide
 ```
+
+The results from VortexLattice compare very well with the analytical solution provided by Wagner.  As discussed in Low Speed Aerodynamics by Katz and Plotkin, the difference between the curves can be attributed to the finite acceleration rate during the first time step, which increases the lift sharply during the acceleration and then increases it moderately later.
 
 ```@example rectangular-wing-sudden-acceleration
 
@@ -956,7 +964,9 @@ plot(
     )
 
 # Computational Results
-plot!(t[2:end], CF[3,:]./CFs[3], label="VortexLattice")
+CL = getindex.(CF, 3)
+CLs = getindex(CFs, 3)
+plot!(t[2:end], CL./CLs, label="VortexLattice")
 
 # Wagner's Function (using approximation of R. T. Jones)
 Φ(t) = 1 - 0.165*exp(-0.045*t) - 0.335*exp(-0.3*t)
@@ -965,17 +975,12 @@ plot!(t, Φ.(2*t), label = "Wagner's Function")
 
 plot!(show=true)
 
-savefig("rectangular-wing-sudden-acceleration-cl.svg") #hide
+savefig("rectangular-wing-sudden-acceleration-wagner.svg") #hide
 
 nothing #hide
 ```
 
-
-![](rectangular-wing-sudden-acceleration-cl.svg)
-
-
-
-![](rectangular-wing-sudden-acceleration-cd.svg)
+![](rectangular-wing-sudden-acceleration-wagner.svg)
 
 ## Heaving Oscillations of a Rectangular Wing
 

@@ -511,7 +511,7 @@ with dimensions (i, j) containing the generated panels.
 function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),
     mirror = false,
-    fcore = (c, Δs)->1e-3,
+    fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
     interp_s = (x, y, xpt) -> LinearInterpolation(x, y)(xpt))
