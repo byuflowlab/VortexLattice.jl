@@ -630,6 +630,13 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
             end
         end
 
+        # save the panel history (if applicable)
+        if it in save
+            surface_history[isave] = deepcopy(system.panels[1])
+            wake_history[isave] = wake[1:iwake, :]
+            isave += 1
+        end
+
         # update wake velocities
         VortexLattice.get_wake_velocities!(wake_velocities, surface,
             wake_shedding_locations, wake, ref, fs[it], Γ;
@@ -648,13 +655,6 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
             iwake += 1
         end
 
-        # save the panel history (if applicable)
-        if it in save
-            surface_history[isave] = deepcopy(system.panels[1])
-            wake_history[isave] = wake[1:iwake, :]
-            isave += 1
-        end
-
     end
 
     # return the modified system and the time history
@@ -668,7 +668,7 @@ Pre-allocated version of `unsteady_analysis`.
 """
 function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, dx;
     symmetric,
-    initial_circulation = [zeros(size(surfaces[i])) for i = 1:length(surfaces)],
+    initial_circulation = zero(system.Γ),
     initial_wakes = [Matrix{WakePanel{Float64}}(undef, 0, size(surfaces[i], 2)) for i = 1:length(surfaces)],
     nwake = fill(length(dx), length(surfaces)),
     surface_id = 1:length(surfaces),
@@ -686,7 +686,7 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
 
     # convert single freestream input to vector (if applicable)
     if isa(fs, Freestream)
-        fs = fill(fs, length(dt))
+        fs = fill(fs, length(dx))
     end
 
     # check if existing wake panel storage is sufficient, replace if necessary
@@ -712,7 +712,7 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     system.Γ .= initial_circulation
 
     # find intersecting surfaces
-    repeated_points = repeated_trailing_edge_points(surface)
+    repeated_points = repeated_trailing_edge_points(surfaces)
 
     # set the initial number of wake panels for each surface
     iwake = [min(size(initial_wakes[isurf], 1), nwake[isurf]) for isurf = 1:nsurf]
@@ -743,10 +743,10 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     isave = 1
 
     # # loop through all time steps
-    for it = 1:length(dt)
+    for it = 1 : length(dx)
 
         first_step = it == 1
-        last_step = it == 1 + length(dt)
+        last_step = it == length(dx)
 
         # flags indicating presence of wake panels
         wake_panels = iwake .> 0
@@ -787,8 +787,7 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
                 nwake = iwake,
                 surface_id = surface_id,
                 wake_finite_core = wake_finite_core,
-                trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                trailing_vortices = trailing_vortices)
         end
 
         # save (-) previous circulation in dΓdt
@@ -828,6 +827,13 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
             end
         end
 
+        # save the panel history
+        if it in save
+            surface_history[isave] = deepcopy(system.panels)
+            wake_history[isave] = [wakes[isurf][1:iwake[isurf], :] for isurf = 1:nsurf]
+            isave += 1
+        end
+
         # update wake velocities
         VortexLattice.get_wake_velocities!(wake_velocities, surfaces,
             wake_shedding_locations, wakes, ref, fs[it], Γ;
@@ -847,13 +853,6 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
             if iwake[isurf] < nwake[isurf]
                 iwake[isurf] += 1
             end
-        end
-
-        # save the panel history
-        if it in save
-            surface_history[isave] = deepcopy(system.panels)
-            wake_history[isave] = [wakes[isurf][1:iwake[isurf], :] for isurf = 1:nsurf]
-            isave += 1
         end
 
     end

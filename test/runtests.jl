@@ -252,7 +252,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        surface[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
+        surface[ip] = set_normal(p, ncp)
     end
 
     system = steady_analysis(surface, ref, fs; symmetric=symmetric)
@@ -322,7 +322,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        surface[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
+        surface[ip] = set_normal(p, ncp)
     end
 
     system = steady_analysis(surface, ref, fs; symmetric=symmetric)
@@ -422,7 +422,7 @@ end
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
+        wing[ip] = set_normal(p, ncp)
     end
 
     hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -524,13 +524,13 @@ end
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
     wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c, fcore = (c,Δs)->max(c/4, Δs/2))
 
     for (ip, p) in enumerate(wing)
         # check that our normal vector is approximately the same as AVL's
         @test isapprox(p.ncp, ncp, rtol=0.01)
         # replace our normal vector with AVL's normal vector for this test
-        wing[ip] = SurfacePanel(p.rtl, p.rtc, p.rtr, p.rbl, p.rbc, p.rbr, p.rcp, ncp, p.core_size, p.area)
+        wing[ip] = set_normal(p, ncp)
     end
 
     hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -798,20 +798,113 @@ end
     @test isapprox(Cnr, -0.000898, rtol=0.01)
 end
 
-@testset "Equivalent Surface & Wake" begin
+@testset "Update Trailing Edge Coefficients" begin
+
+    # This test checks whether the function which updates the trailing edge
+    # coefficients `update_trailing_edge_coefficients!` results in the same
+    # trailing edge coefficients as `influnece_coefficients!`
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    symmetric = [true, true, false]
+
+    # horseshoe vortices
+    wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 2]
+
+    # number of panels
+    N = nc*ns + nc_h*ns_h + nc_v*ns_v
+    AIC1 = zeros(N, N)
+
+    VortexLattice.influence_coefficients!(AIC1, surfaces;
+        symmetric = symmetric,
+        trailing_vortices = fill(false, length(surfaces)),
+        surface_id = surface_id)
+
+    AIC2 = copy(AIC1)
+
+    VortexLattice.update_trailing_edge_coefficients!(AIC2, surfaces;
+        symmetric = symmetric,
+        trailing_vortices = fill(false, length(surfaces)),
+        surface_id = surface_id)
+
+    @test isapprox(AIC1, AIC2)
+end
+
+@testset "Wake Induced Velocity" begin
 
     # This test constructs two surfaces, one using surface panels,
     # and one using wake panels.  It then tests that the wake panel
-    # implementations of `induced_velocity` yield identical results to the
+    # implementations of `induced_velocity` yields identical results to the
     # surface panel implementations
 
-    # define the geometry
+    # generate the surface/wake geometry
     nc = 5
     ns = 10
 
     x = range(0, 1, length = nc+1)
-    y = range(0, 1, length = ns+1)
-    z = range(0, 1, length = ns+1)
+    y = range(0, 2, length = ns+1)
+    z = range(0, 3, length = ns+1)
 
     surface = Matrix{SurfacePanel{Float64}}(undef, nc, ns)
     wake = Matrix{WakePanel{Float64}}(undef, nc, ns)
@@ -822,19 +915,20 @@ end
         rtr = [x[i], y[j+1], z[j+1]]
         rbl = [x[i+1], y[j], z[j]]
         rbr = [x[i+1], y[j+1], z[j+1]]
-        rcp = [0.0, 0.0, 0.0]
-        ncp = [0.0, 0.0, 1.0]
+        rcp = (rtl + rtr + rbl + rbr)/4
+        ncp = cross(rcp - rtr, rcp - rtl)
         core_size = 0.1
-        area = 0.0 # only used for unsteady simuulations
+        chord = 0.0 # only used for unsteady simuulations
 
-        surface[i,j] = SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area)
+        surface[i,j] = SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, chord)
         wake[i,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, Γ[i, j])
     end
 
-    # tests for induced velocity at an arbitrary point in space
-    rcp = [-1, -2, -3]
+    # Test induced velocity calculation at an arbitrary point in space:
+    rcp = [10, 11, 12]
 
-    # test without finite core model, no symmetry, no trailing vortices
+    # no finite core model, no symmetry, no trailing vortices
+
     Vs = VortexLattice.induced_velocity(rcp, surface, Γ[:];
         finite_core = false,
         symmetric = false,
@@ -849,7 +943,8 @@ end
 
     @test isapprox(Vs, Vw)
 
-    # test with finite core, symmetry, and trailing vortices
+    # finite core model, symmetry, and trailing vortices
+
     Vs = VortexLattice.induced_velocity(rcp, surface, Γ[:];
         finite_core = true,
         symmetric = true,
@@ -864,11 +959,11 @@ end
 
     @test isapprox(Vs, Vw)
 
-    # tests for induced velocity at a trailing edge point
+    # Test induced velocity calculation at a trailing edge point:
     is = 3 # trailing edge index
     I = CartesianIndex(nc+1, is) # index on surface
 
-    # test without finite core model, no symmetry, no trailing vortices
+    # no finite core model, no symmetry, no trailing vortices
     Vs = VortexLattice.induced_velocity(is, surface, Γ[:];
         finite_core = false,
         symmetric = false,
@@ -883,7 +978,7 @@ end
 
     @test isapprox(Vs, Vw)
 
-    # test with finite core, symmetry, and trailing vortices
+    # finite core model, symmetry, and trailing vortices
     Vs = VortexLattice.induced_velocity(is, surface, Γ[:];
         finite_core = true,
         symmetric = true,
@@ -897,6 +992,46 @@ end
         xhat = [1, 0, 0])
 
     @test isapprox(Vs, Vw)
+
+    # Test induced velocity calculation at the control points:
+    AIC = zeros(nc*ns, nc*ns)
+
+    # no symmetry, no trailing vortices
+    VortexLattice.influence_coefficients!(AIC, surface;
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    w_surface = AIC*Γ[:]
+
+    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
+        wake_finite_core = false,
+        symmetric = false,
+        trailing_vortices = false,
+        xhat = [1, 0, 0])
+
+    @test isapprox(w_surface, w_wake)
+
+    # symmetry, trailing vortices
+    VortexLattice.influence_coefficients!(AIC, surface;
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    w_surface = AIC*Γ[:]
+
+    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
+        wake_finite_core = false,
+        symmetric = true,
+        trailing_vortices = true,
+        xhat = [1, 0, 0])
+
+    @test isapprox(w_surface, w_wake)
+
+    # Test wake velocity calculations:
+
+
+
 end
 
 @testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
@@ -947,7 +1082,7 @@ end
             mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
         # run analysis
-        system, panel_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+        system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
             symmetric=symmetric)
 
     end
@@ -1034,115 +1169,8 @@ end
 
     # time
     time = 0.0:0.1:10.0
+    dt = time[2:end] - t[1:end-1]
 
-    system, panel_history, wake_history = unsteady_analysis(surfaces, ref, fs, time; symmetric)
+    system, surface_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
 
 end
-
-# # ---- Veldhius validation case ------
-# b = 0.64*2
-# AR = 5.33
-# λ = 1.0
-# Λ = 0.0
-# ϕ = 0.0
-# θr = 0
-# θt = 0
-# npanels = 50
-# duplicate = false
-# spacing = "uniform"
-
-# wing = VLM.simplewing(b, AR, λ, Λ, ϕ, θr, θt, npanels, duplicate, spacing)
-
-
-# import Interpolations: interpolate, Gridded, Linear
-
-# """helper function"""
-# function interp1(xpt, ypt, x)
-#     intf = interpolate((xpt,), ypt, Gridded(Linear()))
-#     y = zeros(x)
-#     idx = (x .> xpt[1]) .& (x.< xpt[end])
-#     y[idx] = intf[x[idx]]
-#     return y
-# end
-
-# function votherprop(rpos)
-
-#     # rcenter = [0.0; 0.469*b/2; 0.0]
-#     rvec = abs(rpos[2] - 0.469*b/2)  # norm(rpos - rcenter)
-
-#     rprop = [0.017464, 0.03422, 0.050976, 0.067732, 0.084488, 0.101244, 0.118]
-#     uprop = [0.0, 1.94373, 3.02229, 7.02335, 9.02449, 8.85675, 0.0]/50.0
-#     vprop = [0.0, 1.97437, 2.35226, 4.07227, 4.35436, 3.69232, 0.0]/50.0
-
-#     cw = 1.0
-
-#     u = 2 * interp1(rprop, uprop, [rvec])[1]  # factor of 2 from far-field
-#     v = cw * interp1(rprop, vprop, [rvec])[1]
-
-#     if rpos[2] > 0.469*b/2
-#         v *= -1
-#     end
-
-#     unew = u*cos(alpha) - v*sin(alpha)
-#     vnew = u*sin(alpha) + v*cos(alpha)
-
-#     return [unew; 0.0; vnew]
-# end
-
-# alpha = 0.0*pi/180
-# beta = 0.0
-# Omega = [0.0; 0.0; 0.0]
-# fs = VLM.Freestream(alpha, beta, Omega, votherprop)
-
-# Sref = 0.30739212
-# cref = 0.24015
-# bref = b
-# rref = [0.0, 0.0, 0.0]
-# ref = VLM.Reference(Sref, cref, bref, rref)
-
-# symmetric = true
-# CF, CM, ymid, zmid, l, cl, dCF, dCM = VLM.run(wing, ref, fs, symmetric)
-
-# alpha = 8.0*pi/180
-# fs = VLM.Freestream(alpha, beta, Omega, votherprop)
-# CF, CM, ymid, zmid, l2, cl2, dCF, dCM = VLM.run(wing, ref, fs, symmetric)
-
-# # # total velocity in direction of Vinf
-# # Vinfeff = zeros(cl)
-# # for i = 1:length(ymid)
-# #     Vext = votherprop([0.0; ymid[i]; zmid[i]])
-# #     Vinfeff[i] = Vinf + Vext[1]*cos(alpha)*cos(beta) + Vext[2]*sin(beta) + Vext[3]*sin(alpha)*cos(beta)
-# # end
-
-# using PyPlot
-# # figure()
-# # plot(ymid, cl2)
-# # plot(ymid, cl3)
-# # gcf()
-
-# figure()
-# plot(ymid, l2)
-# plot(ymid, cl2)
-# ylim([0.0, 1])
-# gcf()
-
-# trapz(ymid/(b/2), cl2)
-
-
-# # figure()
-# # plot(ymid, cl*Vinf./Vinfeff)
-# # gcf()
-
-# # yvec = linspace(0, 0.64, 20)
-# # axial = zeros(20)
-# # swirl = zeros(20)
-# # for i = 1:20
-# #     V = votherprop([0.0; yvec[i]; 0.0])
-# #     axial[i] = V[1]
-# #     swirl[i] = V[2]
-# # end
-
-# # figure()
-# # plot(yvec, axial)
-# # plot(yvec, swirl)
-# # gcf()

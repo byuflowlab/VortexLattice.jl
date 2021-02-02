@@ -283,7 +283,8 @@ Writes unsteady simulation geometry to Paraview files for visualization.
 """
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
     surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
-    wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt; kwargs...)
+    wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt;
+    symmetric = fill(nothing, length(surfaces)), kwargs...)
 
     # create paraview collection file
     paraview_collection(name) do pvdfile
@@ -301,7 +302,7 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
                 for i = 1:length(surfaces)
 
                     # extract circulation at the trailing edge of `surface`
-                    surface_circulation = getproperty.(panel_history[it][i][end,:], :gamma)
+                    surface_circulation = getproperty.(surface_history[it][i][end,:], :gamma)
 
                     # extract circulation at the leading edge of `wake`
                     if isempty(wake_history[it][i])
@@ -311,12 +312,17 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
                     end
 
                     # add paraview files corresponding to the surface to the multiblock file
-                    write_vtk!(vtmfile, surfaces[i], panel_history[it][i];
-                        wake_circulation, trailing_edge = isempty(wake_history[it][i]),
-                        kwargs..., trailing_vortices = false)
+                    write_vtk!(vtmfile, surfaces[i], surface_history[it][i];
+                        wake_circulation,
+                        trailing_edge = isempty(wake_history[it][i]),
+                        symmetric = symmetric[i],
+                        kwargs...,
+                        trailing_vortices = false)
 
                     # add paraview files corresponding to the wake to the multiblock file
-                    write_vtk!(vtmfile, wake_history[it][i]; surface_circulation,
+                    write_vtk!(vtmfile, wake_history[it][i];
+                        surface_circulation,
+                        symmetric = symmetric[i],
                         kwargs...)
                 end
 

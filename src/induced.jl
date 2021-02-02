@@ -648,19 +648,24 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
     of spanwise panels
 
 # Keyword Arguments:
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
+    be used when calculating induced velocities. Defaults to `false` for each surface.
+ - `wake_shedding_locations`: Shedding location coordinates for each surface for
+    each trailing edge vertex.
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
     model by setting all surface ID's to the same value.  Defaults to a unique ID
     for each surface
- - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
-    be used when calculating induced velocities. Defaults to `false` for each surface.
  - `trailing_vortices`: Flags to indicate whether trailing vortices are used for
     each surface. Defaults to `true` for each surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
 @inline function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
-    surface_id = 1:length(surfaces), symmetric = fill(false, length(surfaces)),
-    trailing_vortices = fill(true, length(surfaces)), xhat = SVector(1, 0, 0))
+    symmetric = fill(false, length(surfaces)),
+    wake_shedding_locations = fill(nothing, length(surfaces)),
+    surface_id = 1:length(surfaces),
+    trailing_vortices = fill(true, length(surfaces)),
+    xhat = SVector(1, 0, 0))
 
     nsurf = length(surfaces)
 
@@ -693,6 +698,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
             update_trailing_edge_coefficients!(vAIC, receiving, sending;
                 finite_core = finite_core,
                 symmetric = symmetric[j],
+                wake_shedding_locations = wake_shedding_locations[j],
                 trailing_vortices = trailing_vortices[j],
                 xhat = xhat)
 

@@ -23,8 +23,9 @@ to account for the new wake shedding location
  - `eta = 0.25`: Time step fraction used to define separation between trailing
     edge and wake shedding location.  Typical values range from 0.2-0.3.
 """
-@inline function update_wake_shedding_locations!(wake, wake_shedding_locations,
-    surface, fs, ref, dt; nwake = size(wake, 1), eta = 0.25)
+@inline function update_wake_shedding_locations!(wake::AbstractMatrix,
+    wake_shedding_locations, surface::AbstractMatrix, fs, ref, dt;
+    nwake = size(wake, 1), eta = 0.25)
 
     # number of spanwise panels
     ns = size(wake, 2)
@@ -72,7 +73,6 @@ to account for the new wake shedding location
     return wake, wake_shedding_locations
 end
 
-
 """
     update_wake_shedding_locations!(wakes, wake_shedding_locations, surfaces,
         freestream, reference, dt; kwargs...)
@@ -98,8 +98,10 @@ to account for the new wake shedding location
  - `eta = 0.25`: Time step fraction used to define separation between trailing
     edge and wake shedding location.  Typical values range from 0.2-0.3.
 """
-@inline function update_wake_shedding_locations!(wakes, wake_shedding_locations,
-    surfaces, fs, ref, dt, surface; nwake = size.(wakes, 1), eta = 0.25)
+@inline function update_wake_shedding_locations!(wakes::AbstractVector{<:AbstractMatrix},
+    wake_shedding_locations, surfaces::AbstractVector{<:AbstractMatrix}, fs, ref, dt;
+    nwake = size.(wakes, 1),
+    eta = 0.25)
 
     # get number of surfaces
     nsurf = length(surfaces)
@@ -505,8 +507,6 @@ end
                         nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
-
-                    wake_velocities[isurf][I] += tmp
                 end
 
                 jΓ += Ns # increment Γ index
@@ -696,13 +696,13 @@ wake panels.
 
         vΓ = view(Γ, iΓ+1:iΓ+N)
 
-        shed_wake!(wake[i], wake_shedding_locations[i], wake_velocities[i], dt,
+        shed_wake!(wakes[i], wake_shedding_locations[i], wake_velocities[i], dt,
             surfaces[i], vΓ; nwake=nwake[i])
 
         iΓ += N
     end
 
-    return wake
+    return wakes
 end
 
 """
