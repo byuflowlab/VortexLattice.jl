@@ -1070,7 +1070,7 @@ end
     symmetric = false
 
     # non-dimensional time
-    time = range(0.0, step=1/16)
+    time = range(0.0, 10.0, step=1/16)
     dt = [time[i+1]-time[i] for i = 1:length(time)-1]
 
     # create vortex rings
