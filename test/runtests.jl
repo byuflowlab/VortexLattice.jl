@@ -1162,8 +1162,8 @@ end
     surface_id = [1, 2, 3]
 
     # time
-    time = 0.0:0.1:10.0
-    dt = time[2:end] - t[1:end-1]
+    t = 0.0:0.1:10.0
+    dt = t[2:end] - t[1:end-1]
 
     system, surface_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
 
