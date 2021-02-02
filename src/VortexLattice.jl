@@ -12,7 +12,7 @@ const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
-export translate, translate!, reflect
+export translate, translate!, reflect, set_normal
 
 include("wake.jl")
 export Wake
@@ -35,15 +35,16 @@ include("circulation.jl")
 
 include("system.jl")
 export System
-export PanelProperties, panel_properties
-export panel_properties
+export PanelProperties, get_panel_properties
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
 export unsteady_analysis, unsteady_analysis!
+export prescribed_motion
 
 include("nearfield.jl")
 export body_forces
+export body_forces_history
 
 include("farfield.jl")
 export far_field_drag

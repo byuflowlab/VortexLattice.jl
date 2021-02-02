@@ -14,13 +14,16 @@ AbstractSpacing
 Uniform
 Sine
 Cosine
-VortexRing
-VortexRing()
-Wake
-Wake()
+SurfacePanel
+SurfacePanel()
+WakePanel
+WakePanel()
 grid_to_surface_panels
 wing_to_surface_panels
+set_normal
+translate(grid, r)
 translate(surface::AbstractMatrix, r)
+translate!(grid, r)
 translate!(surface::AbstractMatrix, r)
 reflect(surface::AbstractMatrix)
 ```
@@ -54,6 +57,7 @@ unsteady_analysis!
 PanelProperties
 panel_properties
 body_forces
+body_forces_over_time
 ```
 
 ### Far Field Drag
@@ -85,9 +89,10 @@ VortexLattice.repeated_trailing_edge_points
 VortexLattice.flipy
 VortexLattice.on_symmetry_plane
 VortexLattice.not_on_symmetry_plane
+VortexLattice.bretschneider_area
 ```
 
-### Vortex Rings
+### Surface Panels
 ```@docs
 VortexLattice.top_left
 VortexLattice.top_center
@@ -96,10 +101,10 @@ VortexLattice.bottom_left
 VortexLattice.bottom_center
 VortexLattice.bottom_right
 VortexLattice.controlpoint
-VortexLattice.normal(panel::VortexRing)
+VortexLattice.normal(panel::SurfacePanel)
 VortexLattice.get_core_size
-VortexLattice.translate(panel::VortexRing, r)
-VortexLattice.reflect(panel::VortexRing)
+VortexLattice.translate(panel::SurfacePanel, r)
+VortexLattice.reflect(panel::SurfacePanel)
 VortexLattice.left_center
 VortexLattice.right_center
 VortexLattice.top_vector
@@ -155,7 +160,7 @@ VortexLattice.normal_velocity!
 VortexLattice.normal_velocity_derivatives
 VortexLattice.normal_velocity_derivatives!
 VortexLattice.wake_normal_velocity
-VortexLattice.add_wake_normal_velocity!
+VortexLattice.subtract_wake_normal_velocity!
 VortexLattice.circulation
 VortexLattice.circulation!
 VortexLattice.circulation_derivatives

@@ -13,9 +13,7 @@ Lifting surface panel with attached vortex ring
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
  - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
- - `area`: panel area (for defining transient forces using the unsteady part
-    of Bernoulli's equation). Note that this value is not the same as the area
-    enclosed by the vortex ring.
+ - `chord`: panel chord length (for determining unsteady forces)
 """
 struct SurfacePanel{TF}
     rtl::SVector{3, TF}
@@ -27,11 +25,11 @@ struct SurfacePanel{TF}
     rcp::SVector{3, TF}
     ncp::SVector{3, TF}
     core_size::TF
-    area::TF
+    chord::TF
 end
 
 """
-    SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area; kwargs...)
+    SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, chord; kwargs...)
 
 Construct and return a vortex ring panel.
 
@@ -43,9 +41,7 @@ Construct and return a vortex ring panel.
  - `rcp`: position of the panel control point
  - `ncp`: normal vector at the panel control point
  - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
- - `area`: panel area (for defining transient forces using the unsteady part
-    of Bernoulli's equation). Note that this value is not the same as the area
-    enclosed by the vortex ring.
+ - `chord`: panel chord length (for determining unsteady forces)
 
 # Keyword Arguments
  - `rtc`: position of the center of the top bound vortex, defaults to `(rtl+rtr)/2`
@@ -53,19 +49,19 @@ Construct and return a vortex ring panel.
 """
 SurfacePanel(args...; kwargs...)
 
-function SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, area;
+function SurfacePanel(rtl, rtr, rbl, rbr, rcp, ncp, core_size, chord;
     rtc = (rtl+rtr)/2, # default to average of corners
     rbc = (rbl+rbr)/2) # default to average of corners
 
-    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
-function SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+function SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 
     TF = promote_type(eltype(rtl), eltype(rtc), eltype(rtr), eltype(rbl), eltype(rbc),
-        eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size), typeof(area))
+        eltype(rbr), eltype(rcp), eltype(ncp), typeof(core_size), typeof(chord))
 
-    return SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+    return SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
 @inline Base.eltype(::Type{SurfacePanel{TF}}) where TF = TF
@@ -151,9 +147,9 @@ Return a copy of `panel` translated the distance specified by vector `r`
     rcp = panel.rcp + r
     ncp = panel.ncp
     core_size = panel.core_size
-    area = panel.area
+    chord = panel.chord
 
-    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
 """
@@ -168,7 +164,7 @@ translate(surface::AbstractMatrix, r) = translate.(surface, Ref(r))
 
 Translate the panels in `surface` the distance specified by vector `r`
 """
-function translate!(surface, r)
+function translate!(surface::AbstractMatrix, r)
 
     for i in eachindex(surface)
         surface[i] = translate(surface[i], r)
@@ -193,9 +189,9 @@ Reflect `panel` across the X-Z plane.
     rcp = flipy(panel.rcp)
     ncp = flipy(panel.ncp)
     core_size = panel.core_size
-    area = panel.area
+    chord = panel.chord
 
-    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, area)
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
 """
@@ -204,6 +200,15 @@ end
 Reflects the panels in `surface` across the X-Z plane
 """
 reflect(surface::AbstractMatrix) = reflect.(reverse(surface, dims=2))
+
+"""
+    set_normal(panel::SurfacePanel, ncp)
+
+Return a copy of `panel` with the new normal vector `ncp`
+"""
+@inline set_normal(panel::SurfacePanel, ncp) = SurfacePanel(panel.rtl, panel.rtc,
+    panel.rtr, panel.rbl, panel.rbc, panel.rbr, panel.rcp, ncp, panel.core_size,
+    panel.chord)
 
 """
     left_center(panel::SurfacePanel)
@@ -310,6 +315,22 @@ end
 Return the circulation strength of the wake panel.
 """
 @inline circulation_strength(panel::WakePanel) = panel.gamma
+
+"""
+    set_circulation_strength(panel::WakePanel, gamma)
+
+Return a copy of `panel` with the circulation strength `gamma`
+"""
+@inline function set_circulation_strength(panel::WakePanel, gamma)
+
+    rtl = panel.rtl
+    rtr = panel.rtr
+    rbl = panel.rbl
+    rbr = panel.rbr
+    core_size = panel.core_size
+
+    return WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+end
 
 @inline function translate(panel::WakePanel, r)
 

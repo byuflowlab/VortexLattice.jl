@@ -1,16 +1,16 @@
 """
     Freestream(alpha, beta, Omega, additional_velocity=nothing)
 
-Define the freestream properties.
+Defines the freestream properties.
 
 **Arguments**
 - `alpha`: angle of attack (rad)
 - `beta`: sideslip angle (rad)
 - `Omega`: rotation vector (p, q, r) of the body frame about the center of
-    gravity, normalized by Vinf
+    gravity, divided by the current freestream velocity
 - `additional_velocity`: a function of the form: V = additional_velocity(r) which returns
-    the additional velocity `V` (normalized by the freestream velocity) at
-    position `r`.  Defaults to `nothing`.
+    the additional velocity `V` (divided by the current freestream velocity)
+    at position `r`.  Defaults to `nothing`.
 """
 struct Freestream{TF, TV}
     alpha::TF
@@ -28,7 +28,7 @@ Base.eltype(::Type{Freestream{TF, TV}}) where {TF,TV} = TF
 Base.eltype(::Freestream{TF, TV}) where {TF,TV} = TF
 
 """
-    body_to_stability(fs::Freestream)
+    body_to_stability(freestream)
 
 Construct a rotation matrix from the body axis to the stability axis.
 """
@@ -40,7 +40,7 @@ end
 body_to_stability(sa, ca) = @SMatrix [ca 0 sa; 0 1 0; -sa 0 ca]
 
 """
-    body_to_stability_alpha(fs::Freestream)
+    body_to_stability_alpha(freestream)
 
 Construct a rotation matrix from the body axis to the stability axis and its
 derivative with respect to `alpha`
@@ -62,7 +62,7 @@ function body_to_stability_alpha(sa, ca)
 end
 
 """
-    stability_to_body(fs::Freestream)
+    stability_to_body(freestream)
 
 Construct a rotation matrix from the stability axis to the body axis
 """
@@ -74,7 +74,7 @@ end
 stability_to_body(sa, ca) = body_to_stability(sa, ca)'
 
 """
-    stability_to_body(fs::Freestream)
+    stability_to_body(freestream)
 
 Construct a rotation matrix from the stability axis to the body axis and its
 derivative with respect to `alpha`
@@ -92,7 +92,7 @@ function stability_to_body_alpha(sa, ca)
 end
 
 """
-    stability_to_wind(fs::Freestream)
+    stability_to_wind(freestream)
 
 Construct a rotation matrix from the stability axis to the wind axis
 """
@@ -106,7 +106,7 @@ end
 stability_to_wind(sb, cb) = @SMatrix [cb -sb 0; sb cb 0; 0 0 1]
 
 """
-    stability_to_wind_beta(fs::Freestream)
+    stability_to_wind_beta(freestream)
 
 Construct a rotation matrix from the stability axis to the wind axis and its
 derivative with respect to `beta`
@@ -128,7 +128,7 @@ function stability_to_wind_beta(sb, cb)
 end
 
 """
-    wind_to_stability(fs::Freestream)
+    wind_to_stability(freestream)
 
 Construct a rotation matrix from the wind axis to the stability axis
 """
@@ -140,7 +140,7 @@ end
 wind_to_stability(sb, cb) = stability_to_wind(sb, cb)'
 
 """
-    wind_to_stability_beta(fs::Freestream)
+    wind_to_stability_beta(freestream)
 
 Construct a rotation matrix from the wind axis to the stability axis and its
 derivative with respect to `beta`
@@ -158,7 +158,7 @@ function wind_to_stability_beta(sb, cb)
 end
 
 """
-    body_to_wind(fs::Freestream)
+    body_to_wind(freestream)
 
 Construct a rotation matrix from the body axis to the wind axis
 """
@@ -178,7 +178,7 @@ function body_to_wind(sa, ca, sb, cb)
 end
 
 """
-    body_to_wind_derivatives(fs::Freestream)
+    body_to_wind_derivatives(freestream)
 
 Construct a rotation matrix from the body axis to the wind axis and its
 derivatives with respect to `alpha` and `beta`
@@ -203,7 +203,7 @@ function body_to_wind_derivatives(sa, ca, sb, cb)
 end
 
 """
-    wind_to_body(fs::Freestream)
+    wind_to_body(freestream)
 
 Construct a rotation matrix from the wind axis to the body axis
 """
@@ -216,7 +216,7 @@ end
 wind_to_body(sa, ca, sb, cb) = body_to_wind(sa, ca, sb, cb)'
 
 """
-    wind_to_body_derivatives(fs::Freestream)
+    wind_to_body_derivatives(freestream)
 
 Construct a rotation matrix from the wind axis to the body axis and its derivatives
 with respect to `alpha` and `beta`

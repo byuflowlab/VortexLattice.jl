@@ -56,13 +56,16 @@ end
 """
     ring_induced_velocity(rcp, r11, r12, r21, r22; finite_core = false,
         core_size = 0.0, symmetric = false, xhat = [1,0,0], top = true, bottom = true,
-        left = true, right = true, left_trailing = false, right_trailing = false)
+        left = true, right = true, left_trailing = false, right_trailing = false,
+        reflected_top = true, reflected_bottom = true, reflected_left = true,
+        reflected_right = true, reflected_left_trailing = false, reflected_right_trailing = false)
 
 Compute the induced velocity (per unit circulation) for a vortex ring defined by
 the corners `r11`, `r12`, `r21`, and `r22` at a control point located at `rcp`
 
-Also returns the induced velocity resulting from shared edges from adjacent panels
-on the top, bottom, left, and right sides of panel.
+Also returns the induced velocity resulting from shared edges with panels
+on the top, bottom, left, and right sides of the panel described by `r11`,
+`r12`, `r21`, and `r22`.
 """
 @inline function ring_induced_velocity(rcp, r11, r12, r21, r22;
     finite_core = false, core_size = 0.0, symmetric = false, xhat = SVector(1, 0, 0),
@@ -229,18 +232,22 @@ end
 Construct the aerodynamic influence coefficient matrix for a single surface.
 
 # Arguments:
- - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
-    chordwise panels and `ns` is the number of spanwise panels
+ - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
 
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
     should be used when calculating induced velocities.
- - `trailing_vortices`: Flag to enable/disable trailing vortices.
+ - `wake_shedding_locations`: Wake shedding locations for the trailing edge
+    panels in `surface`
+ - `trailing_vortices`: Flag to enable/disable trailing vortices.  Defaults to
+    `true`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline influence_coefficients!(AIC, surface::AbstractMatrix; surface_id=1, kwargs...) =
-    influence_coefficients!(AIC, surface, surface; kwargs..., finite_core = surface_id < 0)
+@inline influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
+    influence_coefficients!(AIC, surface, surface; kwargs..., finite_core = false)
 
 """
     influence_coefficients!(AIC, surfaces; kwargs...)
@@ -248,25 +255,31 @@ Construct the aerodynamic influence coefficient matrix for a single surface.
 Construct the aerodynamic influence coefficient matrix for multiple surfaces.
 
 # Arguments:
- - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
+ - `surfaces`: Vector of surfaces, represented by matrices of surface panels
+    (see [`SurfacePanel`](@ref) of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
 
 # Keyword Arguments:
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
+    be used when calculating induced velocities. Defaults to `false` for each surface.
  - `surface_id`: ID for each surface.  May be used to deactivate the finite core
     model by setting all surface ID's to the same value.  Defaults to a unique ID
     for each surface
- - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
-    be used when calculating induced velocities. Defaults to `false` for each surface.
+ - `wake_shedding_locations`: Wake shedding locations for the trailing edge panels of
+    each surface in `surfaces`
  - `trailing_vortices`: Flags to indicate whether trailing vortices are used for
     each surface. Defaults to `true` for each surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
 @inline function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
-    surface_id = 1:length(surfaces), symmetric = fill(false, length(surfaces)),
-    trailing_vortices = fill(true, length(surfaces)), xhat = SVector(1, 0, 0))
+    symmetric = fill(false, length(surfaces)),
+    surface_id = 1:length(surfaces),
+    wake_shedding_locations = fill(nothing, length(surfaces)),
+    trailing_vortices = fill(true, length(surfaces)),
+    xhat = SVector(1, 0, 0))
 
+    # number of surfaces
     nsurf = length(surfaces)
 
     # indices for keeping track of where we are in the AIC matrix
@@ -298,6 +311,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
             influence_coefficients!(vAIC, receiving, sending;
                 finite_core = finite_core,
                 symmetric = symmetric[j],
+                wake_shedding_locations = wake_shedding_locations[j],
                 trailing_vortices = trailing_vortices[j],
                 xhat = xhat)
 
@@ -321,6 +335,7 @@ Compute the AIC coefficients corresponding to the influence of the panels in
  - `finite_core`: Flag indicating whether the finite core model is enabled. Defaults
     to `true`
  - `symmetric`: Flag indicating whether sending panels should be mirrored across the X-Z plane
+ - `wake_shedding_locations`: Wake shedding locations for the trailing edge panels in `sending`
  - `trailing_vortices`: Indicates whether trailing vortices are used. Defaults to `true`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
@@ -328,11 +343,9 @@ Compute the AIC coefficients corresponding to the influence of the panels in
 @inline function influence_coefficients!(AIC, receiving, sending;
     finite_core = true,
     symmetric = false,
+    wake_shedding_locations = nothing,
     trailing_vortices = true,
     xhat = SVector(1, 0, 0))
-
-    # zero out AIC matrix
-    AIC .= 0.0
 
     # get sending surface dimensions
     nc, ns = size(sending)
@@ -360,11 +373,12 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                     finite_core = finite_core,
                     symmetric = symmetric,
+                    xhat = xhat,
                     bottom = false, reflected_bottom = false,
                     right = false, reflected_right = false)
 
                 # add partial contribution from current panel
-                AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+                AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
 
                 # add partial contribution from panel above this one (if applicable)
                 if j1 > 1
@@ -385,10 +399,11 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                     finite_core = finite_core,
                     symmetric = symmetric,
+                    xhat = xhat,
                     bottom = false, reflected_bottom = false)
 
                 # add partial contribution from current panel
-                AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+                AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
 
                 # add partial contribution from panel above this one
                 if j1 > 1
@@ -409,19 +424,20 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                     finite_core = finite_core,
                     symmetric = symmetric,
-                    bottom = !trailing_vortices,
-                    reflected_bottom = !trailing_vortices,
+                    xhat = xhat,
+                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
                     right = false,
                     reflected_right = false,
-                    left_trailing = trailing_vortices,
-                    reflected_left_trailing = trailing_vortices,
+                    left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                     right_trailing = false,
                     reflected_right_trailing = false)
 
                 # add partial contribution from current panel
-                AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+                AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
 
-                # add partial contribution from panel above this one
+                # add partial contribution from panel above this panel
                 if j1 > 1
                     AIC[i,ls[j1-1, j2]] += dot(Vhat_t, nhat)
                 end
@@ -429,6 +445,43 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 # add partial contribution from panel to the left
                 if j2 > 1
                     AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                end
+
+                if !isnothing(wake_shedding_locations)
+
+                    # add influence of surface-wake interface panel
+                    panel = sending[j1, j2]
+                    r11 = bottom_left(panel)
+                    r12 = bottom_right(panel)
+                    r21 = wake_shedding_locations[j2]
+                    r22 = wake_shedding_locations[j2+1]
+                    core_size = get_core_size(panel)
+
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        right = false,
+                        reflected_right = false,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = false,
+                        reflected_right_trailing = false)
+
+                    # add partial contribution from current panel
+                    AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+
+                    # add partial contribution from panel to the left
+                    if j2 > 1
+                        AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                    end
+
                 end
 
             end
@@ -440,17 +493,18 @@ Compute the AIC coefficients corresponding to the influence of the panels in
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                 finite_core = finite_core,
                 symmetric = symmetric,
-                bottom = !trailing_vortices,
-                reflected_bottom = !trailing_vortices,
-                left_trailing = trailing_vortices,
-                reflected_left_trailing = trailing_vortices,
-                right_trailing = trailing_vortices,
-                reflected_right_trailing = trailing_vortices)
+                xhat = xhat,
+                bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                reflected_right_trailing = isnothing(wake_shedding_locations) && trailing_vortices)
 
             # add partial contribution from current panel
-            AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+            AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
 
-            # add partial contribution from panel above this one
+            # add partial contribution from panel above this panel
             if j1 > 1
                 AIC[i,ls[j1-1, j2]] += dot(Vhat_t, nhat)
             end
@@ -460,6 +514,40 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
             end
 
+            if !isnothing(wake_shedding_locations)
+
+                # add influence of surface-wake interface panel
+                panel = sending[j1, j2]
+                r11 = bottom_left(panel)
+                r12 = bottom_right(panel)
+                r21 = wake_shedding_locations[j2]
+                r22 = wake_shedding_locations[j2+1]
+                core_size = get_core_size(panel)
+
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                    r11, r12, r21, r22;
+                    finite_core = finite_core,
+                    core_size = core_size,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    top = false,
+                    reflected_top = false,
+                    bottom = !trailing_vortices,
+                    reflected_bottom = !trailing_vortices,
+                    left_trailing = trailing_vortices,
+                    reflected_left_trailing = trailing_vortices,
+                    right_trailing = trailing_vortices,
+                    reflected_right_trailing = trailing_vortices)
+
+                # add partial contribution from current panel
+                AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+
+                # add partial contribution from panel to the left
+                if j2 > 1
+                    AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                end
+
+            end
         else
             # we can't reuse edges, probably because the finite-core model is active
 
@@ -468,11 +556,12 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 # compute induced velocity
                 Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                     finite_core = finite_core,
-                    symmetric = symmetric)
+                    symmetric = symmetric,
+                    xhat = xhat)
 
                 # add to AIC matrix
                 j = ls[j1, j2]
-                AIC[i,j] += dot(Vhat, nhat)
+                AIC[i,j] = dot(Vhat, nhat)
             end
 
             # calculate influence of all trailing edge panels
@@ -481,6 +570,289 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
                     finite_core = finite_core,
                     symmetric = symmetric,
+                    xhat = xhat,
+                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_right_trailing = isnothing(wake_shedding_locations) && trailing_vortices)
+
+                # add to AIC matrix
+                j = ls[j1, j2]
+                AIC[i,j] = dot(Vhat, nhat)
+
+                if !isnothing(wake_shedding_locations)
+
+                    # add influence of surface-wake interface panel
+                    panel = sending[j1, j2]
+                    r11 = bottom_left(panel)
+                    r12 = bottom_right(panel)
+                    r21 = wake_shedding_locations[j2]
+                    r22 = wake_shedding_locations[j2+1]
+                    core_size = get_core_size(panel)
+
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = trailing_vortices,
+                        reflected_right_trailing = trailing_vortices)
+
+                    # add contribution to AIC matrix
+                    AIC[i,j] += dot(Vhat, nhat)
+
+                end
+            end
+        end
+    end
+
+    return AIC
+end
+
+"""
+    update_trailing_edge_coefficients!(AIC, surface; kwargs...)
+
+Construct the aerodynamic influence coefficient matrix for a single surface.
+
+# Arguments:
+ - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`
+    should be used when calculating induced velocities.
+ - `trailing_vortices`: Flag to enable/disable trailing vortices.
+ - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
+    Defaults to [1, 0, 0]
+"""
+@inline update_trailing_edge_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
+    update_trailing_edge_coefficients!(AIC, surface, surface; kwargs..., finite_core = false)
+
+"""
+    update_trailing_edge_coefficients!(AIC, surfaces; kwargs...)
+
+Construct the aerodynamic influence coefficient matrix for multiple surfaces.
+
+# Arguments:
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+
+# Keyword Arguments:
+ - `surface_id`: ID for each surface.  May be used to deactivate the finite core
+    model by setting all surface ID's to the same value.  Defaults to a unique ID
+    for each surface
+ - `symmetric`: Flags indicating whether a mirror image (across the X-Z plane) should
+    be used when calculating induced velocities. Defaults to `false` for each surface.
+ - `trailing_vortices`: Flags to indicate whether trailing vortices are used for
+    each surface. Defaults to `true` for each surface.
+ - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
+    Defaults to [1, 0, 0]
+"""
+@inline function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+    surface_id = 1:length(surfaces), symmetric = fill(false, length(surfaces)),
+    trailing_vortices = fill(true, length(surfaces)), xhat = SVector(1, 0, 0))
+
+    nsurf = length(surfaces)
+
+    # indices for keeping track of where we are in the AIC matrix
+    iAIC = 0
+    jAIC = 0
+
+    # loop through receving surfaces
+    for i = 1:nsurf
+        receiving = surfaces[i]
+
+        # extract number of panels on this receiving surface
+        nr = length(receiving) # number of panels on this receiving surface
+
+        # loop through sending surfaces
+        jAIC = 0
+        for j = 1:nsurf
+            sending = surfaces[j]
+
+            # extract number of panels on this sending surface
+            ns = length(sending)
+
+            # extract portion of AIC matrix for the two surfaces
+            vAIC = view(AIC, iAIC+1:iAIC+nr, jAIC+1:jAIC+ns)
+
+            # check if it's the same surface
+            finite_core = surface_id[i] != surface_id[j]
+
+            # populate entries in the AIC matrix
+            update_trailing_edge_coefficients!(vAIC, receiving, sending;
+                finite_core = finite_core,
+                symmetric = symmetric[j],
+                trailing_vortices = trailing_vortices[j],
+                xhat = xhat)
+
+            # increment position in AIC matrix
+            jAIC += ns
+        end
+        # increment position in AIC matrix
+        iAIC += nr
+    end
+
+    return AIC
+end
+
+"""
+    update_trailing_edge_coefficients!(AIC, receiving, sending; kwargs...)
+
+Update the AIC coefficients corresponding to the influence of the trailing edge
+panels in `sending` on the panels in `receiving`.
+
+# Keyword Arguments
+ - `finite_core`: Flag indicating whether the finite core model is enabled. Defaults
+    to `true`
+ - `symmetric`: Flag indicating whether sending panels should be mirrored across the X-Z plane
+ - `wake_shedding_locations`: Wake shedding locations for the trailing edge panels in `sending`
+ - `trailing_vortices`: Indicates whether trailing vortices are used. Defaults to `true`.
+ - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
+    Defaults to [1, 0, 0]
+"""
+@inline function update_trailing_edge_coefficients!(AIC, receiving, sending;
+    finite_core = true,
+    symmetric = false,
+    wake_shedding_locations = nothing,
+    trailing_vortices = true,
+    xhat = SVector(1, 0, 0))
+
+    # get sending surface dimensions
+    nc, ns = size(sending)
+    ls = LinearIndices(sending)
+
+    # determine control flow parameters based on inputs
+    reuse_edges = !finite_core
+
+    # loop over receiving panels
+    for i in eachindex(receiving)
+
+        # control point location
+        rcp = controlpoint(receiving[i])
+
+        # normal vector body axis
+        nhat = normal(receiving[i])
+
+        if reuse_edges
+            # use more efficient loop when we can reuse edges
+
+            # panels on the trailing edge (excluding bottom right corner)
+            j1 = nc
+            for j2 in 1:ns-1
+
+                # compute induced velocity
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
+                    finite_core = finite_core,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    right = false,
+                    reflected_right = false,
+                    left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    right_trailing = false,
+                    reflected_right_trailing = false)
+
+                # add partial contribution from current panel
+                AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
+
+                # add partial contribution from panel to the left
+                if j2 > 1
+                    AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                end
+
+                if !isnothing(wake_shedding_locations)
+
+                    # add influence of surface-wake interface panel
+                    panel = sending[j1, j2]
+                    r11 = bottom_left(panel)
+                    r12 = bottom_right(panel)
+                    r21 = wake_shedding_locations[j2]
+                    r22 = wake_shedding_locations[j2+1]
+                    core_size = get_core_size(panel)
+
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        right = false,
+                        reflected_right = false,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = false,
+                        reflected_right_trailing = false)
+
+                    # add partial contribution from current panel
+                    AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+
+                    # add partial contribution from panel to the left
+                    if j2 > 1
+                        AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                    end
+
+                end
+
+            end
+
+            # bottom right corner
+            j1 = nc
+            j2 = ns
+
+            Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
+                finite_core = finite_core,
+                symmetric = symmetric,
+                xhat = xhat,
+                bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                reflected_right_trailing = isnothing(wake_shedding_locations) && trailing_vortices)
+
+            # add partial contribution from current panel
+            AIC[i,ls[j1, j2]] = dot(Vhat, nhat)
+
+            # add partial contribution from panel to the left
+            if j2 > 1
+                AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+            end
+
+            if !isnothing(wake_shedding_locations)
+
+                # add influence of surface-wake interface panel
+                panel = sending[j1, j2]
+                r11 = bottom_left(panel)
+                r12 = bottom_right(panel)
+                r21 = wake_shedding_locations[j2]
+                r22 = wake_shedding_locations[j2+1]
+                core_size = get_core_size(panel)
+
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                    r11, r12, r21, r22;
+                    finite_core = finite_core,
+                    core_size = core_size,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    top = false,
+                    reflected_top = false,
                     bottom = !trailing_vortices,
                     reflected_bottom = !trailing_vortices,
                     left_trailing = trailing_vortices,
@@ -488,9 +860,67 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                     right_trailing = trailing_vortices,
                     reflected_right_trailing = trailing_vortices)
 
+                # add partial contribution from current panel
+                AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
+
+                # add partial contribution from panel to the left
+                if j2 > 1
+                    AIC[i,ls[j1, j2-1]] += dot(Vhat_l, nhat)
+                end
+
+            end
+
+        else
+            # we can't reuse edges, probably because the finite-core model is active
+
+            # calculate influence of all trailing edge panels
+            j1 = nc
+            for j2 in 1:ns
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, sending[j1, j2];
+                    finite_core = finite_core,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
+                    reflected_right_trailing = isnothing(wake_shedding_locations) && trailing_vortices)
+
                 # add to AIC matrix
                 j = ls[j1, j2]
-                AIC[i,j] += dot(Vhat, nhat)
+                AIC[i,j] = dot(Vhat, nhat)
+
+                if !isnothing(wake_shedding_locations)
+
+                    # add influence of surface-wake interface panel
+                    panel = sending[j1, j2]
+                    r11 = bottom_left(panel)
+                    r12 = bottom_right(panel)
+                    r21 = wake_shedding_locations[j2]
+                    r22 = wake_shedding_locations[j2+1]
+                    core_size = get_core_size(panel)
+
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = trailing_vortices,
+                        reflected_right_trailing = trailing_vortices)
+
+                    # add contribution to AIC matrix
+                    AIC[i,j] += dot(Vhat, nhat)
+
+                end
+
             end
         end
     end
@@ -639,6 +1069,7 @@ the circulation strengths provided in Γ.
  - `ns`: Number of panels in the spanwise direction. Defaults to `size(surface, 2)`
  - `finite_core`: Flag indicating whether the finite core model should be used
  - `symmetric`: Flag indicating whether sending panels should be mirrored across the X-Z plane
+ - `wake_shedding_locations`: Wake shedding locations for the trailing edge panels in `surface`
  - `trailing_vortices`: Indicates whether trailing vortices are used. Defaults to `true`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
@@ -668,6 +1099,7 @@ the circulation strengths provided in Γ.
 @inline function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
     nc = size(surface, 1), ns = size(surface, 2),
     symmetric = false, finite_core = true,
+    wake_shedding_locations = nothing,
     trailing_vortices = true, xhat = SVector(1, 0, 0),
     skip_leading_edge = false, skip_inside_edges = false, skip_trailing_edge = false,
     skip_top = (), skip_bottom = (),
@@ -715,7 +1147,7 @@ the circulation strengths provided in Γ.
     # when skipping vortices, keep their reflections unless `rcp` lies on the symmetry plane
     keep_reflected = not_on_symmetry_plane(rcp)
 
-    if false#reuse_edges
+    if reuse_edges
         # use more efficient loop when we can reuse edges
 
         # calculate influence of all panels except right and trailing edges
@@ -753,6 +1185,7 @@ the circulation strengths provided in Γ.
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
                 symmetric = symmetric,
                 finite_core = finite_core,
+                xhat = xhat,
                 top = include_top,
                 reflected_top = include_reflected_top,
                 left = include_left,
@@ -858,6 +1291,7 @@ the circulation strengths provided in Γ.
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
                 symmetric = symmetric,
                 finite_core = finite_core,
+                xhat = xhat,
                 top = include_top,
                 reflected_top = include_reflected_top,
                 left = include_left,
@@ -944,12 +1378,14 @@ the circulation strengths provided in Γ.
 
             # check if the bottom bound vortex should be included
             include_bottom =
+                isnothing(wake_shedding_locations) &&
                 !(J in skip_bottom) && # skipped indices
                 !trailing_vortices && # no trailing horseshoe vortex
                 !skip_trailing_edge # skipped trailing edge
 
             # check if the reflection of the bottom bound vortex should be included
             include_reflected_bottom =
+                isnothing(wake_shedding_locations) &&
                 (!(J in skip_bottom) || keep_reflected) && # skipped indices
                 !trailing_vortices && # no trailing horseshoe vortex
                 !skip_trailing_edge # skipped trailing edge
@@ -962,11 +1398,13 @@ the circulation strengths provided in Γ.
 
             # check if left trailing vortex should be included
             include_left_trailing =
+                isnothing(wake_shedding_locations) &&
                 !(J in skip_left_trailing) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
             # check if reflection of left trailing vortex should be included
             include_reflected_left_trailing =
+                isnothing(wake_shedding_locations) &&
                 (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
@@ -981,6 +1419,7 @@ the circulation strengths provided in Γ.
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
                 symmetric = symmetric,
                 finite_core = finite_core,
+                xhat = xhat,
                 top = include_top,
                 reflected_top = include_reflected_top,
                 bottom = include_bottom,
@@ -1048,6 +1487,114 @@ the circulation strengths provided in Γ.
                     end
                 end
             end
+
+            if !isnothing(wake_shedding_locations)
+
+                J = CartesianIndex(j1+1, j2)
+
+                # check if the bottom bound vortex should be included
+                include_bottom =
+                    !(J in skip_bottom) && # skipped indices
+                    !trailing_vortices && # no trailing horseshoe vortex
+                    !skip_trailing_edge # skipped trailing edge
+
+                # check if the reflection of the bottom bound vortex should be included
+                include_reflected_bottom =
+                    (!(J in skip_bottom) || keep_reflected) && # skipped indices
+                    !trailing_vortices && # no trailing horseshoe vortex
+                    !skip_trailing_edge # skipped trailing edge
+
+                # check if left bound vortex should be included
+                include_left = !(J in skip_left)
+
+                # check if reflection of left bound vortex should be included
+                include_reflected_left = (!(J in skip_left) || keep_reflected)
+
+                # check if left trailing vortex should be included
+                include_left_trailing =
+                    !(J in skip_left_trailing) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # check if reflection of left trailing vortex should be included
+                include_reflected_left_trailing =
+                    (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # skip top edge because the bottom edge of the trailing edge
+                # panel cancels its influence exactly.
+                include_top = false
+                include_reflected_top = false
+
+                # skip right edge and right trailing vortex since their influence is
+                # added during another panel's induced velocity calculations
+                include_right = false
+                include_reflected_right = false
+                include_right_trailing = false
+                include_reflected_right_trailing = false
+
+                # add influence of surface-wake interface panel
+                panel = surface[j1, j2]
+                r11 = bottom_left(panel)
+                r12 = bottom_right(panel)
+                r21 = wake_shedding_locations[j2]
+                r22 = wake_shedding_locations[j2+1]
+                core_size = get_core_size(panel)
+
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                    r11, r12, r21, r22,
+                    finite_core = finite_core,
+                    core_size = core_size,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    top = include_top,
+                    reflected_top = include_reflected_top,
+                    bottom = include_bottom,
+                    reflected_bottom = include_reflected_bottom,
+                    left = include_left,
+                    reflected_left = include_reflected_left,
+                    right = include_right,
+                    reflected_right = include_reflected_right,
+                    left_trailing = include_left_trailing,
+                    reflected_left_trailing = include_reflected_left_trailing,
+                    right_trailing = include_right_trailing,
+                    reflected_right_trailing = include_reflected_right_trailing)
+
+                # add contribution from interface panel
+                if isnothing(Γ)
+                    Vind += Vhat * surface[j1, j2].gamma
+                else
+                    j = ls[j1, j2]
+
+                    Vind += Vhat * Γ[j]
+
+                    if derivatives
+                        Vind_a += Vhat*Γ_a[j]
+                        Vind_b += Vhat*Γ_b[j]
+                        Vind_p += Vhat*Γ_p[j]
+                        Vind_q += Vhat*Γ_q[j]
+                        Vind_r += Vhat*Γ_r[j]
+                    end
+                end
+
+                # add partial contribution from the right edge of the panel to the left of this one (if applicable)
+                if j2 > 1
+                    if isnothing(Γ)
+                        Vind += Vhat_l * surface[j1, j2-1].gamma
+                    else
+                        j = ls[j1, j2-1]
+
+                        Vind += Vhat_l * Γ[j]
+
+                        if derivatives
+                            Vind_a += Vhat_l*Γ_a[j]
+                            Vind_b += Vhat_l*Γ_b[j]
+                            Vind_p += Vhat_l*Γ_p[j]
+                            Vind_q += Vhat_l*Γ_q[j]
+                            Vind_r += Vhat_l*Γ_r[j]
+                        end
+                    end
+                end
+            end
         end
 
         # bottom right corner
@@ -1071,12 +1618,14 @@ the circulation strengths provided in Γ.
 
         # check if the bottom bound vortex should be included
         include_bottom =
+            isnothing(wake_shedding_locations) &&
             !(J in skip_bottom) && # skipped indices
             !trailing_vortices && # no trailing horseshoe vortex
             !skip_trailing_edge # skipped trailing edge
 
         # check if the reflection of the bottom bound vortex should be included
         include_reflected_bottom =
+            isnothing(wake_shedding_locations) &&
             (!(J in skip_bottom) || keep_reflected) && # skipped indices
             !trailing_vortices && # no trailing horseshoe vortex
             !skip_trailing_edge # skipped trailing edge
@@ -1095,21 +1644,25 @@ the circulation strengths provided in Γ.
 
         # check if left trailing vortex should be included
         include_left_trailing =
+            isnothing(wake_shedding_locations) &&
             !(J in skip_left_trailing) && # skipped indices
             trailing_vortices # trailing horseshoe vortex
 
         # check if reflection of left trailing vortex should be included
         include_reflected_left_trailing =
+            isnothing(wake_shedding_locations) &&
             (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
             trailing_vortices # trailing horseshoe vortex
 
         # check if left trailing vortex should be included
         include_right_trailing =
+            isnothing(wake_shedding_locations) &&
             !(J in skip_right_trailing) && # skipped indices
             trailing_vortices # trailing horseshoe vortex
 
         # check if reflection of right trailing vortex should be included
         include_reflected_right_trailing =
+            isnothing(wake_shedding_locations) &&
             (!(J in skip_right_trailing) || keep_reflected) && # skipped indices
             trailing_vortices # trailing horseshoe vortex
 
@@ -1117,6 +1670,7 @@ the circulation strengths provided in Γ.
         Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
             finite_core = finite_core,
             symmetric = symmetric,
+            xhat = xhat,
             top = include_top,
             reflected_top = include_reflected_top,
             bottom = include_bottom,
@@ -1185,6 +1739,123 @@ the circulation strengths provided in Γ.
             end
         end
 
+        if !isnothing(wake_shedding_locations)
+
+            J = CartesianIndex(j1+1, j2)
+
+            # check if the bottom bound vortex should be included
+            include_bottom =
+                !(J in skip_bottom) && # skipped indices
+                !trailing_vortices && # no trailing horseshoe vortex
+                !skip_trailing_edge # skipped trailing edge
+
+            # check if the reflection of the bottom bound vortex should be included
+            include_reflected_bottom =
+                (!(J in skip_bottom) || keep_reflected) && # skipped indices
+                !trailing_vortices && # no trailing horseshoe vortex
+                !skip_trailing_edge # skipped trailing edge
+
+            # check if left bound vortex should be included
+            include_left = !(J in skip_left)
+
+            # check if reflection of left bound vortex should be included
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
+
+            # check if right bound vortex should be included
+            include_right = !(J in skip_right)
+
+            # check if reflection of right bound vortex should be included
+            include_reflected_right = (!(J in skip_right) || keep_reflected)
+
+            # check if left trailing vortex should be included
+            include_left_trailing =
+                !(J in skip_left_trailing) && # skipped indices
+                trailing_vortices # trailing horseshoe vortex
+
+            # check if reflection of left trailing vortex should be included
+            include_reflected_left_trailing =
+                (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
+                trailing_vortices # trailing horseshoe vortex
+
+            # check if left trailing vortex should be included
+            include_right_trailing =
+                !(J in skip_right_trailing) && # skipped indices
+                trailing_vortices # trailing horseshoe vortex
+
+            # check if reflection of right trailing vortex should be included
+            include_reflected_right_trailing =
+                (!(J in skip_right_trailing) || keep_reflected) && # skipped indices
+                trailing_vortices # trailing horseshoe vortex
+
+            # skip top edge because the bottom edge of the trailing edge
+            # panel cancels its influence exactly.
+            include_top = false
+            include_reflected_top = false
+
+            # add influence of surface-wake interface panel
+            panel = surface[j1, j2]
+            r11 = bottom_left(panel)
+            r12 = bottom_right(panel)
+            r21 = wake_shedding_locations[j2]
+            r22 = wake_shedding_locations[j2+1]
+            core_size = get_core_size(panel)
+
+            Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                r11, r12, r21, r22,
+                finite_core = finite_core,
+                core_size = core_size,
+                symmetric = symmetric,
+                xhat = xhat,
+                top = include_top,
+                reflected_top = include_reflected_top,
+                bottom = include_bottom,
+                reflected_bottom = include_reflected_bottom,
+                left = include_left,
+                reflected_left = include_reflected_left,
+                right = include_right,
+                reflected_right = include_reflected_right,
+                left_trailing = include_left_trailing,
+                reflected_left_trailing = include_reflected_left_trailing,
+                right_trailing = include_right_trailing,
+                reflected_right_trailing = include_reflected_right_trailing)
+
+            # add contribution from interface panel
+            if isnothing(Γ)
+                Vind += Vhat * surface[j1, j2].gamma
+            else
+                j = ls[j1, j2]
+
+                Vind += Vhat * Γ[j]
+
+                if derivatives
+                    Vind_a += Vhat*Γ_a[j]
+                    Vind_b += Vhat*Γ_b[j]
+                    Vind_p += Vhat*Γ_p[j]
+                    Vind_q += Vhat*Γ_q[j]
+                    Vind_r += Vhat*Γ_r[j]
+                end
+            end
+
+            # add partial contribution from the right edge of the panel to the left of this one (if applicable)
+            if j2 > 1
+                if isnothing(Γ)
+                    Vind += Vhat_l * surface[j1, j2-1].gamma
+                else
+                    j = ls[j1, j2-1]
+
+                    Vind += Vhat_l * Γ[j]
+
+                    if derivatives
+                        Vind_a += Vhat_l*Γ_a[j]
+                        Vind_b += Vhat_l*Γ_b[j]
+                        Vind_p += Vhat_l*Γ_p[j]
+                        Vind_q += Vhat_l*Γ_q[j]
+                        Vind_r += Vhat_l*Γ_r[j]
+                    end
+                end
+            end
+        end
+
     else
 
         # calculate influence of all panels except trailing edge panels
@@ -1230,6 +1901,7 @@ the circulation strengths provided in Γ.
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
                 finite_core = finite_core,
                 symmetric = symmetric,
+                xhat = xhat,
                 top = include_top,
                 reflected_top = include_reflected_top,
                 bottom = include_bottom,
@@ -1277,12 +1949,14 @@ the circulation strengths provided in Γ.
 
             # check if the bottom bound vortex should be included
             include_bottom =
+                isnothing(wake_shedding_locations) &&
                 !(J in skip_bottom) && # skipped indices
                 !trailing_vortices && # no trailing horseshoe vortex
                 !skip_trailing_edge # skipped trailing edge
 
             # check if the reflection of the bottom bound vortex should be included
             include_reflected_bottom =
+                isnothing(wake_shedding_locations) &&
                 (!(J in skip_bottom) || keep_reflected) && # skipped indices
                 !trailing_vortices && # no trailing horseshoe vortex
                 !skip_trailing_edge # skipped trailing edge
@@ -1301,27 +1975,32 @@ the circulation strengths provided in Γ.
 
             # check if left trailing vortex should be included
             include_left_trailing =
+                isnothing(wake_shedding_locations) &&
                 !(J in skip_left_trailing) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
             # check if reflection of left trailing vortex should be included
             include_reflected_left_trailing =
+                isnothing(wake_shedding_locations) &&
                 (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
             # check if left trailing vortex should be included
             include_right_trailing =
+                isnothing(wake_shedding_locations) &&
                 !(J in skip_right_trailing) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
             # check if reflection of right trailing vortex should be included
             include_reflected_right_trailing =
+                isnothing(wake_shedding_locations) &&
                 (!(J in skip_right_trailing) || keep_reflected) && # skipped indices
                 trailing_vortices # trailing horseshoe vortex
 
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
                 finite_core = finite_core,
                 symmetric = symmetric,
+                xhat = xhat,
                 top = include_top,
                 reflected_top = include_reflected_top,
                 bottom = include_bottom,
@@ -1351,11 +2030,108 @@ the circulation strengths provided in Γ.
                     Vind_r += Vhat*Γ_r[j]
                 end
             end
+
+            if !isnothing(wake_shedding_locations)
+
+                J = CartesianIndex(j1+1, j2)
+
+                # check if the bottom bound vortex should be included
+                include_bottom =
+                    !(J in skip_bottom) && # skipped indices
+                    !trailing_vortices && # no trailing horseshoe vortex
+                    !skip_trailing_edge # skipped trailing edge
+
+                # check if the reflection of the bottom bound vortex should be included
+                include_reflected_bottom =
+                    (!(J in skip_bottom) || keep_reflected) && # skipped indices
+                    !trailing_vortices && # no trailing horseshoe vortex
+                    !skip_trailing_edge # skipped trailing edge
+
+                # check if left bound vortex should be included
+                include_left = !(J in skip_left)
+
+                # check if reflection of left bound vortex should be included
+                include_reflected_left = (!(J in skip_left) || keep_reflected)
+
+                # check if right bound vortex should be included
+                include_right = !(J in skip_right)
+
+                # check if reflection of right bound vortex should be included
+                include_reflected_right = (!(J in skip_right) || keep_reflected)
+
+                # check if left trailing vortex should be included
+                include_left_trailing =
+                    !(J in skip_left_trailing) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # check if reflection of left trailing vortex should be included
+                include_reflected_left_trailing =
+                    (!(J in skip_left_trailing) || keep_reflected) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # check if left trailing vortex should be included
+                include_right_trailing =
+                    !(J in skip_right_trailing) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # check if reflection of right trailing vortex should be included
+                include_reflected_right_trailing =
+                    (!(J in skip_right_trailing) || keep_reflected) && # skipped indices
+                    trailing_vortices # trailing horseshoe vortex
+
+                # skip top edge because the bottom edge of the trailing edge
+                # panel cancels its influence exactly.
+                include_top = false
+                include_reflected_top = false
+
+                # add influence of surface-wake interface panel
+                panel = surface[j1, j2]
+                r11 = bottom_left(panel)
+                r12 = bottom_right(panel)
+                r21 = wake_shedding_locations[j2]
+                r22 = wake_shedding_locations[j2+1]
+                core_size = get_core_size(panel)
+
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                    r11, r12, r21, r22,
+                    finite_core = finite_core,
+                    core_size = core_size,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    top = false,
+                    reflected_top = false,
+                    bottom = include_bottom,
+                    reflected_bottom = include_reflected_bottom,
+                    left = include_left,
+                    reflected_left = include_reflected_left,
+                    right = include_right,
+                    reflected_right = include_reflected_right,
+                    left_trailing = include_left_trailing,
+                    reflected_left_trailing = include_reflected_left_trailing,
+                    right_trailing = include_right_trailing,
+                    reflected_right_trailing = include_reflected_right_trailing)
+
+                # add contribution from interface panel
+                if isnothing(Γ)
+                    Vind += Vhat * surface[j1, j2].gamma
+                else
+                    j = ls[j1, j2]
+
+                    Vind += Vhat * Γ[j]
+
+                    if derivatives
+                        Vind_a += Vhat*Γ_a[j]
+                        Vind_b += Vhat*Γ_b[j]
+                        Vind_p += Vhat*Γ_p[j]
+                        Vind_q += Vhat*Γ_q[j]
+                        Vind_r += Vhat*Γ_r[j]
+                    end
+                end
+            end
         end
 
     end
 
-    # if no panels, no influence
     if derivatives
         # pack up derivatives
         dVind = Vind_a, Vind_b, Vind_p, Vind_q, Vind_r

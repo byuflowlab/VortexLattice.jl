@@ -1,13 +1,17 @@
 # Guide
 
-This guide demonstrates the basic capabilities of using `VortexLattice`.  First, we need to load the package.
+This guide demonstrates the basic steady analysis capabilities of VortexLattice.
+See the examples for more advanced uses of VortexLattice, including unsteady
+simulations.
+
+We start by loading the package.
 
 ```@example guide
 using VortexLattice
 nothing #hide
 ```
 
-Then we need to create our geometry.  While `VortexLattice` can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
+Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
 
 ```@example guide
 xle = [0.0, 0.4] # leading edge x-position
@@ -32,15 +36,18 @@ spacing_c = Uniform() # chordwise discretization scheme
 nothing #hide
 ```
 
-We generate our lifting surface using `wing_to_surface_panels`.  We can also generate our lifting surface from a pre-existing grid using `grid_to_surface_panels`.
+We generate our lifting surface using `wing_to_surface_panels`.  We use the keyword argument `mirror` to mirror our geometry across the X-Y plane.  A grid with the
+panel corners and a matrix of vortex lattice panels representing the surface
+of the wing is returned from this function.  Only the latter is needed for the analysis. The former is provided simply for the user's convenience.
 
 ```@example guide
-surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
 spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 nothing #hide
 ```
 
-Note that we used the keyword argument `mirror` to create a copy of our geometry, reflected across the X-Z plane.
+We could have also generated our lifting surface from a pre-existing grid using
+`grid_to_surface_panels`.
 
 Now that we have generated our geometry we need to define our reference parameters and freestream properties. We use the following reference parameters
 
@@ -53,7 +60,7 @@ ref = Reference(Sref, cref, bref, rref)
 nothing #hide
 ```
 
-We use the following flow conditions
+We use the following freestream properties.
 ```@example guide
 alpha = 1.0*pi/180 # angle of attack
 beta = 0.0 # sideslip angle
@@ -62,7 +69,7 @@ fs = Freestream(alpha, beta, Omega)
 nothing #hide
 ```
 
-Since the flow conditions are symmetric, we could have modeled only one half of our wing and used symmetry to model the other half.  This, however, would give incorrect results for the lateral stability derivatives so we have instead mirrored our geometry across the X-Z plane.
+Since the flow conditions are symmetric, we could have modeled one half of our wing and used symmetry to model the other half.  This, however, would give incorrect results for the lateral stability derivatives so we have instead mirrored our geometry across the X-Z plane.
 
 ```@example guide
 symmetric = false
@@ -78,16 +85,16 @@ We are now ready to perform a steady state analysis. We do so by calling the `st
    argument `derivatives`
 
 ```@example guide
-system = steady_analysis(surface, ref, fs; symmetric = symmetric)
+system = steady_analysis(surface, ref, fs; symmetric)
 nothing #hide
 ```
 
-The result of our analysis is an object of type `system` which holds the system state.  Note that the keyword argument `symmetric` is required, because it must
+The result of our analysis is an object of type `system` which holds the system state.  Note that the keyword argument `symmetric` is required, because it is must
 be reused in later analyses.
 
 Once we have performed our steady state analysis (and associated near field analysis) we can extract the body force/moment coefficients using the function `body_forces`. These forces are returned in the reference frame specified by the keyword argument `frame`, which defaults to the body reference frame.
 
-Note that a near field analysis must have been performed on `system` for this function to return sensible results.
+Note that a near field analysis must have been performed on `system` for this function to return sensible results (which is the default behavior when running an analysis).
 
 ```@example guide
 CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
@@ -112,7 +119,9 @@ CDiff = far_field_drag(system, surface, ref, fs; symmetric = symmetric)
 nothing #hide
 ```
 
-We can also compute body or stability derivatives for the aircraft.
+We can also extract the body and/or stability derivatives for the aircraft easily using the functions `body_derivatives` and/or `stability_derivatives`.  
+
+Once again, note that the derivatives of the near-field analysis forces with respect to the freestream variables must have been previously calculated (which is the default behavior when running an analysis) for these functions to yield sensible results.
 
 ```@example guide
 dCFb, dCMb = body_derivatives(system, surface, ref, fs; symmetric = symmetric)

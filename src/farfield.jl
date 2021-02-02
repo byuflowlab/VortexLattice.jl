@@ -1,5 +1,3 @@
-
-
 """
     far_field_drag(system, surface, reference, freestream; kwargs...)
 
@@ -10,10 +8,10 @@ been computed and is present in `system`
 
 # Arguments
  - `system`: Pre-allocated system properties
- - `surface`: Matrix of panels of shape (nc, ns) where `nc` is the number of
-    chordwise panels and `ns` is the number of spanwise panels
- - `reference`: Reference parameters (see `Reference`)
- - `freestream`: Freestream parameters (see `Freestream`)
+ - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape (nc, ns)
+    where `nc` is the number of chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: Reference parameters (see [`Reference`](@ref))
+ - `freestream`: Freestream parameters (see [`Freestream`](@ref))
 
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
@@ -40,11 +38,11 @@ been computed and is present in `system`
 
 # Arguments
  - `system`: Pre-allocated system properties
- - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
- - `reference`: Reference parameters (see `Reference`)
- - `freestream`: Freestream parameters (see `Freestream`)
+ - `surfaces`: Vector of surfaces, represented by matrices of surface panels
+    (see [`SurfacePanel`](@ref)) of shape (nc, ns) where `nc` is the number of
+    chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: Reference parameters (see [`Reference`](@ref))
+ - `freestream`: Freestream parameters (see [`Freestream`](@ref))
 
 # Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
@@ -62,7 +60,7 @@ function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref,
 
     # perform far field analysis
     nsurf = length(surfaces)
-    CD = zero(eltype(eltype(eltype(surfaces))))
+    CD = zero(eltype(system))
     for i = 1:nsurf, j = 1:nsurf
         CD += far_field_drag(trefftz[i], trefftz[j], ref, fs; symmetric = symmetric[j])
     end
@@ -71,19 +69,35 @@ function far_field_drag(system, surfaces::AbstractVector{<:AbstractMatrix}, ref,
 end
 
 # one surface on another surface
+"""
+    far_field_drag(receiving, sending, reference, freestream; kwargs...)
+
+Computes the induced drag on `receiving` from `sending` using the Trefftz
+plane analysis.
+
+# Arguments
+ - `receiving`: Vector of receiving Trefftz panels (see [`TrefftzPanel`](@ref))
+ - `sending`: Vector of sending Trefftz panels (see [`TrefftzPanel`](@ref))
+ - `reference`: Reference parameters (see [`Reference`](@ref))
+ - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+
+# Keyword Arguments
+ - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
+    should be used when calculating induced velocities
+"""
 function far_field_drag(receiving, sending, ref, fs; symmetric)
 
+    # get float type
     TF = promote_type(eltype(eltype(receiving)), eltype(eltype(sending)), eltype(ref), eltype(fs))
 
+    # get number of receiving and sending panels
     Nr = length(receiving)
     Ns = length(sending)
 
     # add up drag
     Di = zero(TF)
-    for j = 1:Ns
-        for i = 1:Nr
-            Di += trefftz_panel_induced_drag(receiving[i], sending[j]; symmetric)
-        end
+    for j = 1:Ns, i = 1:Nr
+        Di += trefftz_panel_induced_drag(receiving[i], sending[j]; symmetric)
     end
 
     # apply symmetry

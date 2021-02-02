@@ -81,8 +81,9 @@ end
 """
     chordwise_spacing(n, spacing::AbstractSpacing)
 
-Distribute `n-1` vortex and `n-1` control point chordwise locations on the
-interval between 0 and 1 according to the discretization strategy in `spacing`.
+Distribute `n` panel edge, `n-1` vortex, and `n-1` control point chordwise
+locations on the interval between 0 and 1 according to the discretization
+strategy in `spacing`.
 """
 chordwise_spacing
 
@@ -166,7 +167,7 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 end
 
 """
-    grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
+    grid_to_surface_panels(xyz; mirror = false, fcore = (c, Δs) -> 1e-3)
 
 Construct a set of panels with associated vortex rings given a potentially curved
 lifting surface defined by a grid with dimensions (3, i, j) where `i` corresponds
@@ -182,9 +183,11 @@ with dimensions (i, j) containing the generated panels.
 - `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
 - `fcore`: function for setting the finite core size based on the chord length
        (in the x-direction) and/or the panel width (in the y/z directions).
-       Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
+       Defaults to `(c, Δs) -> 1e-3`
 """
-function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2))
+function grid_to_surface_panels(xyz;
+    mirror = false,
+    fcore = (c, Δs) -> 1e-3)
 
     TF = eltype(xyz)
 
@@ -216,10 +219,10 @@ function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/
         for i = 1:nc-1
 
             # grid corners of current panel
-            r1 = r1n # top left
-            r2 = r2n # top right
-            r3 = r3n # bottom left
-            r4 = r4n # bottom right
+            r1 = r1n # top left of panel
+            r2 = r2n # top right of panel
+            r3 = r3n # bottom left of panel
+            r4 = r4n # bottom right of panel
 
             # grid corners of next panel
             r1n = r3 # top left
@@ -258,12 +261,12 @@ function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
-            # area of current panel
-            area = bretschneider_area(r1, r2, r3, r4)
+            # get chord length of current panel
+            chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
             panels[ipanel] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
-                ncp, core_size, area)
+                ncp, core_size, chord)
         end
 
         # grid corners of current panel
@@ -303,13 +306,13 @@ function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
         core_size = fcore(c, Δs)
 
-        # area of current panel
-        area = bretschneider_area(r1, r2, r3, r4)
+        # get chord length of current panel
+        chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
         ip = i
         jp = mirror*right_side*ns + j
         panels[ip,jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp,
-            core_size, area)
+            core_size, chord)
     end
 
     # other side
@@ -340,10 +343,13 @@ function grid_to_surface_panels(xyz; mirror=false, fcore=(c, Δs)->max(c/4, Δs/
 end
 
 """
-    grid_to_surface_panels(xyz, ns, nc; mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
-        spacing_s=Cosine(), spacing_c=Uniform(),
-        interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
-        interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    grid_to_surface_panels(xyz, ns, nc;
+        mirror = false,
+        fcore = (c, Δs) -> 1e-3,
+        spacing_s = Cosine(),
+        spacing_c = Uniform(),
+        interp_s = (x, y, xpt) -> LinearInterpolation(x, y)(xpt),
+        interp_c = (x, y, xpt) -> LinearInterpolation(x, y)(xpt))
 
 Discretize a potentially curved lifting surface defined by a grid with dimensions
 (3, i, j) where `i` corresponds to the chordwise direction (ordered from leading
@@ -366,16 +372,19 @@ and a matrix with dimensions (i, j) containing the generated panels.
  - `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
  - `fcore`: function for setting the finite core size based on the chord length
         (in the x-direction) and/or the panel width (in the y/z directions).
-        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
+        Defaults to `(c, Δs) -> 1e-3`
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
  - `interp_c`: chordwise interpolation function, defaults to linear interpolation
 """
-function grid_to_surface_panels(xyz, ns, nc; mirror=false,
-    fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
-    interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt),
-    interp_c=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+function grid_to_surface_panels(xyz, ns, nc;
+    mirror = false,
+    fcore = (c, Δs) -> 1e-3,
+    spacing_s = Cosine(),
+    spacing_c = Uniform(),
+    interp_s = (x, y, xpt) -> LinearInterpolation(x, y)(xpt),
+    interp_c = (x, y, xpt) -> LinearInterpolation(x, y)(xpt))
 
     TF = eltype(xyz)
 
@@ -425,17 +434,17 @@ function grid_to_surface_panels(xyz, ns, nc; mirror=false,
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
-            # set area
+            # get chord length of current panel
             r1 = xyz_panels[i,j] # top left
             r2 = xyz_panels[i,j+1] # top right
             r3 = xyz_panels[i+1, j] # bottom left
             r4 = xyz_panels[i+1, j+1] # bottom right
-            area = bretschneider_area(r1, r2, r3, r4)
+            chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             ip = i
             jp = mirror*right_side*ns + j
             panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
-                ncp, core_size, area)
+                ncp, core_size, chord)
         end
     end
 
@@ -467,9 +476,12 @@ end
 
 """
     wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-        fc=fill(x->0, length(xle)), mirror=false,
-        fcore=(c, Δs)->max(c/4, Δs/2), spacing_s=Cosine(), spacing_c=Uniform(),
-        interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+        fc = fill(x -> 0, length(xle)),
+        mirror = false,
+        fcore = (c, Δs) -> 1e-3,
+        spacing_s = Cosine(),
+        spacing_c = Uniform(),
+        interp_s = (x, y, xpt) -> LinearInterpolation(x, y)(xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise panels with associated
 vortex rings according to the spanwise discretization scheme `spacing_s` and
@@ -491,14 +503,18 @@ with dimensions (i, j) containing the generated panels.
  - `mirror`:  mirror the geometry across the X-Z plane?, defaults to `false`
  - `fcore`: function for setting the finite core size based on the chord length
         (in the x-direction) and/or the panel width (in the y/z directions).
-        Defaults to `(c, Δs)->max(c/4, Δs/2)` (which corresponds to AVL's implementation)
+        Defaults to `(c, Δs) -> 1e-3`
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
 """
 function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    fc=fill(x->0, length(xle)), mirror=false, fcore=(c, Δs)->max(c/4, Δs/2),
-    spacing_s=Cosine(), spacing_c=Uniform(), interp_s=(x,y,xpt)->LinearInterpolation(x, y)(xpt))
+    fc = fill(x->0, length(xle)),
+    mirror = false,
+    fcore = (c, Δs)->1e-3,
+    spacing_s = Cosine(),
+    spacing_c = Uniform(),
+    interp_s = (x, y, xpt) -> LinearInterpolation(x, y)(xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -642,17 +658,17 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
-            # set area
+            # set chord length of current panel
             r1 = xyz_panels[:,i,j] # top left
             r2 = xyz_panels[:,i,j+1] # top right
             r3 = xyz_panels[:,i+1, j] # bottom left
             r4 = xyz_panels[:,i+1, j+1] # bottom right
-            area = bretschneider_area(r1, r2, r3, r4)
+            chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             ip = i
             jp = mirror*right_side*ns + j
             panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
-                ncp, core_size, area)
+                ncp, core_size, chord)
         end
     end
 
@@ -680,6 +696,23 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     end
 
     return xyz_panels, panels
+end
+
+"""
+    translate(grid, r)
+
+Return a copy of the grid points in `grid` translated the distance specified by vector `r`
+"""
+translate(grid, r) = grid .+ r
+
+"""
+    translate!(grid, r)
+
+Translate the grid points in `grid` the distance specified by vector `r`
+"""
+function translate!(grid, r)
+    grid .+= r
+    return grid
 end
 
 """
@@ -724,23 +757,6 @@ function repeated_trailing_edge_points(surfaces::AbstractVector{<:AbstractMatrix
     end
 
     return repeated_points
-end
-
-"""
-    bretschneider_area(rtl, rtr, rbl, rbr)
-
-Compute the area of a quadrilateral in 3D space.  Note that the calculated area
-is not the true area for curved surfaces.
-"""
-@inline function bretschneider_area(rtl, rtr, rbl, rbr)
-    A = rbr - rtl
-    B = rbl - rtr
-    area = 1/4*sqrt(4*norm(A)^2*norm(B)^2 - (
-        norm(rbr - rbl)^2 + # bottom
-        norm(rtr - rtl)^2 - # top
-        norm(rbl - rtl)^2 - # left
-        norm(rbr - rtr)^2)^2) # right
-    return area
 end
 
 """
