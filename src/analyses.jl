@@ -110,6 +110,9 @@ function steady_analysis!(system, surface::AbstractMatrix, ref, fs;
     # see if wake panels are being used
     wake_panels = nwake > 0
 
+    # store surface panels in system
+    system.surfaces[1] = surface
+
     # store new wake panels in system
     system.wakes[1] = wake
 
@@ -195,6 +198,11 @@ function steady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix},
 
     # see if wake panels are being used
     wake_panels = nwake .> 0
+
+    # store surface panels in the system
+    for i = 1:length(surfaces)
+        system.surfaces[i] = surfaces[i]
+    end
 
     # store new wake panels in the system
     for i = 1:length(wakes)
@@ -415,7 +423,7 @@ wake panels(see [`WakePanel`](@ref)) at each time step.
 function unsteady_analysis(surface::AbstractMatrix, reference, freestream, dx;
     nwake = length(dx), kwargs...)
 
-    system = System(surface; nwake)
+    system = System(surface; nw = nwake)
 
     return unsteady_analysis!(system, surface, reference, freestream, dx;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -471,7 +479,7 @@ step.
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractMatrix}, reference,
     freestream, dx; nwake = fill(length(dx), length(surfaces)), kwargs...)
 
-    system = System(surfaces; nwake)
+    system = System(surfaces; nw = nwake)
 
     return unsteady_analysis!(system, surfaces, reference, freestream, dx;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -510,6 +518,11 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
         system.wakes[1] = Matrix{WakePanel{TF}}(undef, nw, ns)
     end
 
+    # copy initial surface panels to pre-allocated storage
+    for I in CartesianIndices(surface)
+        system.surfaces[1][I] = surface[I]
+    end
+
     # copy initial wake panels to pre-allocated storage
     for I in CartesianIndices(initial_wake)
         system.wakes[1][I] = initial_wake[I]
@@ -537,6 +550,7 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
     AIC = system.AIC # AIC matrix
     w = system.w # downwash
     Γ = system.Γ # circulation
+    surface = system.surfaces[1] # surfaces
     wake = system.wakes[1] # wake panels
     wake_velocities = system.V[1] # wake panel vertex velocities
     dw = system.dw # derivatives of downwash wrt freestream variables
@@ -545,7 +559,8 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
     dΓdt = system.dΓdt # derivative of circulation wrt time
 
     # initialize solution history for each time step
-    surface_history = Vector{Matrix{PanelProperties{TF}}}(undef, length(save))
+    surface_history = Vector{Matrix{SurfacePanel{TF}}}(undef, length(save))
+    property_history = Vector{Matrix{PanelProperties{TF}}}(undef, length(save))
     wake_history = Vector{Matrix{WakePanel{TF}}}(undef, length(save))
     isave = 1
 
@@ -632,7 +647,8 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
 
         # save the panel history (if applicable)
         if it in save
-            surface_history[isave] = deepcopy(system.panels[1])
+            surface_history[isave] = deepcopy(system.surfaces[1])
+            property_history[isave] = deepcopy(system.properties[1])
             wake_history[isave] = wake[1:iwake, :]
             isave += 1
         end
@@ -658,7 +674,7 @@ function unsteady_analysis!(system, surface::AbstractMatrix, ref, fs, dx;
     end
 
     # return the modified system and the time history
-    return system, surface_history, wake_history
+    return system, surface_history, property_history, wake_history
 end
 
 """
@@ -701,6 +717,13 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
         end
     end
 
+    # copy initial surface panels to pre-allocated storage
+    for isurf = 1:nsurf
+        for I in CartesianIndices(surfaces[isurf])
+            system.surfaces[isurf][I] = surfaces[isurf][I]
+        end
+    end
+
     # copy initial wake panels to pre-allocated storage
     for isurf = 1:nsurf
         for I in CartesianIndices(initial_wakes[isurf])
@@ -730,6 +753,7 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     AIC = system.AIC
     w = system.w
     Γ = system.Γ
+    surfaces = system.surfaces
     wakes = system.wakes
     wake_velocities = system.V
     dw = system.dw
@@ -738,7 +762,8 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     dΓdt = system.dΓdt
 
     # initialize solution history for each time step
-    surface_history = Vector{Vector{Matrix{PanelProperties{TF}}}}(undef, length(save))
+    surface_history = Vector{Vector{Matrix{SurfacePanel{TF}}}}(undef, length(save))
+    property_history = Vector{Vector{Matrix{PanelProperties{TF}}}}(undef, length(save))
     wake_history = Vector{Vector{Matrix{WakePanel{TF}}}}(undef, length(save))
     isave = 1
 
@@ -829,7 +854,8 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
 
         # save the panel history
         if it in save
-            surface_history[isave] = deepcopy(system.panels)
+            surface_history[isave] = deepcopy(system.surfaces)
+            property_history[isave] = deepcopy(system.properties)
             wake_history[isave] = [wakes[isurf][1:iwake[isurf], :] for isurf = 1:nsurf]
             isave += 1
         end
@@ -858,5 +884,5 @@ function unsteady_analysis!(system, surfaces::AbstractVector{<:AbstractMatrix}, 
     end
 
     # return the modified system and time history
-    return system, surface_history, wake_history
+    return system, surface_history, property_history, wake_history
 end

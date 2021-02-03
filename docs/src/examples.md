@@ -803,11 +803,11 @@ for i = 1:length(AR)
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # run analysis
-    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+    system, surface_history, property_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
         symmetric=symmetric, wake_finite_core = false)
 
     # extract forces at each time step
-    CF[i], CM[i] = body_forces_history(surface, surface_history, ref, fs;     
+    CF[i], CM[i] = body_forces_history(surface_history, property_history, ref, fs;     
         symmetric=symmetric, frame=Wind())
 end
 
@@ -937,11 +937,11 @@ system = steady_analysis(surface, ref, fs; symmetric)
 CFs, CMs = body_forces(system, surface, ref, fs; symmetric, frame = Wind())
 
 # run transient analysis
-system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+system, surface_history, property_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
     symmetric=symmetric)
 
 # extract transient forces
-CF, CM = body_forces_history(surface, surface_history, ref, fs;     
+CF, CM = body_forces_history(surface_history, property_history, ref, fs;     
     symmetric=symmetric, frame=Wind())
 
 nothing #hide
@@ -1063,11 +1063,11 @@ for i = 1:length(k)
     Vinf, fs = prescribed_motion(dt; Xdot, Zdot)
 
     # run analysis
-    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
-        symmetric=symmetric, nwake = 50)
+    system, surface_history, property_history, wake_history = unsteady_analysis(
+        surface, ref, fs, dx; symmetric=symmetric, nwake = 50)
 
     # extract forces at each time step (uses instantaneous velocity as reference)
-    CF[i], CM[i] = body_forces_history(surface, surface_history, ref, fs;     
+    CF[i], CM[i] = body_forces_history(surface_history, property_history, ref, fs;     
         symmetric=symmetric, frame=Wind())
 
     # adjust coefficients to use reference velocity rather than instantaneous velocity

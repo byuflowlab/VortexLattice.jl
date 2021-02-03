@@ -91,16 +91,17 @@ function write_vtk(name, surface::AbstractMatrix{<:SurfacePanel},
 end
 
 """
-    write_vtk(name, surface, surface_history, wake_history, dt; kwargs...)
+    write_vtk(name, surface_history, property_history, wake_history, dt; kwargs...)
 
 Writes the results of an unsteady simulation to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
- - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
+ - `surface_history`: Vector of surfaces at each time step, where each surface is
+    represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `surface_history`: Vector of surface properties at each time step, where surface
+ - `property_history`: Vector of surface properties at each time step, where surface
     properties are represented by a matrix of panel properties (see [`PanelProperties`](@ref))
     of shape (nc, ns) where `nc` is the number of chordwise panels and `ns` is
     the number of spanwise panels
@@ -113,8 +114,8 @@ Writes the results of an unsteady simulation to Paraview files for visualization
     was used when calculating induced velocities
  - `metadata`: Dictionary of metadata to include in generated files
 """
-function write_vtk(name, surface::AbstractMatrix,
-    surface_history::AbstractVector{<:AbstractMatrix},
+function write_vtk(name, surface_history::AbstractVector{<:AbstractMatrix},
+    property_history::AbstractVector{<:AbstractMatrix},
     wake_history::AbstractVector{<:AbstractMatrix}, dt; kwargs...)
 
     # create paraview collection file
@@ -130,17 +131,17 @@ function write_vtk(name, surface::AbstractMatrix,
             vtk_multiblock(name*"-step$it") do vtmfile
 
                 # extract circulation at the trailing edge of `surface`
-                surface_circulation = getproperty.(surface_history[it][end,:], :gamma)
+                surface_circulation = getproperty.(property_history[it][end,:], :gamma)
 
                 # extract circulation at the leading edge of `wake`
                 if isempty(wake_history[it])
-                    wake_circulation = zeros(size(surface, 2))
+                    wake_circulation = zeros(size(surface_history[it], 2))
                 else
                     wake_circulation = getproperty.(wake_history[it][1,:], :gamma)
                 end
 
                 # add paraview files corresponding to the surface to the multiblock file
-                write_vtk!(vtmfile, surface, surface_history[it];
+                write_vtk!(vtmfile, surface_history[it], property_history[it];
                     wake_circulation,
                     trailing_edge = isempty(wake_history[it]),
                     kwargs...,
@@ -255,16 +256,17 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
 end
 
 """
-    write_vtk(name, surfaces, surface_history, wake_history; kwargs...)
+    write_vtk(name, surface_history, property_history, wake_history; kwargs...)
 
 Writes unsteady simulation geometry to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
- - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+ - `surface_history`: Vector of surfaces at each time step, where each surface is
+    represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `surface_history`: Vector of surface properties for each surface at each
+ - `property_history`: Vector of surface properties for each surface at each
     time step, where surface properties are represented by a matrix of panel
     properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc` is
     the number of chordwise panels and `ns` is the number of spanwise panels
@@ -281,10 +283,10 @@ Writes unsteady simulation geometry to Paraview files for visualization.
  - `wake_length`: Distance to extend trailing vortices. Defaults to 10
  - `metadata`: Dictionary of metadata to include in generated files
 """
-function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
-    surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+    property_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
     wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt;
-    symmetric = fill(nothing, length(surfaces)), kwargs...)
+    symmetric = fill(nothing, length(surface_history[1])), kwargs...)
 
     # create paraview collection file
     paraview_collection(name) do pvdfile
@@ -299,20 +301,20 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
             vtk_multiblock(name*"-step$it") do vtmfile
 
                 # loop through all surfaces
-                for i = 1:length(surfaces)
+                for i = 1:length(surface_history[it])
 
                     # extract circulation at the trailing edge of `surface`
-                    surface_circulation = getproperty.(surface_history[it][i][end,:], :gamma)
+                    surface_circulation = getproperty.(property_history[it][i][end,:], :gamma)
 
                     # extract circulation at the leading edge of `wake`
                     if isempty(wake_history[it][i])
-                        wake_circulation = zeros(size(surfaces[i], 2))
+                        wake_circulation = zeros(size(surface_history[it][i], 2))
                     else
                         wake_circulation = getproperty.(wake_history[it][i][1,:], :gamma)
                     end
 
                     # add paraview files corresponding to the surface to the multiblock file
-                    write_vtk!(vtmfile, surfaces[i], surface_history[it][i];
+                    write_vtk!(vtmfile, surface_history[it][i], property_history[it][i];
                         wake_circulation,
                         trailing_edge = isempty(wake_history[it][i]),
                         symmetric = symmetric[i],

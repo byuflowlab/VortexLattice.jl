@@ -43,12 +43,13 @@ Contains pre-allocated storage for internal system variables.
  - `w`: Normal velocity at the control points from external sources and wakes
  - `Γ`: Circulation strength of the surface panels
  - `V`: Velocity at the wake vertices for each surface
- - `panels`: Surface panel properties for each surface
+ - `surfaces`: Surfaces, represented by matrices of surface panels
+ - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
  - `dw`: Derivatives of the R.H.S. with respect to the freestream variables
  - `dΓ`: Derivatives of the circulation strength with respect to the freestream variables
- - `dpanels`: Derivatives of the panel properties with respect to the freestream variables
+ - `dproperties`: Derivatives of the panel properties with respect to the freestream variables
  - `wake_shedding_locations`: Wake shedding locations for each surface
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
 """
@@ -57,12 +58,13 @@ struct System{TF}
     w::Vector{TF}
     Γ::Vector{TF}
     V::Vector{Matrix{SVector{3,TF}}}
-    panels::Vector{Matrix{PanelProperties{TF}}}
+    surfaces::Vector{Matrix{SurfacePanel{TF}}}
+    properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
     dw::NTuple{5, Vector{TF}}
     dΓ::NTuple{5, Vector{TF}}
-    dpanels::NTuple{5, Vector{Matrix{PanelProperties{TF}}}}
+    dproperties::NTuple{5, Vector{Matrix{PanelProperties{TF}}}}
     wake_shedding_locations::Vector{Vector{SVector{3,TF}}}
     dΓdt::Vector{TF}
 end
@@ -71,105 +73,131 @@ end
 @inline Base.eltype(::System{TF}) where TF = TF
 
 """
-    System([TF], surface; kwargs...)
+    System([TF], surfaces; kwargs...)
 
-Return an object of type `System` with pre-allocated storage for internal
-system variables
+Return an object of type `System` with pre-allocated storage for internal system
+variables
 
 # Arguments:
  - `TF`: Floating point type, defaults to the floating point type used by `surface`
- - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
+ - `surfaces`:
+        Either:
+         - One or more grids of shape (3, nc+1, ns+1) which represents lifting surfaces,
+         or
+         - One or more matrices of surface panels (see [`SurfacePanel`](@ref)) of
+           shape (nc, ns)
+        where `nc` is the number of chordwise panels and `ns` is the number of
+        spanwise panels
 
 # Keyword Arguments:
- - `nwake`: Number of chordwise wake panels to initialize. Defaults to zero wake panels.
+ - `nw`: Number of chordwise wake panels to initialize for each surface. Defaults to
+    zero wake panels for each surface.
 """
 function System() end
 
-System(surface::AbstractMatrix; kwargs...) = System(eltype(eltype(surface)), surface; kwargs...)
+# one grid, no provided type
+function System(grid::AbstractMatrix{TF}; kwargs...) where TF
 
-function System(TF::Type{<:AbstractFloat}, surface::AbstractMatrix; nwake=0)
+    return System(TF, grid; kwargs...)
+end
 
-    N = length(surface)
-    nc, ns = size(surface)
-    nw = nwake
+# one grid, provided type
+function System(TF::Type, grid::AbstractMatrix; kwargs...)
 
-    AIC = zeros(TF, N, N)
-    w = zeros(TF, N)
-    Γ = zeros(TF, N)
-    V = [Matrix{SVector{3, TF}}(undef, nw+1, ns+1)]
-    panels = [Matrix{PanelProperties{TF}}(undef, nc, ns)]
-    wakes = [Matrix{WakePanel{TF}}(undef, nw, ns)]
-    trefftz = [Vector{TrefftzPanel{TF}}(undef, ns)]
-    dw = Tuple(zeros(TF, N) for id = 1:5)
-    dΓ = Tuple(zeros(TF, N) for id = 1:5)
-    dpanels = Tuple([Matrix{PanelProperties{TF}}(undef, nc, ns)] for id = 1:5)
-    wake_shedding_locations = [Vector{SVector{3,TF}}(undef, ns+1)]
-    dΓdt = zeros(TF, N)
+    nc = size(grid, 2)
+    ns = size(grid, 3)
 
-    return System{TF}(AIC, w, Γ, V, panels, wakes, trefftz, dw, dΓ, dpanels,
-        wake_shedding_locations, dΓdt)
+    return System(TF, nc, ns; kwargs...)
+end
+
+# one surface, no provided type
+function System(surface::AbstractMatrix{SurfacePanel{TF}}; kwargs...) where TF
+
+    return System(TF, surface; kwargs...)
+end
+
+# one surface, provided type
+function System(TF::Type, surface::AbstractMatrix{<:SurfacePanel}; kwargs...)
+
+    nc = size(surface, 1)
+    ns = size(surface, 2)
+
+    return System(TF, nc, ns; kwargs...)
+end
+
+# multiple grids, no provided type
+function System(grids::AbstractVector{<:AbstractMatrix{TF}}; kwargs...) where TF
+
+    return System(TF, grids; kwargs...)
+end
+
+# multiple grids, provided type
+function System(TF::Type, grids::AbstractVector{<:AbstractMatrix}; kwargs...)
+
+    nc = size(grids, 2)
+    ns = size(grids, 3)
+
+    return System(TF, nc, ns; kwargs...)
+end
+
+# multiple surfaces, no provided type
+function System(surfaces::AbstractVector{<:AbstractMatrix{SurfacePanel{TF}}};
+    kwargs...) where TF
+
+    return System(TF, surfaces; kwargs...)
+end
+
+# multiple surfaces, provided type
+function System(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}};
+    kwargs...)
+
+    nc = size.(surfaces, 1)
+    ns = size.(surfaces, 2)
+
+    return System(TF, nc, ns; kwargs...)
 end
 
 """
-    System([TF], surfaces; kwargs...)
+    System(TF, nc, ns; nw = zero(nc))
 
-Return an object of type `System` with pre-allocated storage for internal
-system variables
+Return an object of type `System` with pre-allocated storage for internal system
+variables
 
 # Arguments:
- - `TF`: Floating point type, defaults to the floating point type used by `surfaces`
- - `surfaces`: Vector of surfaces, represented by matrices of surface panels
-    (see [`SurfacePanel`](@ref) of shape (nc, ns) where `nc` is the number of
-    chordwise panels and `ns` is the number of spanwise panels
+ - `TF`: Floating point type.
+ - `nc`: Number of chordwise panels on each surface.
+ - `ns`: Number of spanwise panels on each surface.
 
-# Keyword Arguments:
- - `nwake`: Number of chordwise wake panels to initialize for each surface. Defaults
-    to zero wake panels for each surface.
+# Keyword Arguments
+ - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
+    panels on each surface
 """
-System(surfaces::AbstractVector{<:AbstractMatrix}; kwargs...) =
-    System(eltype(eltype(eltype(surfaces))), surfaces; kwargs...)
+function System(TF::Type, nc, ns; nw = zero(nc))
 
-function System(TF::Type{<:AbstractFloat}, surfaces::AbstractVector{<:AbstractMatrix};
-    nwake = 0)
+    @assert length(nc) == length(ns) == length(nw)
 
     # number of surfaces
-    nsurf = length(surfaces)
+    nsurf = length(nc)
 
     # number of surface panels
-    N = sum(length.(surfaces))
-
-    # number of chordwise panels in each surface
-    nc = size.(surfaces, 1)
-
-    # number of spanwise panels in each surface
-    ns = size.(surfaces, 2)
-
-    # number of wake panels for each surface
-    if typeof(nwake) <: Number
-        # use the same number of wake panels for each surface
-        nw = fill(nwake, nsurf)
-    else
-        # use specified number of wake panels for each surface
-        nw = nwake
-    end
+    N = sum(nc .* ns)
 
     AIC = zeros(TF, N, N)
     w = zeros(TF, N)
     Γ = zeros(TF, N)
     V = [Matrix{SVector{3, TF}}(undef, nw[i]+1, ns[i]+1) for i = 1:nsurf]
-    panels = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
+    surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
+    properties = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
     dw = Tuple(zeros(TF, N) for i = 1:5)
     dΓ = Tuple(zeros(TF, N) for i = 1:5)
-    dpanels = Tuple([Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:length(surfaces)] for j = 1:5)
+    dproperties = Tuple([Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:length(surfaces)] for j = 1:5)
     wake_shedding_locations = [Vector{SVector{3, TF}}(undef, ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    return System{TF}(AIC, w, Γ, V, panels, wakes, trefftz, dw, dΓ, dpanels,
-        wake_shedding_locations, dΓdt)
+    return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz, dw, dΓ,
+        dproperties, wake_shedding_locations, dΓdt)
 end
 
 """
@@ -177,11 +205,11 @@ end
 
 Return the panel properties stored in `system`
 """
-get_panel_properties(system, surface::AbstractMatrix) = system.panels[1]
+get_panel_properties(system, surface::AbstractMatrix) = system.properties[1]
 
 """
     get_panel_properties(system, surfaces)
 
 Return the panel properties stored in `system`
 """
-get_panel_properties(system, surfaces::AbstractVector{<:AbstractMatrix}) = system.panels
+get_panel_properties(system, surfaces::AbstractVector{<:AbstractMatrix}) = system.properties

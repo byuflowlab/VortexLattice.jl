@@ -1070,15 +1070,15 @@ end
     symmetric = false
 
     # non-dimensional time
-    time = range(0.0, 10.0, step=1/16)
-    dt = [time[i+1]-time[i] for i = 1:length(time)-1]
+    t = range(0.0, 10.0, step=0.2)
+    dt = [t[i+1]-t[i] for i = 1:length(t)-1]
 
     # create vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # run analysis
-    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+    system, surface_history, property_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
         symmetric=symmetric)
 
 end
@@ -1161,10 +1161,10 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
-    # time
-    t = 0.0:0.1:10.0
+    # t
+    t = range(0.0, 10.0, step=0.2)
     dt = t[2:end] - t[1:end-1]
 
-    system, surface_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
 
 end
