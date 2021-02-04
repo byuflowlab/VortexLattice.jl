@@ -191,8 +191,8 @@ function grid_to_surface_panels(xyz;
 
     TF = eltype(xyz)
 
-    nc = size(grid, 2)-1 # number of chordwise panels
-    ns = size(grid, 3)-1 # number of spanwise panels
+    nc = size(xyz, 2)-1 # number of chordwise panels
+    ns = size(xyz, 3)-1 # number of spanwise panels
     N = (1+mirror)*nc*ns # total number of panels
 
     # check which side we're working with
@@ -206,29 +206,29 @@ function grid_to_surface_panels(xyz;
     for j = 1:ns
 
         # get leading edge panel corners
-        r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
-        r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
-        r3n = SVector(grid[1,2,j], grid[2,2,j], grid[3,2,j]) # bottom left
-        r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
+        r1n = SVector(xyz[1,1,j], xyz[2,1,j], xyz[3,1,j]) # top left
+        r2n = SVector(xyz[1,1,j+1], xyz[2,1,j+1], xyz[3,1,j+1]) # top right
+        r3n = SVector(xyz[1,2,j], xyz[2,2,j], xyz[3,2,j]) # bottom left
+        r4n = SVector(xyz[1,2,j+1], xyz[2,2,j+1], xyz[3,2,j+1]) # bottom right
 
         # also get chord length for setting finite core size
-        cl = grid[1,end,j] - grid[1,1,j]
-        cr = grid[1,end,j+1] - grid[1,1,j+1]
+        cl = xyz[1,end,j] - xyz[1,1,j]
+        cr = xyz[1,end,j+1] - xyz[1,1,j+1]
         c = (cl + cr)/2
 
         for i = 1:nc-1
 
-            # grid corners of current panel
+            # xyz corners of current panel
             r1 = r1n # top left of panel
             r2 = r2n # top right of panel
             r3 = r3n # bottom left of panel
             r4 = r4n # bottom right of panel
 
-            # grid corners of next panel
+            # xyz corners of next panel
             r1n = r3 # top left
             r2n = r4 # top right
-            r3n = SVector(grid[1,i+2,j], grid[2,i+2,j], grid[3,i+2,j]) # bottom left
-            r4n = SVector(grid[1,i+2,j+1], grid[2,i+2,j+1], grid[3,i+2,j+1]) # bottom right
+            r3n = SVector(xyz[1,i+2,j], xyz[2,i+2,j], xyz[3,i+2,j]) # bottom left
+            r4n = SVector(xyz[1,i+2,j+1], xyz[2,i+2,j+1], xyz[3,i+2,j+1]) # bottom right
 
             # top left corner of ring vortex
             rtl = linearinterp(0.25, r1, r3)
@@ -251,7 +251,7 @@ function grid_to_surface_panels(xyz;
             # control point
             rtop = linearinterp(0.5, r1, r2)
             rbot = linearinterp(0.5, r3, r4)
-            rcp = linearinterp(0.75, rl, rr)
+            rcp = linearinterp(0.75, rtop, rbot)
 
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
@@ -264,12 +264,13 @@ function grid_to_surface_panels(xyz;
             # get chord length of current panel
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
-            ipanel = mirror*right_side*nc*ns + (j-1)*nc + i
-            panels[ipanel] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
+            ip = i
+            jp = mirror*right_side*ns + j
+            panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
                 ncp, core_size, chord)
         end
 
-        # grid corners of current panel
+        # xyz corners of current panel
         r1 = r1n # top left
         r2 = r2n # top right
         r3 = r3n # bottom left
@@ -296,7 +297,7 @@ function grid_to_surface_panels(xyz;
         # control point
         rtop = linearinterp(0.5, r1, r2)
         rbot = linearinterp(0.5, r3, r4)
-        rcp = linearinterp(0.75, rl, rr)
+        rcp = linearinterp(0.75, rtop, rbot)
 
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
@@ -309,7 +310,7 @@ function grid_to_surface_panels(xyz;
         # get chord length of current panel
         chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
-        ip = i
+        ip = nc
         jp = mirror*right_side*ns + j
         panels[ip,jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp,
             core_size, chord)
@@ -318,7 +319,7 @@ function grid_to_surface_panels(xyz;
     # other side
     if mirror
 
-        # first reflect grid
+        # first reflect xyz
         if right_side
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_r = xyz_panels
@@ -434,11 +435,11 @@ function grid_to_surface_panels(xyz, ns, nc;
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
             core_size = fcore(c, Δs)
 
-            # get chord length of current panel
-            r1 = xyz_panels[i,j] # top left
-            r2 = xyz_panels[i,j+1] # top right
-            r3 = xyz_panels[i+1, j] # bottom left
-            r4 = xyz_panels[i+1, j+1] # bottom right
+            # set chord length of current panel
+            r1 = xyz_panels[:, i, j] # top left
+            r2 = xyz_panels[:, i, j+1] # top right
+            r3 = xyz_panels[:, i+1, j] # bottom left
+            r4 = xyz_panels[:, i+1, j+1] # bottom right
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             ip = i
@@ -696,6 +697,131 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     end
 
     return xyz_panels, panels
+end
+
+"""
+    update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
+
+Updates the surface panels in `surface` to correspond to the grid coordinates in
+`grid`.
+"""
+function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
+
+    TF = eltype(eltype(surface))
+
+    nc, ns = size(surface) # number of chordwise and spanwise panels
+
+    # populate each panel
+    for j = 1:ns
+
+        # get leading edge panel corners
+        r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
+        r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
+        r3n = SVector(grid[1,2,j], grid[2,2,j], grid[3,2,j]) # bottom left
+        r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
+
+        # also get chord length for setting finite core size
+        cl = grid[1,end,j] - grid[1,1,j]
+        cr = grid[1,end,j+1] - grid[1,1,j+1]
+        c = (cl + cr)/2
+
+        for i = 1:nc-1
+
+            # grid corners of current panel
+            r1 = r1n # top left of panel
+            r2 = r2n # top right of panel
+            r3 = r3n # bottom left of panel
+            r4 = r4n # bottom right of panel
+
+            # grid corners of next panel
+            r1n = r3 # top left
+            r2n = r4 # top right
+            r3n = SVector(grid[1,i+2,j], grid[2,i+2,j], grid[3,i+2,j]) # bottom left
+            r4n = SVector(grid[1,i+2,j+1], grid[2,i+2,j+1], grid[3,i+2,j+1]) # bottom right
+
+            # top left corner of ring vortex
+            rtl = linearinterp(0.25, r1, r3)
+
+            # top right corner of ring vortex
+            rtr = linearinterp(0.25, r2, r4)
+
+            # center of top bound vortex
+            rtc = (rtl + rtr)/2
+
+            # bottom left corner of ring vortex
+            rbl = linearinterp(0.25, r1n, r3n)
+
+            # bottom right corner of ring vortex
+            rbr = linearinterp(0.25, r2n, r4n)
+
+            # center of bottom bound vortex
+            rbc = (rbl + rbr)/2
+
+            # control point
+            rtop = linearinterp(0.5, r1, r2)
+            rbot = linearinterp(0.5, r3, r4)
+            rcp = linearinterp(0.75, rtop, rbot)
+
+            # surface normal
+            ncp = cross(rcp - rtr, rcp - rtl)
+            ncp /= norm(ncp)
+
+            # set finite core size
+            Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+            core_size = fcore(c, Δs)
+
+            # get chord length of current panel
+            chord = norm((r1 + r2)/2 - (r3 + r4)/2)
+
+            surface[i,j] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
+                ncp, core_size, chord)
+        end
+
+        # grid corners of current panel
+        r1 = r1n # top left
+        r2 = r2n # top right
+        r3 = r3n # bottom left
+        r4 = r4n # bottom right
+
+        # top left corner of ring vortex
+        rtl = linearinterp(0.25, r1, r3)
+
+        # top right corner of ring vortex
+        rtr = linearinterp(0.25, r2, r4)
+
+        # center of top bound vortex
+        rtc = (rtl + rtr)/2
+
+        # bottom left corner of ring vortex
+        rbl = r3
+
+        # bottom right corner of ring vortex
+        rbr = r4
+
+        # center of bottom bound vortex
+        rbc = (rbl + rbr)/2
+
+        # control point
+        rtop = linearinterp(0.5, r1, r2)
+        rbot = linearinterp(0.5, r3, r4)
+        rcp = linearinterp(0.75, rtop, rbot)
+
+        # surface normal
+        ncp = cross(rcp - rtr, rcp - rtl)
+        ncp /= norm(ncp)
+
+        # set finite core size
+        Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
+        core_size = fcore(c, Δs)
+
+        # get chord length of current panel
+        chord = norm((r1 + r2)/2 - (r3 + r4)/2)
+
+        surface[end, j] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp,
+            core_size, chord)
+    end
+
+    return surface
 end
 
 """

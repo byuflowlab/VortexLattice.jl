@@ -798,6 +798,234 @@ end
     @test isapprox(Cnr, -0.000898, rtol=0.01)
 end
 
+@testset "Geometry Generation" begin
+
+    # Test Case: Simple Wing with Uniform Spacing
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    vother = nothing
+    fs = Freestream(alpha, beta, Omega, vother)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # wing_to_surface_panels
+
+    mirror = false
+    symmetric = true
+
+    halfgrid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # grid_to_surface_panels(grid)
+
+    mirror = false
+    symmetric = true
+
+    halfgrid, surface = grid_to_surface_panels(halfgrid; mirror=mirror)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # grid_to_surface_panels(grid, nc, ns)
+
+    mirror = false
+    symmetric = true
+
+    halfgrid, surface = grid_to_surface_panels(halfgrid, ns, nc; mirror=mirror,
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # update_surface_panels!(surface, grid)
+
+    mirror = false
+    symmetric = true
+
+    surface = VortexLattice.update_surface_panels!(surface, halfgrid)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # wing_to_surface_panels - mirrored
+
+    mirror = true
+    symmetric = false
+
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # grid_to_surface_panels(grid) - mirrored
+
+    mirror = true
+    symmetric = false
+
+    grid, surface = grid_to_surface_panels(halfgrid; mirror = mirror)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # grid_to_surface_panels(grid, nc, ns) - mirrored
+
+    mirror = true
+    symmetric = false
+
+    grid, surface = grid_to_surface_panels(halfgrid, ns, nc; mirror=mirror,
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # update_surface_panels!(surface, grid) - mirrored
+
+    mirror = true
+    symmetric = false
+
+    surface = VortexLattice.update_surface_panels!(surface, grid)
+
+    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+
+    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+end
+
 @testset "Update Trailing Edge Coefficients" begin
 
     # This test checks whether the function which updates the trailing edge

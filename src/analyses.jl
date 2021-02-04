@@ -1,67 +1,27 @@
 """
-    steady_analysis(surface, reference, freestream; kwargs...)
-
-Perform a steady vortex lattice method analysis.  Return an object of type
-[`System`](@ref) containing the system state.
-
-# Arguments
- - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
- - `reference`: Reference parameters (see [`Reference`](@ref))
- - `freestream`: Freestream parameters (see [`Freestream`](@ref))
-
-# Keyword Arguments
- - `symmetric`: (required) Flag indicating whether a mirror image (across the
-    X-Z plane) of the panels in `surface` should be used when calculating induced velocities
- - `wake`: Matrix of wake panels (see [`WakePanel`](@ref)) of shape (nw, ns)
-    where `nw` is the number of chordwise wake panels and `ns` is the number of
-    spanwise panels, defaults to no wake panels
- - `nwake`: Number of chordwise wake panels to use from `wake`, defaults to all
-    provided wake panels
- - `wake_finite_core`: Flag indicating whether the finite core model should be
-    enabled when calculating a wake's influence on itself and its corresponding
-    surface. Defaults to `true`
- - `trailing_vortices`: Flag to enable/disable trailing vortices, defaults to `true`
- - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
- - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
-    coefficient matrix has already been calculated.  Re-using the same AIC matrix
-    will reduce calculation times when the underlying geometry has not changed.
-    Defaults to `true`.  Note that this argument is only valid for the pre-allocated
-    version of this function.
- - `near_field_analysis`: Flag indicating whether a near field analysis should be
-    performed to obtain panel velocities, circulation, and forces. Defaults to `true`.
- - `derivatives`: Flag indicating whether the derivatives with respect
-    to the freestream variables should be calculated. Defaults to `true`.
-"""
-function steady_analysis(surface::AbstractMatrix, reference, freestream; kwargs...)
-
-    system = System(surface)
-
-    return steady_analysis!(system, surface, reference, freestream; kwargs...,
-        calculate_influence_matrix = true)
-end
-
-"""
     steady_analysis(surfaces, reference, freestream; kwargs...)
 
 Perform a steady vortex lattice method analysis.  Return an object of type
 [`System`](@ref) containing the system state.
 
 # Arguments
- - `surfaces`: Vector of surfaces, represented by matrices of surface panels
-    (see [`SurfacePanel`](@ref) of shape (nc, ns) where `nc` is the number of
-    chordwise panels and `ns` is the number of spanwise panels
+ - `surfaces`:
+   - One or more grids of shape (3, nc+1, ns+1) which represents lifting surfaces
+   or
+   - One or more matrices of surface panels (see [`SurfacePanel`](@ref)) of shape
+     (nc, ns)
+   where `nc` is the number of chordwise panels and `ns` is the number of
+   spanwise panels
  - `reference`: Reference parameters (see [`Reference`](@ref))
- - `freestream`: Freestream parameters (see [`Freestream`]@ref)
+ - `freestream`: Freestream parameters (see [`Freestream`](@ref))
 
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror
     image across the X-Z plane should be used when calculating induced velocities
- - `wakes`: Vector of wakes corresponding to each surface, represented by matrices
-    of wake panels (see [`WakePanel`](@ref)) of shape (nw, ns) where `nw` is the
-    number of chordwise wake panels and `ns` is the number of spanwise panels.
-    Defaults to no wake panels.
+ - `wake`: Matrix of wake panels (see [`WakePanel`](@ref)) for each surface.  Each
+    matrix has shape (nw, ns) where `nw` is the number of chordwise wake panels
+    and `ns` is the number of spanwise panels for each surface, defaults to no
+    wake panels for each surface
  - `nwake`: Number of chordwise wake panels to use from each wake in `wakes`,
     defaults to all provided wake panels
  - `surface_id`: Surface ID for each surface.  The finite core model is disabled
@@ -78,10 +38,20 @@ Perform a steady vortex lattice method analysis.  Return an object of type
     Defaults to `true`.  Note that this argument is only valid for the pre-allocated
     version of this function.
  - `near_field_analysis`: Flag indicating whether a near field analysis should be
-    performed to obtain panel velocities, circulation, and forces. Defaults to `true`
+    performed to obtain panel velocities, circulation, and forces. Defaults to `true`.
  - `derivatives`: Flag indicating whether the derivatives with respect
-    to the freestream variables should be calculated. Defaults to `true`
+    to the freestream variables should be calculated. Defaults to `true`.
 """
+function steady_analysis end
+
+function steady_analysis(surface::AbstractMatrix, reference, freestream; kwargs...)
+
+    system = System(surface)
+
+    return steady_analysis!(system, surface, reference, freestream; kwargs...,
+        calculate_influence_matrix = true)
+end
+
 function steady_analysis(surfaces::AbstractVector{<:AbstractMatrix}, reference,
     freestream; kwargs...)
 
