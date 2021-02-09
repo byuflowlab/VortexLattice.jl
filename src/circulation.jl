@@ -1,7 +1,7 @@
 # --- right hand side - normal velocities at control points --- #
 
 """
-    normal_velocity(surface[s], reference, freestream)
+    normal_velocity(surface[s], reference, freestream, additional_velocity)
 
 Compute the downwash due to the freestream velocity at each control point for a
 single surface or vector of surfaces.
@@ -11,23 +11,23 @@ This forms the right hand side of the circulation linear system solve.
 normal_velocity
 
 # one surface
-function normal_velocity(surface::AbstractMatrix, ref, fs)
+function normal_velocity(surface::AbstractMatrix, ref, fs, additional_velocity)
 
     N = length(surface)
     TF = promote_type(eltype(eltype(surface)), eltype(ref), eltype(fs))
     w = Vector{TF}(undef, N)
 
-    return normal_velocity!(w, surface, ref, fs)
+    return normal_velocity!(w, surface, ref, fs, additional_velocity)
 end
 
 # multiple surfaces
-function normal_velocity(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+function normal_velocity(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, additional_velocity)
 
     N = sum(length.(surfaces))
     TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs))
     w = Vector{TF}(undef, N)
 
-    return normal_velocity!(w, surfaces, ref, fs)
+    return normal_velocity!(w, surfaces, ref, fs, additional_velocity)
 end
 
 """
@@ -38,7 +38,7 @@ Non-allocating version of `normal_velocity`
 normal_velocity!
 
 # one surface
-function normal_velocity!(w, surface::AbstractMatrix, ref, fs)
+function normal_velocity!(w, surface::AbstractMatrix, ref, fs, additional_velocity)
 
     N = length(surface)
     c = CartesianIndices(surface)
@@ -55,7 +55,7 @@ function normal_velocity!(w, surface::AbstractMatrix, ref, fs)
         nhat = normal(surface[I])
 
         # external velocity
-        Vext = external_velocity(fs, rcp, ref.r)
+        Vext = external_velocity(rcp, fs, ref.r, additional_velocity)
 
         # right hand side vector
         w[i] = -dot(Vext, nhat)
@@ -66,7 +66,7 @@ function normal_velocity!(w, surface::AbstractMatrix, ref, fs)
 end
 
 # multiple surfaces
-function normal_velocity!(w, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+function normal_velocity!(w, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, additional_velocity)
 
     nsurf = length(surfaces)
 
@@ -83,7 +83,7 @@ function normal_velocity!(w, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs
         vw = view(w, iw+1:iw+n)
 
         # fill in RHS vector
-        normal_velocity!(vw, surfaces[i], ref, fs)
+        normal_velocity!(vw, surfaces[i], ref, fs, additional_velocity)
 
         # increment position in AIC matrix
         iw += n
@@ -104,7 +104,7 @@ This forms the right hand side of the circulation linear system solve (and its d
 normal_velocity_derivatives
 
 # one surface
-function normal_velocity_derivatives(surface::AbstractMatrix, ref, fs)
+function normal_velocity_derivatives(surface::AbstractMatrix, ref, fs, additional_velocity)
 
     N = length(surface)
     TF = promote_type(eltype(eltype(surface)), eltype(ref), eltype(fs))
@@ -122,11 +122,11 @@ function normal_velocity_derivatives(surface::AbstractMatrix, ref, fs)
     # pack up derivatives
     dw = (w_a, w_b, w_p, w_q, w_r)
 
-    return normal_velocity_derivatives!(w, dw, surface, ref, fs)
+    return normal_velocity_derivatives!(w, dw, surface, ref, fs, additional_velocity)
 end
 
 # multiple surfaces
-function normal_velocity_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+function normal_velocity_derivatives(surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, additional_velocity)
 
     N = sum(length.(surfaces))
     TF = promote_type(eltype(eltype(eltype(surfaces))), eltype(ref), eltype(fs))
@@ -144,18 +144,18 @@ function normal_velocity_derivatives(surfaces::AbstractVector{<:AbstractMatrix},
     # pack up derivatives
     dw = (w_a, w_b, w_p, w_q, w_r)
 
-    return normal_velocity_derivatives!(w, dw, surfaces, ref, fs)
+    return normal_velocity_derivatives!(w, dw, surfaces, ref, fs, additional_velocity)
 end
 
 """
-    normal_velocity_derivatives!(b, dw, surface[s], ref, fs)
+    normal_velocity_derivatives!(b, dw, surface[s], ref, fs, additional_velocity)
 
 Non-allocating version of `normal_velocity_derivatives`
 """
 normal_velocity_derivatives!
 
 # single surface
-function normal_velocity_derivatives!(w, dw, surface, ref, fs)
+function normal_velocity_derivatives!(w, dw, surface, ref, fs, additional_velocity)
 
     N = length(surface)
 
@@ -176,7 +176,7 @@ function normal_velocity_derivatives!(w, dw, surface, ref, fs)
         nhat = normal(surface[I])
 
         # external velocity and its derivatives
-        Vext, dVext = external_velocity_derivatives(fs, rcp, ref.r)
+        Vext, dVext = external_velocity_derivatives(rcp, fs, ref.r, additional_velocity)
 
         # unpack derivatives
         Vext_a, Vext_b, Vext_pb, Vext_qb, Vext_rb = dVext
@@ -199,7 +199,7 @@ function normal_velocity_derivatives!(w, dw, surface, ref, fs)
 end
 
 # multiple surfaces
-function normal_velocity_derivatives!(w, dw, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs)
+function normal_velocity_derivatives!(w, dw, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs, additional_velocity)
 
     nsurf = length(surfaces)
 
@@ -220,7 +220,7 @@ function normal_velocity_derivatives!(w, dw, surfaces::AbstractVector{<:Abstract
         vdb = view.(dw, Ref(iw+1:iw+n))
 
         # fill in RHS vector and its derivatives
-        normal_velocity_derivatives!(vb, vdb, surfaces[i], ref, fs)
+        normal_velocity_derivatives!(vb, vdb, surfaces[i], ref, fs, additional_velocity)
 
         # increment position in AIC matrix
         iw += n

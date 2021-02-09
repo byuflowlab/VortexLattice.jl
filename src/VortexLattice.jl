@@ -35,7 +35,7 @@ include("circulation.jl")
 
 include("system.jl")
 export System
-export PanelProperties, get_panel_properties
+export PanelProperties, get_surface_properties
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!

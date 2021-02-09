@@ -16,6 +16,8 @@ to account for the new wake shedding location
     of spanwise panels
  - `reference`: Reference parameters (see [`Reference`](@ref))
  - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+ - `additional_velocity`: Function defining additional velocity field
+    (normalized by the instantaneous freestream velocity)
  - `dt`: Time step (seconds)
 
 # Keyword Arguments
@@ -24,8 +26,8 @@ to account for the new wake shedding location
     edge and wake shedding location.  Typical values range from 0.2-0.3.
 """
 @inline function update_wake_shedding_locations!(wake::AbstractMatrix,
-    wake_shedding_locations, surface::AbstractMatrix, fs, ref, dt;
-    nwake = size(wake, 1), eta = 0.25)
+    wake_shedding_locations, surface::AbstractMatrix, ref, fs, additional_velocity,
+    dt; nwake = size(wake, 1), eta = 0.25)
 
     # number of spanwise panels
     ns = size(wake, 2)
@@ -41,7 +43,7 @@ to account for the new wake shedding location
         end
 
         # extract corresponding velocity
-        Vte = external_velocity(fs, rte, ref.r)
+        Vte = external_velocity(rte, fs, ref.r, additional_velocity)
 
         # update wake shedding location coordinates
         wake_shedding_locations[j] = rte + eta*Vte*dt
@@ -75,7 +77,7 @@ end
 
 """
     update_wake_shedding_locations!(wakes, wake_shedding_locations, surfaces,
-        freestream, reference, dt; kwargs...)
+        reference, freestream, dt; kwargs...)
 
 Update the wake shedding locations.  Also update the first chordwise wake panels
 to account for the new wake shedding location
@@ -91,6 +93,8 @@ to account for the new wake shedding location
     chordwise panels and `ns` is the number of spanwise panels
  - `reference`: Reference parameters (see [`Reference`](@ref))
  - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+ - `additional_velocity`: Function defining additional velocity field
+    (normalized by the instantaneous freestream velocity)
  - `dt`: Time step (seconds)
 
 # Keyword Arguments
@@ -99,9 +103,8 @@ to account for the new wake shedding location
     edge and wake shedding location.  Typical values range from 0.2-0.3.
 """
 @inline function update_wake_shedding_locations!(wakes::AbstractVector{<:AbstractMatrix},
-    wake_shedding_locations, surfaces::AbstractVector{<:AbstractMatrix}, fs, ref, dt;
-    nwake = size.(wakes, 1),
-    eta = 0.25)
+    wake_shedding_locations, surfaces::AbstractVector{<:AbstractMatrix}, ref, fs,
+    additional_velocity, dt; nwake = size.(wakes, 1), eta = 0.25)
 
     # get number of surfaces
     nsurf = length(surfaces)
@@ -111,7 +114,7 @@ to account for the new wake shedding location
 
         # update the wake shedding location for this surface
         update_wake_shedding_locations!(wakes[i], wake_shedding_locations[i],
-            surfaces[i], fs, ref, dt; nwake = nwake[i], eta)
+            surfaces[i], ref, fs, additional_velocity, dt; nwake = nwake[i], eta)
 
     end
 
@@ -277,7 +280,7 @@ end
 
 """
     get_wake_velocities!(wake_velocities, surface, wake, wake_shedding_locations,
-    reference, freestream; kwargs...)
+    reference, freestream, additional_velocity; kwargs...)
 
 Return the velocities at the corners of the wake panels in `wake`
 
@@ -293,6 +296,8 @@ Return the velocities at the corners of the wake panels in `wake`
     where wake panels are shed from the trailing edge of `surface`.
  - `reference`: Reference parameters (see [`Reference`](@ref))
  - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+ - `additional_velocity`: Function defining additional velocity field
+    (normalized by the instantaneous freestream velocity)
 
 # Keyword Arguments
  - `symmetric`: (required) Flag indicating whether a mirror image of the panels
@@ -311,7 +316,7 @@ Return the velocities at the corners of the wake panels in `wake`
 """
 @inline function get_wake_velocities!(wake_velocities, surface::AbstractMatrix,
     wake_shedding_locations::AbstractVector,
-    wake::AbstractMatrix, ref, fs, Γ;
+    wake::AbstractMatrix, ref, fs, additional_velocity, Γ;
     symmetric,
     repeated_points = Dict{NTuple{2, Int}, Vector{NTuple{2, Int}}}(),
     nwake = size(wake, 1),
@@ -320,7 +325,7 @@ Return the velocities at the corners of the wake panels in `wake`
     xhat = SVector(1, 0, 0))
 
     get_wake_velocities!([wake_velocities], [surface], [wake_shedding_locations],
-        [wake], ref, fs, Γ;
+        [wake], ref, fs, additional_velocity, Γ;
         symmetric = [symmetric],
         surface_id = 1:1,
         wake_finite_core = wake_finite_core,
@@ -334,7 +339,7 @@ end
 
 """
     get_wake_velocities!(wake_velocities, surfaces, wakes, wake_shedding_locations,
-        ref, fs; symmetric, surface_id, wake_finite_core,
+        ref, fs, additional_velocity; symmetric, surface_id, wake_finite_core,
         trailing_vortices, xhat, nwake, repeated_points)
 
 # Arguments
@@ -349,6 +354,8 @@ end
     each trailing edge vertex.
  - `reference`: Reference parameters (see [`Reference`](@ref))
  - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+ - `additional_velocity`: Function defining additional velocity field
+    (normalized by the instantaneous freestream velocity)
 
 # Keyword Arguments
  - `symmetric`: (required) Flag for each surface indicating whether a mirror
@@ -370,7 +377,7 @@ end
 """
 @inline function get_wake_velocities!(wake_velocities, surfaces::AbstractVector{<:AbstractMatrix},
     wake_shedding_locations::AbstractVector{<:AbstractVector},
-    wakes::AbstractVector{<:AbstractMatrix}, ref, fs, Γ;
+    wakes::AbstractVector{<:AbstractMatrix}, ref, fs, additional_velocity, Γ;
     symmetric,
     repeated_points = Dict{NTuple{2, Int}, Vector{NTuple{2, Int}}}(),
     nwake = size.(wakes, 1),
@@ -407,7 +414,7 @@ end
             rc = wake_shedding_locations[isurf][is]
 
             # velocity of trailing edge
-            wake_velocities[isurf][1,is] = external_velocity(fs, rc, ref.r)
+            wake_velocities[isurf][1,is] = external_velocity(rc, fs, ref.r, additional_velocity)
         end
 
         # velocity at all other wake vertices
@@ -439,7 +446,7 @@ end
             end
 
             # start with external velocity
-            wake_velocities[isurf][I] = external_velocity(fs, rc, ref.r)
+            wake_velocities[isurf][I] = external_velocity(rc, fs, ref.r, additional_velocity)
 
             # add induced velocity from each surface and wake
             jΓ = 0 # index for accessing Γ

@@ -47,6 +47,20 @@ Contains pre-allocated storage for internal system variables.
  - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
+ - `reference`: Pointer to reference parameters associated with the system (see [`Reference`](@ref))
+ - `freestream`: Pointer to current freestream parameters associated with the system (see [`Freestream`](@ref))
+ - `symmetric`: Flags indicating whether each surface is symmetric across the X-Z plane
+ - `nwake`: Number of chordwise wake panels to use from each wake in `wakes`,
+ - `surface_id`: Surface ID for each surface.  The finite core model is disabled
+    when calculating the influence of surfaces/wakes that share the same ID.
+ - `trailing_vortices`: Flags to enable/disable trailing vortices
+ - `wake_finite_core`: Flag for each wake indicating whether the finite core
+    model should be enabled when calculating the wake's influence on itself and
+    surfaces/wakes with the same surface ID.
+ - `near_field_analysis`: Flag indicating whether a near field analysis has been
+    performed for the current system state
+ - `derivatives`: Flag indicating whether the derivatives with respect to the
+    freestream variables have been calculated
  - `dw`: Derivatives of the R.H.S. with respect to the freestream variables
  - `dΓ`: Derivatives of the circulation strength with respect to the freestream variables
  - `dproperties`: Derivatives of the panel properties with respect to the freestream variables
@@ -62,6 +76,16 @@ struct System{TF}
     properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
+    reference::Vector{Reference{TF}}
+    freestream::Vector{Freestream{TF}}
+    symmetric::Vector{Bool}
+    nwake::Vector{Int}
+    surface_id::Vector{Int}
+    wake_finite_core::Vector{Bool}
+    trailing_vortices::Vector{Bool}
+    xhat::Vector{SVector{3, TF}}
+    near_field_analysis::Vector{Bool}
+    derivatives::Vector{Bool}
     dw::NTuple{5, Vector{TF}}
     dΓ::NTuple{5, Vector{TF}}
     dproperties::NTuple{5, Vector{Matrix{PanelProperties{TF}}}}
@@ -93,61 +117,31 @@ variables
  - `nw`: Number of chordwise wake panels to initialize for each surface. Defaults to
     zero wake panels for each surface.
 """
-function System() end
+System(args...; kwargs...)
 
-# one grid, no provided type
-function System(grid::AbstractMatrix{TF}; kwargs...) where TF
-
-    return System(TF, grid; kwargs...)
-end
-
-# one grid, provided type
-function System(TF::Type, grid::AbstractMatrix; kwargs...)
-
-    nc = size(grid, 2)
-    ns = size(grid, 3)
-
-    return System(TF, nc, ns; kwargs...)
-end
-
-# one surface, no provided type
-function System(surface::AbstractMatrix{SurfacePanel{TF}}; kwargs...) where TF
-
-    return System(TF, surface; kwargs...)
-end
-
-# one surface, provided type
-function System(TF::Type, surface::AbstractMatrix{<:SurfacePanel}; kwargs...)
-
-    nc = size(surface, 1)
-    ns = size(surface, 2)
-
-    return System(TF, nc, ns; kwargs...)
-end
-
-# multiple grids, no provided type
-function System(grids::AbstractVector{<:AbstractMatrix{TF}}; kwargs...) where TF
+# grid inputs, no provided type
+function System(grids::AbstractVector{<:AbstractArray{TF, 3}}; kwargs...) where TF
 
     return System(TF, grids; kwargs...)
 end
 
-# multiple grids, provided type
-function System(TF::Type, grids::AbstractVector{<:AbstractMatrix}; kwargs...)
+# grid inputs, provided type
+function System(TF::Type, grids::AbstractVector{<:AbstractArray{<:Any, 3}}; kwargs...)
 
-    nc = size(grids, 2)
-    ns = size(grids, 3)
+    nc = size.(grids, 2) .- 1
+    ns = size.(grids, 3) .- 1
 
     return System(TF, nc, ns; kwargs...)
 end
 
-# multiple surfaces, no provided type
+# surface inputs, no provided type
 function System(surfaces::AbstractVector{<:AbstractMatrix{SurfacePanel{TF}}};
     kwargs...) where TF
 
     return System(TF, surfaces; kwargs...)
 end
 
-# multiple surfaces, provided type
+# surface inputs, provided type
 function System(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}};
     kwargs...)
 
@@ -190,26 +184,33 @@ function System(TF::Type, nc, ns; nw = zero(nc))
     properties = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
+    reference = Vector{Reference{TF}}(undef, 1)
+    freestream = Vector{Freestream{TF}}(undef, 1)
+    symmetric = [false for i = 1:nsurf]
+    nwake = [0 for i = 1:nsurf]
+    surface_id = [i for i = 1:nsurf]
+    wake_finite_core = [true for i = 1:nsurf]
+    trailing_vortices = [false for i = 1:nsurf]
+    xhat = [SVector{3,TF}(1, 0, 0)]
+    near_field_analysis = [false]
+    derivatives = [false]
     dw = Tuple(zeros(TF, N) for i = 1:5)
     dΓ = Tuple(zeros(TF, N) for i = 1:5)
     dproperties = Tuple([Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:length(surfaces)] for j = 1:5)
     wake_shedding_locations = [Vector{SVector{3, TF}}(undef, ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz, dw, dΓ,
-        dproperties, wake_shedding_locations, dΓdt)
+    return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
+        reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
+        trailing_vortices, xhat, near_field_analysis, derivatives,
+        dw, dΓ, dproperties, wake_shedding_locations, dΓdt)
 end
 
 """
-    get_panel_properties(system, surface)
+    get_surface_properties(system)
 
-Return the panel properties stored in `system`
+Return a vector of surface panel properties for each surface, stored as matrices
+of panel properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc`
+is the number of chordwise panels and `ns` is the number of spanwise panels
 """
-get_panel_properties(system, surface::AbstractMatrix) = system.properties[1]
-
-"""
-    get_panel_properties(system, surfaces)
-
-Return the panel properties stored in `system`
-"""
-get_panel_properties(system, surfaces::AbstractVector{<:AbstractMatrix}) = system.properties
+get_surface_properties(system) = system.properties

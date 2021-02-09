@@ -39,24 +39,26 @@ ref = Reference(Sref, cref, bref, rref)
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega)
 
 # construct surface
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     spacing_s=spacing_s, spacing_c=spacing_c)
 
+# create vector containing all surfaces
+surfaces = [surface]
+
 # we can use symmetry since the geometry and flow conditions are symmetric about the X-Z axis
 symmetric = true
 
 # perform steady state analysis
-system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
-CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -95,9 +97,9 @@ Markdown.parse(str) #hide
 We can also generate files to visualize the results in Paraview using the function `write_vtk`.
 
 ```julia
-properties = get_panel_properties(system, surface)
+properties = get_surface_properties(system)
 
-write_vtk("symmetric-planar-wing", surface, properties; symmetric)
+write_vtk("symmetric-planar-wing", surfaces, properties; symmetric)
 ```
 
 ![](symmetric-planar-wing.png)
@@ -112,14 +114,17 @@ grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
 # symmetry is not used in the analysis
 symmetric = false
 
+# create vector containing all surfaces
+surfaces = [surface]
+
 # perform steady state analysis
-system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
-CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -159,7 +164,7 @@ The stability derivatives are also very close to those predicted by AVL.
 
 ```@example planar-wing
 
-dCF, dCM = stability_derivatives(system, surface, ref, fs; symmetric=symmetric)
+dCF, dCM = stability_derivatives(system)
 
 CDa, CYa, CLa = dCF.alpha
 Cla, Cma, Cna = dCM.alpha
@@ -246,9 +251,9 @@ Markdown.parse(str) #hide
 Visualizing the geometry now shows the circulation distribution across the entire wing.
 
 ```julia
-properties = get_panel_properties(system, surface)
+properties = get_surface_properties(system)
 
-write_vtk("mirrored-planar-wing", surface, properties; symmetric)
+write_vtk("mirrored-planar-wing", surfaces, properties; symmetric)
 ```
 
 ![](mirrored-planar-wing.png)
@@ -282,8 +287,7 @@ ref = Reference(Sref, cref, bref, rref)
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega)
 
 # declare symmetry
 symmetric = true
@@ -291,14 +295,17 @@ symmetric = true
 # construct surface
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
 
+# create vector containing all surfaces
+surfaces = [surface]
+
 # perform steady state analysis
-system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
-CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -362,14 +369,17 @@ for i = 1:length(surface)
     surface[i] = set_normal(surface[i], ncp)
 end
 
+# create vector containing all surfaces
+surfaces = [surface]
+
 # perform steady state analysis
-system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
-CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -404,9 +414,9 @@ Markdown.parse(str) #hide
 ```
 
 ```julia
-properties = get_panel_properties(system, surface)
+properties = get_surface_properties(system)
 
-write_vtk("wing-with-dihedral", surface, properties; symmetric)
+write_vtk("wing-with-dihedral", surfaces, properties; symmetric)
 ```
 
 ![](wing-with-dihedral.png)
@@ -466,8 +476,7 @@ ref = Reference(Sref, cref, bref, rref)
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -493,9 +502,9 @@ surface_id = [1, 2, 3]
 
 system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
-CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+CF, CM = body_forces(system; frame=Wind())
 
-CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -564,10 +573,10 @@ surfaces[1] = wing
 system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
-CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # perform far-field analysis
-CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -654,8 +663,7 @@ ref = Reference(Sref, cref, bref, rref)
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-vother = nothing
-fs = Freestream(alpha, beta, Omega, vother)
+fs = Freestream(alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -689,9 +697,9 @@ surface_id = [1, 2, 3]
 
 system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
-CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+CF, CM = body_forces(system; frame=Stability())
 
-CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
+CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
@@ -730,7 +738,7 @@ Markdown.parse(str) #hide
 By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.
 
 ```julia
-properties = get_panel_properties(system, surface)
+properties = get_surface_properties(system)
 
 write_vtk("wing-tail", surfaces, properties; symmetric)
 ```
@@ -802,13 +810,15 @@ for i = 1:length(AR)
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    # create vector containing surfaces
+    surfaces = [surface]
+
     # run analysis
-    system, surface_history, property_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dx;
         symmetric=symmetric, wake_finite_core = false)
 
     # extract forces at each time step
-    CF[i], CM[i] = body_forces_history(surface_history, property_history, ref, fs;     
-        symmetric=symmetric, frame=Wind())
+    CF[i], CM[i] = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
 end
 
 nothing #hide
@@ -930,19 +940,21 @@ dx = [(t[i+1]-t[i]) for i = 1:length(t)-1]
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+# create vector containing all surfaces
+surfaces = [surface]
+
 # run steady analysis
-system = steady_analysis(surface, ref, fs; symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric)
 
 # extract steady forces
-CFs, CMs = body_forces(system, surface, ref, fs; symmetric, frame = Wind())
+CFs, CMs = body_forces(system; frame=Wind())
 
 # run transient analysis
-system, surface_history, property_history, wake_history = unsteady_analysis(surface, ref, fs, dx;
+system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dx;
     symmetric=symmetric)
 
 # extract transient forces
-CF, CM = body_forces_history(surface_history, property_history, ref, fs;     
-    symmetric=symmetric, frame=Wind())
+CF, CM = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
 
 nothing #hide
 ```
@@ -1044,6 +1056,9 @@ for i = 1:length(k)
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    # create vector containing all surfaces
+    surfaces = [surface]
+
     # angular frequency
     ω = 2*Uinf*k[i]/c[i]
 
@@ -1064,11 +1079,10 @@ for i = 1:length(k)
 
     # run analysis
     system, surface_history, property_history, wake_history = unsteady_analysis(
-        surface, ref, fs, dx; symmetric=symmetric, nwake = 50)
+        surfaces, ref, fs, dx; symmetric=symmetric, nwake = 50)
 
     # extract forces at each time step (uses instantaneous velocity as reference)
-    CF[i], CM[i] = body_forces_history(surface_history, property_history, ref, fs;     
-        symmetric=symmetric, frame=Wind())
+    CF[i], CM[i] = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
 
     # adjust coefficients to use reference velocity rather than instantaneous velocity
     for it = 1:length(dt)

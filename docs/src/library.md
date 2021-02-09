@@ -56,8 +56,8 @@ unsteady_analysis!
 ### Near Field Forces and Moments
 ```@docs
 PanelProperties
-get_panel_properties
-body_forces
+get_surface_properties
+body_forces(system::System{TF}; frame = Body()) where TF
 body_forces_history
 ```
 
@@ -85,6 +85,7 @@ VortexLattice.linearinterp
 VortexLattice.spanwise_spacing
 VortexLattice.chordwise_spacing
 VortexLattice.interpolate_grid
+VortexLattice.update_surface_panels!
 VortexLattice.trailing_edge_points
 VortexLattice.repeated_trailing_edge_points
 VortexLattice.flipy
@@ -174,6 +175,7 @@ VortexLattice.circulation_derivatives!
 ```@docs
 VortexLattice.near_field_forces!
 VortexLattice.near_field_forces_derivatives!
+VortexLattice.body_forces(surfaces, properties, ref, fs, symmetric, frame)
 VortexLattice.body_forces_derivatives
 VortexLattice.body_to_frame
 ```

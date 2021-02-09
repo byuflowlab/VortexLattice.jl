@@ -212,8 +212,8 @@ function grid_to_surface_panels(xyz;
         r4n = SVector(xyz[1,2,j+1], xyz[2,2,j+1], xyz[3,2,j+1]) # bottom right
 
         # also get chord length for setting finite core size
-        cl = xyz[1,end,j] - xyz[1,1,j]
-        cr = xyz[1,end,j+1] - xyz[1,1,j+1]
+        cl = norm(xyz[:,end,j] - xyz[:,1,j])
+        cr = norm(xyz[:,end,j+1] - xyz[:,1,j+1])
         c = (cl + cr)/2
 
         for i = 1:nc-1
@@ -322,12 +322,14 @@ function grid_to_surface_panels(xyz;
         # first reflect xyz
         if right_side
             xyz_l = reverse(xyz_panels, dims=3)
+            xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
+            xyz_r[2,:,:] .= -xyz_r[2,:,:]
         end
-        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+        xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
         # then populate remaining panels
         for j = 1:ns
@@ -417,7 +419,9 @@ function grid_to_surface_panels(xyz, ns, nc;
     for j = 1:ns
 
         # get chord for setting finite core size
-        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+
+        # also get chord length for setting finite core size
+        c = norm(xyz_center[:,end,j] - xyz_center[:,1,j])
 
         for i = 1:nc
             # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
@@ -454,12 +458,14 @@ function grid_to_surface_panels(xyz, ns, nc;
         # first reflect grid
         if right_side
             xyz_l = reverse(xyz_panels, dims=3)
+            xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
+            xyz_r[2,:,:] .= -xyz_r[2,:,:]
         end
-        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+        xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
         # then populate remaining panels
         for j = 1:ns
@@ -641,7 +647,7 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     for j = 1:ns
 
         # get chord for setting finite core size
-        c = xyz_center[1,end,j] - xyz_center[1,1,j]
+        c = norm(xyz_center[:,end,j] - xyz_center[:,1,j])
 
         for i = 1:nc
             # note that `i==1` corresponds to the leading edge for `xyz_corner` and `xyz_center`
@@ -678,12 +684,14 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         # first reflect grid
         if right_side
             xyz_l = reverse(xyz_panels, dims=3)
+            xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
+            xyz_r[2,:,:] .= -xyz_r[2,:,:]
         end
-        xyz_panels = cat(xyz_l, xyz_r, dims=3)
+        xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
         # then populate remaining panels
         for j = 1:ns
@@ -721,8 +729,8 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
         r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
 
         # also get chord length for setting finite core size
-        cl = grid[1,end,j] - grid[1,1,j]
-        cr = grid[1,end,j+1] - grid[1,1,j+1]
+        cl = norm(grid[:,end,j] - grid[:,1,j])
+        cr = norm(grid[:,end,j+1] - grid[:,1,j+1])
         c = (cl + cr)/2
 
         for i = 1:nc-1
