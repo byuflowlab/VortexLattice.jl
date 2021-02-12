@@ -49,7 +49,7 @@ This code has been optimized to be highly performant, primarily by maintaining t
 
 ## Usage
 
-See the [documentation](https://flow.byu.edu/VLM.jl/dev)
+See the [documentation](https://flow.byu.edu/VortexLattice.jl/dev)
 
 ## References
 <a id="1">[1]</a>
