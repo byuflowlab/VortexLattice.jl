@@ -7,6 +7,12 @@ Pages = ["examples.md"]
 Depth = 3
 ```
 
+```@setup examples
+# this is placed here to pre-install matplotlib so the documentation doesn't get cluttered with the installation print statements.
+using Plots
+pyplot()
+```
+
 ## Steady State Analysis of a Wing
 
 This example shows how to calculate aerodynamic coefficients and stability derivatives for a symmetric planar wing.
