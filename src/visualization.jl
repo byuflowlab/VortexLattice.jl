@@ -130,6 +130,8 @@ function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:Abst
     wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt;
     symmetric = fill(nothing, length(surface_history[1])), kwargs...)
 
+    symmetric = isa(symmetric, Number) ? fill(symmetric, length(surface_history[1])) : symmetric
+
     # create paraview collection file
     paraview_collection(name) do pvdfile
 

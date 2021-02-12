@@ -34,7 +34,7 @@ end
 
 # one surface on another surface
 """
-    far_field_drag(receiving, sending, reference, freestream; kwargs...)
+    far_field_drag(receiving, sending, reference, symmetric)
 
 Computes the induced drag on `receiving` from `sending` using the Trefftz
 plane analysis.
@@ -43,8 +43,6 @@ plane analysis.
  - `receiving`: Vector of receiving Trefftz panels (see [`TrefftzPanel`](@ref))
  - `sending`: Vector of sending Trefftz panels (see [`TrefftzPanel`](@ref))
  - `reference`: Reference parameters (see [`Reference`](@ref))
-
-# Keyword Arguments
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
     should be used when calculating induced velocities
 """
@@ -68,8 +66,11 @@ plane analysis.
         Di *= 2
     end
 
+    # reference dynamic pressure
+    q = 1/2*RHO*ref.V^2
+
     # normalize
-    CDi = Di / (QINF*ref.S)
+    CDi = Di / (q*ref.S)
 
     return CDi
 end

@@ -850,6 +850,32 @@ function translate!(grid, r)
 end
 
 """
+    rotate(grid, R, r = [0,0,0])
+
+Return a copy of the grid points in `grid` rotated about point `r` using the rotation matrix `R`
+"""
+rotate(grid, args...) = rotate!(copy(grid), args...)
+
+"""
+    rotate!(grid, R, r = [0,0,0])
+
+Rotate the grid points in `grid` about point `r` using the rotation matrix `R`
+"""
+function rotate!(grid, R, r = (@SVector zeros(3)))
+    nc, ns = size(grid, 2), size(grid, 3)
+
+    grid .-= r
+
+    for i = 1:nc, j = 1:ns
+        grid[:,i,j] = R*grid[:,i,j]
+    end
+
+    grid .+= r
+
+    return grid
+end
+
+"""
     trailing_edge_points(surface[s])
 
 Return points on the trailing edge of each surface.

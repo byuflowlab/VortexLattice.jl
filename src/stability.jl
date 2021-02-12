@@ -111,15 +111,15 @@ function stability_derivatives(system)
     # assign outputs, and apply stability derivative normalizations
     CF_a = CFs_a
     CF_b = CFs_b
-    CF_p = CFs_ps*2*VINF/ref.b
-    CF_q = CFs_qs*2*VINF/ref.c
-    CF_r = CFs_rs*2*VINF/ref.b
+    CF_p = CFs_ps*2*ref.V/ref.b
+    CF_q = CFs_qs*2*ref.V/ref.c
+    CF_r = CFs_rs*2*ref.V/ref.b
 
     CM_a = CMs_a
     CM_b = CMs_b
-    CM_p = CMs_ps*2*VINF/ref.b
-    CM_q = CMs_qs*2*VINF/ref.c
-    CM_r = CMs_rs*2*VINF/ref.b
+    CM_p = CMs_ps*2*ref.V/ref.b
+    CM_q = CMs_qs*2*ref.V/ref.c
+    CM_r = CMs_rs*2*ref.V/ref.b
 
     # pack up derivatives as named tuples
     dCF = (alpha=CF_a, beta=CF_b, p=CF_p, q=CF_q, r=CF_r)

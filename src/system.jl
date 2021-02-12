@@ -4,14 +4,17 @@
 Panel specific properties calculated during the vortex lattice method analysis.
 
 **Fields**
- - `gamma`: Vortex ring circulation strength, normalized by VINF
- - `velocity`: Local velocity at the panel's bound vortex center, normalized by VINF
+ - `gamma`: Vortex ring circulation strength, normalized by the reference velocity
+ - `velocity`: Local velocity at the panel's bound vortex center, normalized by
+    the reference velocity
  - `cfb`: Net force on the panel's bound vortex, as calculated using the
-    Kutta-Joukowski theorem, normalized by `QINF*S`
+    Kutta-Joukowski theorem, normalized by the reference dynamic pressure and area
  - `cfl`: Force on the left bound vortex from this panel's vortex ring, as
-    calculated by the Kutta-Joukowski theorem, normalized by `QINF*S`
+    calculated by the Kutta-Joukowski theorem, normalized by the reference
+    dynamic pressure and area
  - `cfr`: Force on the right bound vortex from this panel's vortex ring, as
-    calculated by the Kutta-Joukowski theorem, normalized by `QINF*S`
+    calculated by the Kutta-Joukowski theorem, normalized by the reference
+    dynamic pressure and area
 """
 struct PanelProperties{TF}
     gamma::TF
@@ -65,6 +68,10 @@ Contains pre-allocated storage for internal system variables.
  - `dΓ`: Derivatives of the circulation strength with respect to the freestream variables
  - `dproperties`: Derivatives of the panel properties with respect to the freestream variables
  - `wake_shedding_locations`: Wake shedding locations for each surface
+ - `Vcp`: Velocity due to surface motion at the control points
+ - `Vh`: Velocity due to surface motion at the horizontal bound vortex centers
+ - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
+ - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
 """
 struct System{TF}
@@ -76,20 +83,25 @@ struct System{TF}
     properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
-    reference::Vector{Reference{TF}}
-    freestream::Vector{Freestream{TF}}
+    reference::Array{Reference{TF}, 0}
+    freestream::Array{Freestream{TF}, 0}
     symmetric::Vector{Bool}
     nwake::Vector{Int}
     surface_id::Vector{Int}
     wake_finite_core::Vector{Bool}
     trailing_vortices::Vector{Bool}
-    xhat::Vector{SVector{3, TF}}
-    near_field_analysis::Vector{Bool}
-    derivatives::Vector{Bool}
+    xhat::Array{SVector{3, TF}, 0}
+    near_field_analysis::Array{Bool, 0}
+    derivatives::Array{Bool, 0}
     dw::NTuple{5, Vector{TF}}
     dΓ::NTuple{5, Vector{TF}}
     dproperties::NTuple{5, Vector{Matrix{PanelProperties{TF}}}}
     wake_shedding_locations::Vector{Vector{SVector{3,TF}}}
+    previous_surfaces::Vector{Matrix{SurfacePanel{TF}}}
+    Vcp::Vector{Matrix{SVector{3, TF}}}
+    Vh::Vector{Matrix{SVector{3, TF}}}
+    Vv::Vector{Matrix{SVector{3, TF}}}
+    Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
 end
 
@@ -179,31 +191,37 @@ function System(TF::Type, nc, ns; nw = zero(nc))
     AIC = zeros(TF, N, N)
     w = zeros(TF, N)
     Γ = zeros(TF, N)
-    V = [Matrix{SVector{3, TF}}(undef, nw[i]+1, ns[i]+1) for i = 1:nsurf]
+    V = [fill((@SVector zeros(TF, 3)), nw[i]+1, ns[i]+1) for i = 1:nsurf]
     surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     properties = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
-    reference = Vector{Reference{TF}}(undef, 1)
-    freestream = Vector{Freestream{TF}}(undef, 1)
+    reference = Array{Reference{TF}}(undef)
+    freestream = Array{Freestream{TF}}(undef)
     symmetric = [false for i = 1:nsurf]
     nwake = [0 for i = 1:nsurf]
     surface_id = [i for i = 1:nsurf]
     wake_finite_core = [true for i = 1:nsurf]
     trailing_vortices = [false for i = 1:nsurf]
-    xhat = [SVector{3,TF}(1, 0, 0)]
-    near_field_analysis = [false]
-    derivatives = [false]
+    xhat = fill(SVector{3,TF}(1, 0, 0))
+    near_field_analysis = fill(false)
+    derivatives = fill(false)
     dw = Tuple(zeros(TF, N) for i = 1:5)
     dΓ = Tuple(zeros(TF, N) for i = 1:5)
     dproperties = Tuple([Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:length(surfaces)] for j = 1:5)
-    wake_shedding_locations = [Vector{SVector{3, TF}}(undef, ns[i]+1) for i = 1:nsurf]
+    wake_shedding_locations = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
+    previous_surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
+    Vcp = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]) for i = 1:nsurf]
+    Vh = [fill((@SVector zeros(TF, 3)), nc[i]+1, ns[i]) for i = 1:nsurf]
+    Vv = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]+1) for i = 1:nsurf]
+    Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
     return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
-        dw, dΓ, dproperties, wake_shedding_locations, dΓdt)
+        dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
+        Vv, Vte, dΓdt)
 end
 
 """
