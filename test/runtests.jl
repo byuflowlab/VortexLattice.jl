@@ -36,12 +36,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -120,12 +121,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -175,12 +177,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 8.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -235,12 +238,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -310,12 +314,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 20.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -409,12 +414,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -517,12 +523,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -590,12 +597,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -646,12 +654,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -701,12 +710,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 15.0*pi/180
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -758,12 +768,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -914,12 +925,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -1008,12 +1020,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -1106,12 +1119,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -1251,46 +1265,11 @@ end
 
     @test isapprox(Vs, Vw)
 
-    # Test induced velocity calculation at the control points:
-    AIC = zeros(nc*ns, nc*ns)
-
-    # no symmetry, no trailing vortices
-    VortexLattice.influence_coefficients!(AIC, surface;
-        symmetric = false,
-        trailing_vortices = false,
-        xhat = [1, 0, 0])
-
-    w_surface = AIC*Γ[:]
-
-    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
-        wake_finite_core = false,
-        symmetric = false,
-        trailing_vortices = false,
-        xhat = [1, 0, 0])
-
-    @test isapprox(w_surface, w_wake)
-
-    # symmetry, trailing vortices
-    VortexLattice.influence_coefficients!(AIC, surface;
-        symmetric = true,
-        trailing_vortices = true,
-        xhat = [1, 0, 0])
-
-    w_surface = AIC*Γ[:]
-
-    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
-        wake_finite_core = false,
-        symmetric = true,
-        trailing_vortices = true,
-        xhat = [1, 0, 0])
-
-    @test isapprox(w_surface, w_wake)
 end
 
 @testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
 
     Uinf = 1.0
-
     AR = 4
 
     # reference parameters
@@ -1298,13 +1277,14 @@ end
     bref = AR
     Sref = bref*cref
     rref = [0.0, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     # freestream parameters
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # geometry
     xle = [0.0, 0.0]
@@ -1335,7 +1315,7 @@ end
         symmetric=symmetric)
 
     # extract forces at each time step
-    CF, CM = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
 
 @testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
@@ -1390,12 +1370,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -1419,4 +1400,7 @@ end
     dt = t[2:end] - t[1:end-1]
 
     system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
+
+    # extract forces at each time step
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
