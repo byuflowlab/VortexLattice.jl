@@ -36,13 +36,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -54,11 +54,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -78,11 +80,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -117,13 +121,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -132,11 +136,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -171,13 +177,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 8.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -186,11 +192,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -230,13 +238,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -255,11 +263,13 @@ end
         surface[ip] = set_normal(p, ncp)
     end
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -304,13 +314,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 20.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -325,11 +335,13 @@ end
         surface[ip] = set_normal(p, ncp)
     end
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -402,13 +414,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -438,9 +450,9 @@ end
 
     system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
-    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system; frame=Stability())
 
-    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -511,13 +523,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -544,11 +556,11 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, derivatives = false)
 
-    CF, CM = body_forces(system, surfaces, ref, fs; symmetric=symmetric, frame=Stability())
+    CF, CM = body_forces(system; frame=Stability())
 
-    CDiff = far_field_drag(system, surfaces, ref, fs; symmetric=symmetric)
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -585,13 +597,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -599,11 +611,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -640,13 +654,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -654,11 +668,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -694,13 +710,13 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 15.0*pi/180
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -711,11 +727,13 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Stability())
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
 
-    CDiff = far_field_drag(system, surface, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
 
     CD, CY, CL = CF
     Cl, Cm, Cn = CM
@@ -750,21 +768,23 @@ end
     cref = 2.0
     bref = 15.0
     rref = [0.50, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    system = steady_analysis(surface, ref, fs; symmetric=symmetric)
+    surfaces = [surface]
 
-    dCF, dCM = stability_derivatives(system, surface, ref, fs; symmetric=symmetric)
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+    dCF, dCM = stability_derivatives(system)
 
     CDa, CYa, CLa = dCF.alpha
     Cla, Cma, Cna = dCM.alpha
@@ -796,6 +816,258 @@ end
     @test isapprox(Cnp, -0.019846, rtol=0.01)
     @test isapprox(Cnq, 0.0, atol=ztol)
     @test isapprox(Cnr, -0.000898, rtol=0.01)
+end
+
+@testset "Geometry Generation" begin
+
+    # Tests of the geometry generation functions
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    # Symmetric Geometry
+
+    halfgrid1, surface1 = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    halfgrid2, surface2 = grid_to_surface_panels(halfgrid1)
+
+    halfgrid3, surface3 = grid_to_surface_panels(halfgrid1, ns, nc;
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    surface4 = similar(surface1)
+    VortexLattice.update_surface_panels!(surface4, halfgrid1)
+
+    @test isapprox(halfgrid1, halfgrid2)
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface2[I], field))
+        end
+    end
+
+    @test isapprox(halfgrid1, halfgrid3)
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface3[I], field))
+        end
+    end
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface4[I], field))
+        end
+    end
+
+    # Mirrored Geometry
+
+    mirror = true
+
+    grid1, surface1 = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    grid2, surface2 = grid_to_surface_panels(halfgrid1; mirror = mirror)
+
+    grid3, surface3 = grid_to_surface_panels(halfgrid1, ns, nc; mirror=mirror,
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    surface4 = similar(surface1)
+    VortexLattice.update_surface_panels!(surface4, grid1)
+
+    @test isapprox(grid1, grid2)
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface2[I], field))
+        end
+    end
+
+    @test isapprox(grid1, grid3)
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface3[I], field))
+        end
+    end
+
+    for I in CartesianIndices(surface1)
+        for field in fieldnames(SurfacePanel)
+            @test isapprox(getproperty(surface1[I], field), getproperty(surface4[I], field))
+        end
+    end
+end
+
+@testset "Grid Input" begin
+
+    # Tests for inputting a grid rather than a surface
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    mirror = false
+    symmetric = true
+
+    halfgrid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # steady analysis, single grid
+
+    grids = [halfgrid]
+
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24454, atol=1e-3)
+    @test isapprox(CD, 0.00247, atol=1e-5)
+    @test isapprox(CDiff, 0.00248, atol=1e-5)
+    @test isapprox(Cm, -0.02091, atol=1e-4)
+    @test isapprox(CY, 0.0, atol=1e-16)
+    @test isapprox(Cl, 0.0, atol=1e-16)
+    @test isapprox(Cn, 0.0, atol=1e-16)
+
+    # steady analysis multiple grids
+
+    # NOTE: AVL's finite-core model is turned off for these tests
+
+    # NOTE: There is some interaction between twist, dihedral, and chordwise
+    # position which causes the normal vectors found by AVL to differ from those
+    # computed by this package.  We therefore manually overwrite the normal
+    # vectors when this occurs in order to get a better comparison.
+
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
+
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
+
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
+
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    symmetric = [true, true, false]
+
+    ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+    # vortex rings - finite core deactivated
+    wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(hgrid, [4.0, 0.0, 0.0])
+    translate!(htail, [4.0, 0.0, 0.0])
+
+    vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+        mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    translate!(vgrid, [4.0, 0.0, 0.0])
+    translate!(vtail, [4.0, 0.0, 0.0])
+
+    grids = [wgrid, hgrid, vgrid]
+    surface_id = [1, 1, 1]
+
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+    CF, CM = body_forces(system; frame=Stability())
+
+    CDiff = far_field_drag(system)
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    # some differences are expected since we don't set the normal vector in
+    # VortexLattice equal to that used by AVL
+
+    @test isapprox(CL, 0.60408, rtol=0.01)
+    @test isapprox(CD, 0.01058, rtol=0.01)
+    @test isapprox(CDiff, 0.010378, atol=0.02)
+    @test isapprox(Cm, -0.02778, rtol=0.01)
+    @test isapprox(CY, 0.0, atol=ztol)
+    @test isapprox(Cl, 0.0, atol=ztol)
+    @test isapprox(Cn, 0.0, atol=ztol)
 end
 
 @testset "Update Trailing Edge Coefficients" begin
@@ -847,13 +1119,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -993,52 +1265,11 @@ end
 
     @test isapprox(Vs, Vw)
 
-    # Test induced velocity calculation at the control points:
-    AIC = zeros(nc*ns, nc*ns)
-
-    # no symmetry, no trailing vortices
-    VortexLattice.influence_coefficients!(AIC, surface;
-        symmetric = false,
-        trailing_vortices = false,
-        xhat = [1, 0, 0])
-
-    w_surface = AIC*Γ[:]
-
-    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
-        wake_finite_core = false,
-        symmetric = false,
-        trailing_vortices = false,
-        xhat = [1, 0, 0])
-
-    @test isapprox(w_surface, w_wake)
-
-    # symmetry, trailing vortices
-    VortexLattice.influence_coefficients!(AIC, surface;
-        symmetric = true,
-        trailing_vortices = true,
-        xhat = [1, 0, 0])
-
-    w_surface = AIC*Γ[:]
-
-    w_wake = VortexLattice.wake_normal_velocity(surface, wake;
-        wake_finite_core = false,
-        symmetric = true,
-        trailing_vortices = true,
-        xhat = [1, 0, 0])
-
-    @test isapprox(w_surface, w_wake)
-
 end
 
 @testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
 
-    # Katz and Plotkin: Figures 13.34 and 13.35
-    # AR = [4, 8, 12, 20, ∞]
-    # Uinf*Δt/c = 1/16
-    # α = 5°
-
     Uinf = 1.0
-
     AR = 4
 
     # reference parameters
@@ -1046,14 +1277,14 @@ end
     bref = AR
     Sref = bref*cref
     rref = [0.0, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     # freestream parameters
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # geometry
     xle = [0.0, 0.0]
@@ -1070,19 +1301,22 @@ end
     symmetric = false
 
     # non-dimensional time
-    time = range(0.0, 10.0, step=1/16)
-    dt = [time[i+1]-time[i] for i = 1:length(time)-1]
+    t = range(0.0, 10.0, step=0.2)
+    dt = [t[i+1]-t[i] for i = 1:length(t)-1]
 
     # create vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    surfaces = [surface]
+
     # run analysis
-    system, surface_history, wake_history = unsteady_analysis(surface, ref, fs, dt;
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt;
         symmetric=symmetric)
 
+    # extract forces at each time step
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
-
 
 @testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
 
@@ -1136,13 +1370,13 @@ end
     cref = 0.9
     bref = 10.0
     rref = [0.5, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    vother = nothing
-    fs = Freestream(alpha, beta, Omega, vother)
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -1161,10 +1395,12 @@ end
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
-    # time
-    t = 0.0:0.1:10.0
+    # t
+    t = range(0.0, 10.0, step=0.2)
     dt = t[2:end] - t[1:end-1]
 
-    system, surface_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
 
+    # extract forces at each time step
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end

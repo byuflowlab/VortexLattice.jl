@@ -21,10 +21,10 @@ WakePanel()
 grid_to_surface_panels
 wing_to_surface_panels
 set_normal
-translate(grid, r)
-translate(surface::AbstractMatrix, r)
-translate!(grid, r)
-translate!(surface::AbstractMatrix, r)
+translate
+translate!
+rotate
+rotate!
 reflect(surface::AbstractMatrix)
 ```
 
@@ -40,6 +40,7 @@ Wind
 ### Freestream Parameters
 ```@docs
 Freestream
+trajectory_to_freestream
 ```
 
 ### Performing an Analysis
@@ -48,7 +49,6 @@ System
 System()
 steady_analysis
 steady_analysis!
-prescribed_motion
 unsteady_analysis
 unsteady_analysis!
 ```
@@ -56,8 +56,8 @@ unsteady_analysis!
 ### Near Field Forces and Moments
 ```@docs
 PanelProperties
-get_panel_properties
-body_forces
+get_surface_properties
+body_forces(system::System{TF}; frame = Body()) where TF
 body_forces_history
 ```
 
@@ -85,6 +85,7 @@ VortexLattice.linearinterp
 VortexLattice.spanwise_spacing
 VortexLattice.chordwise_spacing
 VortexLattice.interpolate_grid
+VortexLattice.update_surface_panels!
 VortexLattice.trailing_edge_points
 VortexLattice.repeated_trailing_edge_points
 VortexLattice.flipy
@@ -103,7 +104,6 @@ VortexLattice.bottom_right
 VortexLattice.controlpoint
 VortexLattice.normal(panel::SurfacePanel)
 VortexLattice.get_core_size
-VortexLattice.translate(panel::SurfacePanel, r)
 VortexLattice.reflect(panel::SurfacePanel)
 VortexLattice.left_center
 VortexLattice.right_center
@@ -152,18 +152,15 @@ VortexLattice.wind_to_body_derivatives
 VortexLattice.wind_to_stability_beta
 VortexLattice.freestream_velocity
 VortexLattice.freestream_velocity_derivatives
-VortexLattice.external_velocity
-VortexLattice.external_velocity_derivatives
+VortexLattice.rotational_velocity
+VortexLattice.rotational_velocity_derivatives
+VortexLattice.get_surface_velocities!
 ```
 
 ### Circulation
 ```@docs
-VortexLattice.normal_velocity
 VortexLattice.normal_velocity!
-VortexLattice.normal_velocity_derivatives
 VortexLattice.normal_velocity_derivatives!
-VortexLattice.wake_normal_velocity
-VortexLattice.subtract_wake_normal_velocity!
 VortexLattice.circulation
 VortexLattice.circulation!
 VortexLattice.circulation_derivatives
@@ -174,6 +171,7 @@ VortexLattice.circulation_derivatives!
 ```@docs
 VortexLattice.near_field_forces!
 VortexLattice.near_field_forces_derivatives!
+VortexLattice.body_forces(surfaces, properties, ref, fs, symmetric, frame)
 VortexLattice.body_forces_derivatives
 VortexLattice.body_to_frame
 ```

@@ -6,21 +6,23 @@
 Reference quantities.
 
 **Arguments**
-- `S`: reference area
-- `c`: reference chord
-- `b`: reference span
-- `r`: reference location for all rotations/moments
+ - `S`: reference area
+ - `c`: reference chord
+ - `b`: reference span
+ - `r`: reference location for all rotations/moments
+ - `V`: reference velocity (magnitude)
 """
 struct Reference{TF}
     S::TF
     c::TF
     b::TF
     r::SVector{3, TF}
+    V::TF
 end
 
-function Reference(S, c, b, r)
-    TF = promote_type(typeof(S), typeof(c), typeof(b), eltype(r))
-    return Reference{TF}(S, c, b, r)
+function Reference(S, c, b, r, V)
+    TF = promote_type(typeof(S), typeof(c), typeof(b), eltype(r), typeof(V))
+    return Reference{TF}(S, c, b, r, V)
 end
 
 Base.eltype(::Type{Reference{TF}}) where TF = TF

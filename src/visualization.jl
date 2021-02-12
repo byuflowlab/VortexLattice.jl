@@ -1,167 +1,6 @@
 # TODO: Add grid based visualization
 
 """
-    write_vtk(name, surface, [properties]; kwargs...)
-    write_vtk(name, wake; kwargs...)
-    write_vtk(name, surface, wake, [properties]; kwargs...)
-
-Write surface and/or wake geometry to Paraview files for visualization.
-
-# Arguments
- - `name`: Base name for the generated files
- - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
- - `wake`: (optional) Matrix of wake panels (see [`WakePanel`](@ref)) of shape (nw, ns)
-    where `nw` is the number of chordwise wake panels and `ns` is the number of
-    spanwise panels
- - `properties`: (optional) Matrix of panel properties for each non-wake panel
-    where each element of the matrix is of type [`PanelProperties`](@ref).
-
-# Keyword Arguments:
- - `symmetric`: (required if `properties` is provided) Flag indicating whether a
-    mirror image (across the X-Z plane) was used when calculating induced velocities.
- - `trailing_vortices`: Flag indicating whether the model uses trailing vortices.
-    Defaults to `true` when wake panels are absent, `false` otherwise
- - `xhat`: Direction in which trailing vortices extend if used. Defaults to [1, 0, 0].
- - `wake_length`: Distance to extend trailing vortices. Defaults to 10
- - `metadata`: Dictionary of metadata to include in generated files
- """
-write_vtk(name, surface::AbstractMatrix, args...; kwargs...)
-
-# surface implementation
-function write_vtk(name, surface::AbstractMatrix{<:SurfacePanel}, properties=nothing; kwargs...)
-
-    # create paraview multiblock file
-    vtk_multiblock(name) do vtmfile
-
-        # add paraview files corresponding to the surface to the multiblock file
-        write_vtk!(vtmfile, surface, properties; kwargs...)
-
-    end
-
-    return nothing
-end
-
-# wake implementation
-function write_vtk(name, surface::AbstractMatrix{<:WakePanel}; kwargs...)
-
-    # create paraview multiblock file
-    vtk_multiblock(name) do vtmfile
-
-        # add paraview files corresponding to the wake to the multiblock file
-        write_vtk!(vtmfile, surface; kwargs...)
-
-    end
-
-    return nothing
-end
-
-# surface + wake implementation
-function write_vtk(name, surface::AbstractMatrix{<:SurfacePanel},
-    wake::AbstractMatrix{<:WakePanel}, properties=nothing; kwargs...)
-
-    # create multiblock file
-    vtk_multiblock(name) do vtmfile
-
-        # extract circulation at the trailing edge of `surface`
-        if isnothing(properties)
-            surface_circulation = zeros(size(surface, 2))
-        else
-            surface_circulation = getproperty.(properties[end,:], :gamma)
-        end
-
-        # extract circulation at the leading edge of `wake`
-        wake_circulation = getproperty.(wake[1,:], :gamma)
-
-        # add paraview files corresponding to the surface to the multiblock file
-        write_vtk!(vtmfile, surface, properties;
-            wake_circulation,
-            trailing_edge = false,
-            kwargs...,
-            trailing_vortices = false)
-
-        # add paraview files corresponding to the wake to the multiblock file
-        write_vtk!(vtmfile, wake;
-            surface_circulation,
-            kwargs...)
-    end
-
-    return nothing
-end
-
-"""
-    write_vtk(name, surface, surface_history, wake_history, dt; kwargs...)
-
-Writes the results of an unsteady simulation to Paraview files for visualization.
-
-# Arguments
- - `name`: Base name for the generated files
- - `surface`: Matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
- - `surface_history`: Vector of surface properties at each time step, where surface
-    properties are represented by a matrix of panel properties (see [`PanelProperties`](@ref))
-    of shape (nc, ns) where `nc` is the number of chordwise panels and `ns` is
-    the number of spanwise panels
- - `wake_history`: Matrices corresponding to the wake panels (see [`WakePanel`](@ref))
-    corresponding to `surface` at each time step
- - `dt`: Time step vector
-
-# Keyword Arguments:
- - `symmetric`: (required) Flag indicating whether a mirror image (across the X-Z plane)
-    was used when calculating induced velocities
- - `metadata`: Dictionary of metadata to include in generated files
-"""
-function write_vtk(name, surface::AbstractMatrix,
-    surface_history::AbstractVector{<:AbstractMatrix},
-    wake_history::AbstractVector{<:AbstractMatrix}, dt; kwargs...)
-
-    # create paraview collection file
-    paraview_collection(name) do pvdfile
-
-        # construct time vector
-        time = cumsum(dt)
-
-        # loop through each time step
-        for it = 1:length(time)
-
-            # construct multiblock file for each time step
-            vtk_multiblock(name*"-step$it") do vtmfile
-
-                # extract circulation at the trailing edge of `surface`
-                surface_circulation = getproperty.(surface_history[it][end,:], :gamma)
-
-                # extract circulation at the leading edge of `wake`
-                if isempty(wake_history[it])
-                    wake_circulation = zeros(size(surface, 2))
-                else
-                    wake_circulation = getproperty.(wake_history[it][1,:], :gamma)
-                end
-
-                # add paraview files corresponding to the surface to the multiblock file
-                write_vtk!(vtmfile, surface, surface_history[it];
-                    wake_circulation,
-                    trailing_edge = isempty(wake_history[it]),
-                    kwargs...,
-                    trailing_vortices = false)
-
-                # add paraview files corresponding to the wake to the multiblock file
-                write_vtk!(vtmfile, wake_history[it];
-                    surface_circulation,
-                    kwargs...,
-                    trailing_vortices = false)
-
-                # add multiblock file to the paraview collection file
-                pvdfile[time[it]] = vtmfile
-            end
-        end
-    end
-
-    return nothing
-end
-
-"""
     write_vtk(name, surfaces, [surface_properties]; kwargs...)
     write_vtk(name, wakes; kwargs...)
     write_vtk(name, surfaces, wakes, [surface_properties]; kwargs...)
@@ -170,15 +9,19 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
- - `surfaces`: Vector of surfaces, represented by matrices of surface panels
-    (see [`SurfacePanel`](@ref) of shape (nc, ns) where `nc` is the number of
-    chordwise panels and `ns` is the number of spanwise panels
+ - `surfaces`:
+   - Vector of grids of shape (3, nc+1, ns+1) which represent lifting surfaces
+   or
+   - Vector of matrices of shape (nc, ns) containing surface panels (see
+    [`SurfacePanel`](@ref))
+   where `nc` is the number of chordwise panels and `ns` is the number of
+   spanwise panels
  - `wakes`: (optional) Vector of wakes corresponding to each surface, represented
     by matrices of wake panels (see [`WakePanel`](@ref)) of shape (nw, ns) where
     `nw` is the number of chordwise wake panels and `ns` is the number of
     spanwise panels.
- - `surface_properties`: (optional) Vector of properties for each surface,
-    represented by matrices of panel properties (see [`PanelProperties`](@ref))
+ - `surface_properties`: (optional) Vector of surface panel properties for each
+    surface, stored as matrices of panel properties (see [`PanelProperties`](@ref))
     of shape (nc, ns) where `nc` is the number of chordwise panels and `ns` is
     the number of spanwise panels
 
@@ -195,14 +38,14 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
-    properties=nothing; kwargs...) where T
+    properties=nothing; symmetric=fill(nothing, length(surfaces)), kwargs...) where T
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile
         # loop through all surfaces
         for i = 1:length(surfaces)
             # add paraview files corresponding to the surface to the multiblock file
-            write_vtk!(vtmfile, surfaces[i], properties[i]; kwargs...)
+            write_vtk!(vtmfile, surfaces[i], properties[i]; symmetric=symmetric[i], kwargs...)
         end
     end
 
@@ -223,8 +66,8 @@ function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; k
     return nothing
 end
 
-function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
-    wakes::AbstractVector{<:AbstractMatrix}, properties=nothing; kwargs...)
+function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
+    wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=nothing; kwargs...)
 
     # create multiblock file
     vtk_multiblock(name) do vtmfile
@@ -255,16 +98,17 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
 end
 
 """
-    write_vtk(name, surfaces, surface_history, wake_history; kwargs...)
+    write_vtk(name, surface_history, property_history, wake_history; kwargs...)
 
 Writes unsteady simulation geometry to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
- - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+ - `surface_history`: Vector of surfaces at each time step, where each surface is
+    represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
     of spanwise panels
- - `surface_history`: Vector of surface properties for each surface at each
+ - `property_history`: Vector of surface properties for each surface at each
     time step, where surface properties are represented by a matrix of panel
     properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc` is
     the number of chordwise panels and `ns` is the number of spanwise panels
@@ -281,10 +125,12 @@ Writes unsteady simulation geometry to Paraview files for visualization.
  - `wake_length`: Distance to extend trailing vortices. Defaults to 10
  - `metadata`: Dictionary of metadata to include in generated files
 """
-function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
-    surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+    property_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
     wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt;
-    symmetric = fill(nothing, length(surfaces)), kwargs...)
+    symmetric = fill(nothing, length(surface_history[1])), kwargs...)
+
+    symmetric = isa(symmetric, Number) ? fill(symmetric, length(surface_history[1])) : symmetric
 
     # create paraview collection file
     paraview_collection(name) do pvdfile
@@ -299,20 +145,20 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix},
             vtk_multiblock(name*"-step$it") do vtmfile
 
                 # loop through all surfaces
-                for i = 1:length(surfaces)
+                for i = 1:length(surface_history[it])
 
                     # extract circulation at the trailing edge of `surface`
-                    surface_circulation = getproperty.(surface_history[it][i][end,:], :gamma)
+                    surface_circulation = getproperty.(property_history[it][i][end,:], :gamma)
 
                     # extract circulation at the leading edge of `wake`
                     if isempty(wake_history[it][i])
-                        wake_circulation = zeros(size(surfaces[i], 2))
+                        wake_circulation = zeros(size(surface_history[it][i], 2))
                     else
                         wake_circulation = getproperty.(wake_history[it][i][1,:], :gamma)
                     end
 
                     # add paraview files corresponding to the surface to the multiblock file
-                    write_vtk!(vtmfile, surfaces[i], surface_history[it][i];
+                    write_vtk!(vtmfile, surface_history[it][i], property_history[it][i];
                         wake_circulation,
                         trailing_edge = isempty(wake_history[it][i]),
                         symmetric = symmetric[i],

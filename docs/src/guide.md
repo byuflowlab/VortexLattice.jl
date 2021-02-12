@@ -9,7 +9,7 @@ using VortexLattice
 nothing #hide
 ```
 
-Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
+Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a wing with the following geometric properties.
 
 ```@example guide
 xle = [0.0, 0.4] # leading edge x-position
@@ -18,6 +18,7 @@ zle = [0.0, 0.0] # leading edge z-position
 chord = [2.2, 1.8] # chord length
 theta = [2.0*pi/180, 2.0*pi/180] # twist (in radians)
 phi = [0.0, 0.0] # section rotation about the x-axis
+fc = fill((xc) -> 0, 2) # camberline function for each section (y/c = f(x/c))
 nothing #hide
 ```
 
@@ -40,12 +41,19 @@ of the wing is returned from this function.  Only the latter is needed for the a
 
 ```@example guide
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+fc = fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 nothing #hide
 ```
 
 We could have also generated our lifting surface from a pre-existing grid using
 `grid_to_surface_panels`.
+
+The last step in defining our geometry is to combine all surfaces in a single vector.  Since we only have one surface, we create a vector with a single element.
+
+```@example guide
+surfaces = [surface]
+nothing #hide
+```
 
 Now that we have generated our geometry we need to define our reference parameters and freestream properties. We use the following reference parameters
 
@@ -54,7 +62,8 @@ Sref = 30.0 # reference area
 cref = 2.0  # reference chord
 bref = 15.0 # reference span
 rref = [0.50, 0.0, 0.0] # reference location for rotations/moments (typically the c.g.)
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0 # reference velocity (magnitude)
+ref = Reference(Sref, cref, bref, rref, Vinf)
 nothing #hide
 ```
 
@@ -63,7 +72,7 @@ We use the following freestream properties.
 alpha = 1.0*pi/180 # angle of attack
 beta = 0.0 # sideslip angle
 Omega = [0.0, 0.0, 0.0] # rotational velocity around the reference location
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 nothing #hide
 ```
 
@@ -83,19 +92,18 @@ We are now ready to perform a steady state analysis. We do so by calling the `st
    argument `derivatives`
 
 ```@example guide
-system = steady_analysis(surface, ref, fs; symmetric)
+system = steady_analysis(surfaces, ref, fs; symmetric)
 nothing #hide
 ```
 
-The result of our analysis is an object of type `system` which holds the system state.  Note that the keyword argument `symmetric` is required, because it is must
-be reused in later analyses.
+The result of our analysis is an object of type `system` which holds the system state.  Note that the keyword argument `symmetric` is not strictly necessary, since by default it is set to false for each surface.
 
 Once we have performed our steady state analysis (and associated near field analysis) we can extract the body force/moment coefficients using the function `body_forces`. These forces are returned in the reference frame specified by the keyword argument `frame`, which defaults to the body reference frame.
 
 Note that a near field analysis must have been performed on `system` for this function to return sensible results (which is the default behavior when running an analysis).
 
 ```@example guide
-CF, CM = body_forces(system, surface, ref, fs; symmetric=symmetric, frame=Wind())
+CF, CM = body_forces(system; frame=Wind())
 
 # extract aerodynamic forces
 CD, CY, CL = CF
@@ -103,17 +111,10 @@ Cl, Cm, Cn = CM
 nothing #hide
 ```
 
-We can also extract the forces on the panels on each surface using the `get_panel_properties` function.
-
-```@example guide
-properties = get_panel_properties(system, surface)
-nothing #hide
-```
-
 Numerical noise often corrupts drag estimates from near-field analyses, therefore, it is often more accurate to compute drag in the farfield on the Trefftz plane.
 
 ```@example guide
-CDiff = far_field_drag(system, surface, ref, fs; symmetric = symmetric)
+CDiff = far_field_drag(system)
 nothing #hide
 ```
 
@@ -122,7 +123,7 @@ We can also extract the body and/or stability derivatives for the aircraft easil
 Once again, note that the derivatives of the near-field analysis forces with respect to the freestream variables must have been previously calculated (which is the default behavior when running an analysis) for these functions to yield sensible results.
 
 ```@example guide
-dCFb, dCMb = body_derivatives(system, surface, ref, fs; symmetric = symmetric)
+dCFb, dCMb = body_derivatives(system)
 
 # traditional names for each body derivative
 CXu, CYu, CZu = dCFb.u
@@ -142,7 +143,7 @@ nothing #hide
 ```
 
 ```@example guide
-dCFs, dCMs = stability_derivatives(system, surface, ref, fs; symmetric = symmetric)
+dCFs, dCMs = stability_derivatives(system)
 
 # traditional names for each stability derivative
 CDa, CYa, CLa = dCFs.alpha
@@ -162,7 +163,9 @@ nothing #hide
 Visualizing the geometry (and results) may be done in Paraview after writing the associated visualization files using `write_vtk`.
 
 ```julia
-write_vtk("simplewing", surface, properties[1])
+properties = get_surface_properties(system)
+
+write_vtk("simplewing", surfaces, properties)
 ```
 
 ![](simple-guide.png)

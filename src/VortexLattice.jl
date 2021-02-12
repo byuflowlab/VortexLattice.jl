@@ -5,14 +5,12 @@ using StaticArrays
 using Interpolations
 using WriteVTK
 
-# values for dimensionalizing, included just for clarity in the algorithms
+# value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
-const VINF = 1.0
-const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
-export translate, translate!, reflect, set_normal
+export reflect, set_normal
 
 include("wake.jl")
 export Wake
@@ -20,14 +18,14 @@ export Wake
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_surface_panels, wing_to_surface_panels
-export translate, translate!, reflect
+export translate, translate!, rotate, rotate!, reflect
 
 include("reference.jl")
 export Reference
 export AbstractFrame, Body, Stability, Wind
 
 include("freestream.jl")
-export Freestream
+export Freestream, trajectory_to_freestream
 
 include("induced.jl")
 
@@ -35,11 +33,10 @@ include("circulation.jl")
 
 include("system.jl")
 export System
-export PanelProperties, get_panel_properties
+export PanelProperties, get_surface_properties
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
-export prescribed_motion
 export unsteady_analysis, unsteady_analysis!
 
 include("nearfield.jl")

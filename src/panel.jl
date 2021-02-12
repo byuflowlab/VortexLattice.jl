@@ -174,6 +174,92 @@ function translate!(surface::AbstractMatrix, r)
 end
 
 """
+    translate(surfaces, r)
+
+Return a copy of the surfaces in `surfaces` translated the distance specified by vector `r`
+"""
+translate(surfaces::AbstractVector{<:AbstractMatrix}, r) = translate.(surfaces, Ref(r))
+
+"""
+    translate!(surfaces, r)
+
+Translate the surfaces in `surfaces` the distance specified by vector `r`
+"""
+function translate!(surfaces::AbstractVector{AbstractMatrix}, r)
+
+    for i in eachindex(surfaces)
+        surfaces[i] = translate!(surfaces[i], r)
+    end
+
+    return surfaces
+end
+
+"""
+    rotate(panel::SurfacePanel, R, r = [0,0,0])
+
+Return a copy of `panel` rotated about point `r` using the rotation matrix `R`
+"""
+@inline function rotate(panel::SurfacePanel, R, r = (@SVector zeros(3)))
+
+    rtl = R*(panel.rtl - r) + r
+    rtc = R*(panel.rtc - r) + r
+    rtr = R*(panel.rtr - r) + r
+    rbl = R*(panel.rbl - r) + r
+    rbc = R*(panel.rbc - r) + r
+    rbr = R*(panel.rbr - r) + r
+    rcp = R*(panel.rcp - r) + r
+    ncp = R*panel.ncp
+    core_size = panel.core_size
+    chord = panel.chord
+
+    return SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
+end
+
+"""
+    rotate(surface, R, r = [0,0,0])
+
+Return a copy of the panels in `surface` rotated about point `r` using the rotation matrix `R`
+"""
+rotate(surface::AbstractMatrix, R, r = (@SVector zeros(3))) = rotate.(surface, Ref(R), Ref(r))
+
+"""
+    rotate!(surface, R, r = [0,0,0])
+
+Rotate the panels in `surface` about point `r` using the rotation matrix `R`
+"""
+function rotate!(surface::AbstractMatrix, R, r = (@SVector zeros(3)))
+
+    for i in eachindex(surface)
+        surface[i] = rotate(surface[i], R, r)
+    end
+
+    return surface
+end
+
+"""
+    rotate(surfaces, R, r = [0,0,0])
+
+Return a copy of the surfaces in `surfaces` rotated about point `r` using the
+rotation matrix `R`
+"""
+rotate(surfaces::AbstractVector{<:AbstractMatrix}, R, r = (@SVector zeros(3))) =
+    rotate.(surfaces, Ref(R), Ref(r))
+
+"""
+    rotate!(surfaces, R, r = [0,0,0])
+
+Rotate the surfaces in `surfaces` about point `r` using the rotation matrix `R`
+"""
+function rotate!(surfaces::AbstractVector{AbstractMatrix}, R, r = (@SVector zeros(3)))
+
+    for i in eachindex(surfaces)
+        surfaces[i] = rotate!(surfaces[i], R, r)
+    end
+
+    return surfaces
+end
+
+"""
     reflect(panel::SurfacePanel)
 
 Reflect `panel` across the X-Z plane.
