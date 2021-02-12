@@ -274,7 +274,7 @@ zle = [0.0, 3.0]
 chord = [2.2, 1.8]
 theta = [2.0*pi/180, 2.0*pi/180]
 phi = [0.0, 0.0]
-fc = fill((xc) -> 0, 2).0 #camberline function for each section
+fc = fill((xc) -> 0, 2) #camberline function for each section
 
 ns = 12
 nc = 6
@@ -465,7 +465,7 @@ zle_h = [0.0, 0.0]
 chord_h = [0.7, 0.42]
 theta_h = [0.0, 0.0]
 phi_h = [0.0, 0.0]
-fc_h = (xc) -> 0 #camberline function for each section
+fc_h = fill((xc) -> 0, 2) #camberline function for each section
 ns_h = 6
 nc_h = 3
 spacing_s_h = Uniform()
@@ -479,7 +479,7 @@ zle_v = [0.0, 1.0]
 chord_v = [0.7, 0.42]
 theta_v = [0.0, 0.0]
 phi_v = [0.0, 0.0]
-fc_v = (xc) -> 0 #camberline function for each section
+fc_v = fill((xc) -> 0, 2) #camberline function for each section
 ns_v = 5
 nc_v = 3
 spacing_s_v = Uniform()
@@ -512,7 +512,7 @@ translate!(htail, [4.0, 0.0, 0.0])
 
 # generate surface panels for vertical tail
 vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
-    mirror=mirror_v, fc=fc_v spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vgrid, [4.0, 0.0, 0.0])
 translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -665,7 +665,7 @@ zle_h = [0.0, 0.0]
 chord_h = [0.7, 0.42]
 theta_h = [0.0, 0.0]
 phi_h = [0.0, 0.0]
-fc_h = (xc) -> 0 # camberline function for each section
+fc_h = fill((xc) -> 0, 2) # camberline function for each section
 ns_h = 6
 nc_h = 3
 spacing_s_h = Uniform()
@@ -679,7 +679,7 @@ zle_v = [0.0, 1.0]
 chord_v = [0.7, 0.42]
 theta_v = [0.0, 0.0]
 phi_v = [0.0, 0.0]
-fc_v = (xc) -> 0 # camberline function for each section
+fc_v = fill((xc) -> 0, 2) # camberline function for each section
 ns_v = 5
 nc_v = 3
 spacing_s_v = Uniform()
@@ -1231,8 +1231,7 @@ t = Vector{Vector{Float64}}(undef, length(k))
 CF = Vector{Vector{Vector{Float64}}}(undef, length(k))
 CM = Vector{Vector{Vector{Float64}}}(undef, length(k))
 
-i = 1
-#for i = 1:length(k)
+for i = 1:length(k)
 
     # span length
     b = AR*c[i]
@@ -1291,7 +1290,7 @@ i = 1
     # extract forces at each time step (uses instantaneous velocity as reference)
     CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
 
-#end
+end
 
 nothing #hide
 ```
