@@ -33,13 +33,14 @@ Sref = 30.0
 cref = 2.0
 bref = 15.0
 rref = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
 
 # freestream parameters
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 
 # construct surface
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -109,7 +110,8 @@ For asymmetric flow conditions and/or to obtain accurate asymmetric stability de
 ```@example planar-wing
 
 # construct geometry with mirror image
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # symmetry is not used in the analysis
 symmetric = false
@@ -282,18 +284,20 @@ Sref = 30.0
 cref = 2.0
 bref = 15.0
 rref = [0.50, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
 
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 
 # declare symmetry
 symmetric = true
 
 # construct surface
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=spacing_s, spacing_c=spacing_c)
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    spacing_s=spacing_s, spacing_c=spacing_c)
 
 # create vector containing all surfaces
 surfaces = [surface]
@@ -353,11 +357,20 @@ If we set the normal vectors in VortexLattice equal to those used in AVL, the re
 using LinearAlgebra
 
 function avl_normal_vector(ds, theta)
+
     st, ct = sincos(theta)
-    bhat = ds/norm(ds) # bound vortex vector
-    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2) # chordwise strip normal vector
-    chat = [ct, -st*shat[2], -st*shat[3]] # camberline vector
-    ncp = cross(chat, ds) # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+
+    # bound vortex vector
+    bhat = ds/norm(ds)
+
+    # chordwise strip normal vector
+    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2)
+
+    # camberline vector
+    chat = [ct, -st*shat[2], -st*shat[3]]
+
+    # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+    ncp = cross(chat, ds)
     return ncp / norm(ncp) # normal vector used by AVL
 end
 
@@ -471,12 +484,13 @@ Sref = 9.0
 cref = 0.9
 bref = 10.0
 rref = [0.5, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
 
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -552,11 +566,20 @@ If we set the normal vectors in VortexLattice equal to those used in AVL, the re
 using LinearAlgebra
 
 function avl_normal_vector(ds, theta)
+
     st, ct = sincos(theta)
-    bhat = ds/norm(ds) # bound vortex vector
-    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2) # chordwise strip normal vector
-    chat = [ct, -st*shat[2], -st*shat[3]] # camberline vector
-    ncp = cross(chat, ds) # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+
+    # bound vortex vector
+    bhat = ds/norm(ds)
+
+    # chordwise strip normal vector
+    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2)
+
+    # camberline vector
+    chat = [ct, -st*shat[2], -st*shat[3]]
+
+    # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+    ncp = cross(chat, ds)
     return ncp / norm(ncp) # normal vector used by AVL
 end
 
@@ -658,12 +681,13 @@ Sref = 9.0
 cref = 0.9
 bref = 10.0
 rref = [0.5, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
 
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -752,23 +776,30 @@ This example shows how to predict the transient forces and moments on a rectangu
 ```@example rectangular-wing-sudden-acceleration
 # Katz and Plotkin: Figures 13.34 and 13.35
 # AR = [4, 8, 12, 20, ∞]
-# Uinf*Δt/c = 1/16
+# Vinf*Δt/c = 1/16
 # α = 5°
 
 using VortexLattice
 
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 10.0, step=1/16)
-
 AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
 
+system = Vector{Any}(undef, length(AR))
+surface_history = Vector{Any}(undef, length(AR))
+property_history = Vector{Any}(undef, length(AR))
+wake_history = Vector{Any}(undef, length(AR))
 CF = Vector{Vector{Vector{Float64}}}(undef, length(AR))
 CM = Vector{Vector{Vector{Float64}}}(undef, length(AR))
 
-for i = 1:length(AR)
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 10.0, step=1/16)
 
-    # chord length
-    c = 1
+# chord length
+c = 1
+
+# time step
+dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+
+for i = 1:length(AR)
 
     # span length
     b = AR[i]*c
@@ -790,21 +821,19 @@ for i = 1:length(AR)
     mirror = false
     symmetric = false
 
-    # freestream parameters
-    alpha = 5.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(alpha, beta, Omega)
-
     # reference parameters
     cref = c
     bref = b
     Sref = S
     rref = [0.0, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
-    # time step (in meters)
-    dx = [(t[i+1]-t[i])*c for i = 1:length(t)-1]
+    # freestream parameters
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # create vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -814,17 +843,27 @@ for i = 1:length(AR)
     surfaces = [surface]
 
     # run analysis
-    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dx;
-        symmetric=symmetric, wake_finite_core = false)
+    system[i], surface_history[i], property_history[i], wake_history[i] =
+        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
 
     # extract forces at each time step
-    CF[i], CM[i] = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
+    CF[i], CM[i] = body_forces_history(system[i], surface_history[i],
+        property_history[i]; frame=Wind())
+
 end
 
 nothing #hide
 ```
 
-Plotting the results reveals that the results predicted by VortexLattice are similar to those shown in Figures 13.34 and 13.35 of Low-Speed Aerodynamics by Katz and Plotkin.
+We can visualize the solution using the `write_vtk` function.
+```julia
+write_vtk("acceleration-AR4", surface_history[1], property_history[1],
+    wake_history[1], dt; symmetric=false)
+```
+
+![](acceleration-AR4.gif)
+
+The transient lift and drag coefficients are similar to those shown in Figures 13.34 and 13.35 of Low-Speed Aerodynamics by Katz and Plotkin.
 
 ```@example rectangular-wing-sudden-acceleration
 using Plots
@@ -883,12 +922,165 @@ nothing #hide
 
 ![](rectangular-wing-sudden-acceleration-cd.svg)
 
+We modeled the problem using a body-fixed reference frame (which for this problem is more straightforward), but we could have also modeled the problem in a global reference frame.
+
+```@example rectangular-wing-sudden-acceleration
+# Katz and Plotkin: Figures 13.34 and 13.35
+# AR = [4, 8, 12, 20, ∞]
+# Vinf*Δt/c = 1/16
+# α = 5°
+
+using VortexLattice
+
+AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
+
+system_t = Vector{Any}(undef, length(AR))
+surface_history_t = Vector{Any}(undef, length(AR))
+property_history_t = Vector{Any}(undef, length(AR))
+wake_history_t = Vector{Any}(undef, length(AR))
+CF_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+CM_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 10.0, step=1/16)
+
+# chord length
+c = 1
+
+# time step
+dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+
+for i = 1:length(AR)
+
+    # span length
+    b = AR[i]*c
+
+    # planform area
+    S = b*c
+
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [-b/2, b/2]
+    zle = [0.0, 0.0]
+    chord = [c, c]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = false
+
+    # reference parameters
+    cref = c
+    bref = b
+    Sref = S
+    rref = [0.0, 0.0, 0.0]
+    Vinf = 1.0 # reference velocity is 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    # freestream parameters
+    Vinf = 0.0 # freestream velocity is 0.0
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # create vortex rings
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # create vector containing surfaces at each time step
+    surfaces = [[VortexLattice.translate(surface,
+        -t[it]*[cos(alpha), 0, sin(alpha)])] for it = 1:length(t)]
+
+    # run analysis
+    system_t[i], surface_history_t[i], property_history_t[i], wake_history_t[i] =
+        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+
+    # extract forces at each time step
+    CF_t[i], CM_t[i] = body_forces_history(system_t[i], surface_history_t[i],
+        property_history_t[i]; frame=Wind())
+
+end
+
+nothing #hide
+```
+
+As can be seen, the transient lift and drag coefficients for the two setups are identical.
+
+```@example rectangular-wing-sudden-acceleration
+using Plots
+pyplot()
+
+# lift coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = "\$ \\frac{U_\\infty t}{c} \$",
+    ylim = (0.0, 0.55),
+    yticks = 0.0:0.1:0.5,
+    ylabel = "\$ C_{L} \$",
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CL = [CF_t[i][j][3] for j = 1:length(CF_t[i])]
+    plot!(t[2:end], CL, label="AR = $(AR[i])")
+end
+
+plot!(show=true)
+
+savefig("moving-rectangular-wing-sudden-acceleration-cl.svg") #hide
+
+nothing #hide
+```
+
+![](moving-rectangular-wing-sudden-acceleration-cl.svg)
+
+```@example rectangular-wing-sudden-acceleration
+# drag coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = "\$ \\frac{U_\\infty t}{c} \$",
+    ylim = (0.0, 0.030),
+    yticks = 0.0:0.005:0.03,
+    ylabel = "\$ C_{D} \$",
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CD_t = [CF_t[i][j][1] for j = 1:length(CF_t[i])]
+    plot!(t[2:end], CD_t, label="AR = $(AR[i])")
+end
+
+plot!(show = true)
+
+savefig("moving-rectangular-wing-sudden-acceleration-cd.svg") #hide
+
+nothing #hide
+```
+
+![](moving-rectangular-wing-sudden-acceleration-cd.svg)
+
+Visualizing the solution shows the movement of the body in the global reference frame.
+```julia
+write_vtk("acceleration-AR4-moving", surface_history_t[1], property_history_t[1],
+    wake_history_t[1], dt; symmetric=false)
+```
+
+![](acceleration-AR4-moving.gif)
+
 For infinite aspect ratios, the problem degenerates into the analysis of the sudden acceleration of a 2D flat plate, for which we have an analytical solution through the work of Herbert Wagner.
 
 ```@example rectangular-wing-sudden-acceleration
 # See Katz and Plotkin: Figure 13.37
 # AR = ∞
-# Uinf*Δt/c = 1/16
+# Vinf*Δt/c = 1/16
 # α = 5°
 
 # essentially infinite aspect ratio
@@ -917,24 +1109,25 @@ spacing_c = Uniform()
 mirror = false
 symmetric = false
 
-# freestream parameters
-alpha = 5.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-fs = Freestream(alpha, beta, Omega)
-
 # reference parameters
 cref = c
 bref = b
 Sref = S
 rref = [0.0, 0.0, 0.0]
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+# freestream parameters
+alpha = 5.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
 
 # non-dimensional time (t*Vinf/c)
 t = range(0.0, 7.0, step=1/8)
 
-# time step (in meters)
-dx = [(t[i+1]-t[i]) for i = 1:length(t)-1]
+# time step
+dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
 
 # create vortex rings
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -950,11 +1143,11 @@ system = steady_analysis(surfaces, ref, fs; symmetric)
 CFs, CMs = body_forces(system; frame=Wind())
 
 # run transient analysis
-system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dx;
-    symmetric=symmetric)
+system, surface_history, property_history, wake_history = unsteady_analysis(
+    surfaces, ref, fs, dt; symmetric=symmetric)
 
 # extract transient forces
-CF, CM = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
+CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 
 nothing #hide
 ```
@@ -1001,14 +1194,14 @@ This example shows how to predict the transient forces and moments for a heaving
 ```@example heaving-rectangular-wing
 # Katz and Plotkin: Figures 13.38a
 # AR = 4
-# k = ω*c/(2*Uinf) = [0.5, 0.3, 0.1]
+# k = ω*c/(2*Vinf) = [0.5, 0.3, 0.1]
 # c = [1.0, 0.6, 0.2]
 # α = -5°
 
 using VortexLattice
 
 # forward velocity
-Uinf = 1
+Vinf = 1
 
 # angle of attack
 alpha = -5*pi/180
@@ -1050,7 +1243,25 @@ for i = 1:length(k)
     bref = b
     Sref = b*c[i]
     rref = [0.0, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref)
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    # angular frequency
+    ω = 2*Vinf*k[i]/c[i]
+
+    # time
+    t[i] = range(0.0, 9*pi/ω, length = 100)
+    dt = t[i][2:end] - t[i][1:end-1]
+    dt = Vinf*dt
+
+    # heaving amplitude
+    h = 0.1*c[i]
+
+    # use forward and vertical velocity at beginning of each time step
+    Xdot = Vinf*cos(alpha)
+    Zdot = Vinf*sin(alpha) .- h*cos.(ω*t[i][1:end-1])
+
+    # freestream parameters for each time step
+    fs = trajectory_to_freestream(dt; Xdot, Zdot)
 
     # surface panels
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -1059,36 +1270,12 @@ for i = 1:length(k)
     # create vector containing all surfaces
     surfaces = [surface]
 
-    # angular frequency
-    ω = 2*Uinf*k[i]/c[i]
-
-    # time
-    t[i] = range(0.0, 9*pi/ω, length = 100)
-    dt = t[i][2:end] - t[i][1:end-1]
-    dx = Uinf*dt
-
-    # heaving amplitude
-    h = 0.1*c[i]
-
-    # use forward and vertical velocity at beginning of each time step
-    Xdot = Uinf*cos(alpha)
-    Zdot = Uinf*sin(alpha) .- h*cos.(ω*t[i][1:end-1])
-
-    # instantaneous velocity and freestream parameters for each time step
-    Vinf, fs = prescribed_motion(dt; Xdot, Zdot)
-
     # run analysis
     system, surface_history, property_history, wake_history = unsteady_analysis(
-        surfaces, ref, fs, dx; symmetric=symmetric, nwake = 50)
+        surfaces, ref, fs, dt; symmetric=symmetric, nwake = 50)
 
     # extract forces at each time step (uses instantaneous velocity as reference)
-    CF[i], CM[i] = body_forces_history(system, surface_history, property_history, ref, fs; frame=Wind())
-
-    # adjust coefficients to use reference velocity rather than instantaneous velocity
-    for it = 1:length(dt)
-        CF[i][it] *= Vinf[it]^2/Uinf^2
-        CM[i][it] *= Vinf[it]^2/Uinf^2
-    end
+    CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
 
 end
 
@@ -1104,7 +1291,9 @@ pyplot()
 # lift coefficient plot
 plot(
     xlim = (6*pi, 8*pi),
-    xticks = ([6*pi, 13*pi/2, 7*pi, 15*pi/2, 8*pi], ["\$ 0 \$", "\$ \\frac{\\pi}{2} \$", "\$ \\pi \$", "\$ \\frac{3\\pi}{2} \$", "\$ 2\\pi \$"]),
+    xticks = ([6*pi, 13*pi/2, 7*pi, 15*pi/2, 8*pi], ["\$ 0 \$",
+        "\$ \\frac{\\pi}{2} \$", "\$ \\pi \$", "\$ \\frac{3\\pi}{2} \$",
+        "\$ 2\\pi \$"]),
     xlabel = "\$ ω \\cdot t \$",
     ylim = (-1.0, 0.1),
     yticks = -1.0:0.2:0.0,
@@ -1115,7 +1304,7 @@ plot(
 
 for i = 1:length(k)
     # extract ω
-    ω = 2*Uinf*k[i]/c[i]
+    ω = 2*Vinf*k[i]/c[i]
 
     # extract ω*t (use time at the beginning of the time step)
     ωt = ω*t[i][1:end-1]
@@ -1134,3 +1323,81 @@ nothing #hide
 ```
 
 ![](heaving-rectangular-wing.svg)
+
+## Deforming Geometries
+
+VortexLattice also has the capabilities to model deforming geometries, including for scenarios such as flapping flight.
+
+```julia
+# Katz and Plotkin: Figures 13.34 and 13.35
+# AR = [4, 8, 12, 20, ∞]
+# Vinf*Δt/c = 1/16
+# α = 5°
+
+using VortexLattice
+
+AR = 4
+
+# chord length
+c = 1
+
+# span length
+b = AR*c
+
+# planform area
+S = b*c
+
+# geometry
+xle = [0.0, 0.0]
+yle = [-b/2, b/2]
+zle = [0.0, 0.0]
+chord = [c, c]
+theta = [0.0, 0.0]
+phi = [0.0, 0.0]
+ns = 13
+nc = 4
+spacing_s = Uniform()
+spacing_c = Uniform()
+mirror = false
+symmetric = false
+
+# reference parameters
+cref = c
+bref = b
+Sref = S
+rref = [0.0, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+# freestream parameters
+alpha = 5.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 10.0, step=1/16)
+
+# time step
+dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
+
+# create vortex rings
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# create vector containing surfaces at each time step
+surfaces = Vector{Vector{Matrix{SurfacePanel{Float64}}}}(undef, length(t))
+for i = 1:length(t)
+    surfaces[i] = [translate(surface), ]
+end
+
+# run analysis
+system, surface_history, property_history, wake_history =
+    unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+
+# extract forces at each time step
+CF, CM = body_forces_history(system, surface_history,
+    property_history; frame=Wind())
+
+nothing #hide
+```

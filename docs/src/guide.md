@@ -61,7 +61,8 @@ Sref = 30.0 # reference area
 cref = 2.0  # reference chord
 bref = 15.0 # reference span
 rref = [0.50, 0.0, 0.0] # reference location for rotations/moments (typically the c.g.)
-ref = Reference(Sref, cref, bref, rref)
+Vinf = 1.0 # reference velocity (magnitude)
+ref = Reference(Sref, cref, bref, rref, Vinf)
 nothing #hide
 ```
 
@@ -70,7 +71,7 @@ We use the following freestream properties.
 alpha = 1.0*pi/180 # angle of attack
 beta = 0.0 # sideslip angle
 Omega = [0.0, 0.0, 0.0] # rotational velocity around the reference location
-fs = Freestream(alpha, beta, Omega)
+fs = Freestream(Vinf, alpha, beta, Omega)
 nothing #hide
 ```
 
