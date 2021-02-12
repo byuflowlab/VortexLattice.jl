@@ -9,7 +9,7 @@ using VortexLattice
 nothing #hide
 ```
 
-Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a planar wing with the following geometric properties.
+Then we need to create our geometry.  While VortexLattice can handle multiple lifting surfaces, for this guide we will be analyzing a wing with the following geometric properties.
 
 ```@example guide
 xle = [0.0, 0.4] # leading edge x-position
@@ -18,6 +18,7 @@ zle = [0.0, 0.0] # leading edge z-position
 chord = [2.2, 1.8] # chord length
 theta = [2.0*pi/180, 2.0*pi/180] # twist (in radians)
 phi = [0.0, 0.0] # section rotation about the x-axis
+fc = fill((xc) -> 0, 2) # camberline function for each section (y/c = f(x/c))
 nothing #hide
 ```
 
@@ -40,7 +41,7 @@ of the wing is returned from this function.  Only the latter is needed for the a
 
 ```@example guide
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+fc = fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 nothing #hide
 ```
 

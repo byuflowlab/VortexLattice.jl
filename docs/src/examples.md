@@ -7,7 +7,7 @@ Pages = ["examples.md"]
 Depth = 3
 ```
 
-## Steady State Analysis of a Planar Wing
+## Steady State Analysis of a Wing
 
 This example shows how to calculate aerodynamic coefficients and stability derivatives for a symmetric planar wing.
 
@@ -21,6 +21,7 @@ zle = [0.0, 0.0]
 chord = [2.2, 1.8]
 theta = [2.0*pi/180, 2.0*pi/180]
 phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2) # camberline function for each section
 
 # discretization parameters
 ns = 12
@@ -44,7 +45,7 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 
 # construct surface
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    spacing_s=spacing_s, spacing_c=spacing_c)
+    fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # create vector containing all surfaces
 surfaces = [surface]
@@ -111,7 +112,7 @@ For asymmetric flow conditions and/or to obtain accurate asymmetric stability de
 
 # construct geometry with mirror image
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+    fc=fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # symmetry is not used in the analysis
 symmetric = false
@@ -260,7 +261,7 @@ write_vtk("mirrored-planar-wing", surfaces, properties; symmetric)
 
 ![](mirrored-planar-wing.png)
 
-## Steady State Analysis of a Wing with Dihedral
+## Steady State Analysis of a Flat Plate Wing with Dihedral
 
 This example shows how to calculate aerodynamic coefficients and stability derivatives for a simple wing with dihedral.
 
@@ -273,6 +274,8 @@ zle = [0.0, 3.0]
 chord = [2.2, 1.8]
 theta = [2.0*pi/180, 2.0*pi/180]
 phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2).0 #camberline function for each section
+
 ns = 12
 nc = 6
 spacing_s = Uniform()
@@ -297,7 +300,7 @@ symmetric = true
 
 # construct surface
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    spacing_s=spacing_s, spacing_c=spacing_c)
+    fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # create vector containing all surfaces
 surfaces = [surface]
@@ -448,6 +451,7 @@ zle = [0.0, 1.0]
 chord = [1.0, 0.6]
 theta = [2.0*pi/180, 2.0*pi/180]
 phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
 nc = 6
 spacing_s = Uniform()
@@ -461,6 +465,7 @@ zle_h = [0.0, 0.0]
 chord_h = [0.7, 0.42]
 theta_h = [0.0, 0.0]
 phi_h = [0.0, 0.0]
+fc_h = (xc) -> 0 #camberline function for each section
 ns_h = 6
 nc_h = 3
 spacing_s_h = Uniform()
@@ -474,6 +479,7 @@ zle_v = [0.0, 1.0]
 chord_v = [0.7, 0.42]
 theta_v = [0.0, 0.0]
 phi_v = [0.0, 0.0]
+fc_v = (xc) -> 0 #camberline function for each section
 ns_v = 5
 nc_v = 3
 spacing_s_v = Uniform()
@@ -496,17 +502,17 @@ symmetric = [true, true, false]
 
 # generate surface panels for wing
 wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    mirror=mirror, fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
 hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
-    mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(hgrid, [4.0, 0.0, 0.0])
 translate!(htail, [4.0, 0.0, 0.0])
 
 # generate surface panels for vertical tail
 vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
-    mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    mirror=mirror_v, fc=fc_v spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vgrid, [4.0, 0.0, 0.0])
 translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -645,6 +651,7 @@ zle = [0.0, 1.0]
 chord = [1.0, 0.6]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
 nc = 6
 spacing_s = Uniform()
@@ -658,6 +665,7 @@ zle_h = [0.0, 0.0]
 chord_h = [0.7, 0.42]
 theta_h = [0.0, 0.0]
 phi_h = [0.0, 0.0]
+fc_h = (xc) -> 0 # camberline function for each section
 ns_h = 6
 nc_h = 3
 spacing_s_h = Uniform()
@@ -671,6 +679,7 @@ zle_v = [0.0, 1.0]
 chord_v = [0.7, 0.42]
 theta_v = [0.0, 0.0]
 phi_v = [0.0, 0.0]
+fc_v = (xc) -> 0 # camberline function for each section
 ns_v = 5
 nc_v = 3
 spacing_s_v = Uniform()
@@ -693,17 +702,17 @@ symmetric = [true, true, false]
 
 # generate surface panels for wing
 wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
 hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
-    mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(hgrid, [4.0, 0.0, 0.0])
 translate!(htail, [4.0, 0.0, 0.0])
 
 # generate surface panels for vertical tail
 vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
-    mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+    mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vgrid, [4.0, 0.0, 0.0])
 translate!(vtail, [4.0, 0.0, 0.0])
 
@@ -814,6 +823,7 @@ for i = 1:length(AR)
     chord = [c, c]
     theta = [0.0, 0.0]
     phi = [0.0, 0.0]
+    fc = fill((xc) -> 0, 2) # camberline function for each section
     ns = 13
     nc = 4
     spacing_s = Uniform()
@@ -837,7 +847,7 @@ for i = 1:length(AR)
 
     # create vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # create vector containing surfaces
     surfaces = [surface]
@@ -965,6 +975,7 @@ for i = 1:length(AR)
     chord = [c, c]
     theta = [0.0, 0.0]
     phi = [0.0, 0.0]
+    fc = fill((xc) -> 0, 2) # camberline function for each section
     ns = 13
     nc = 4
     spacing_s = Uniform()
@@ -989,7 +1000,7 @@ for i = 1:length(AR)
 
     # create vortex rings
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # create vector containing surfaces at each time step
     surfaces = [[VortexLattice.translate(surface,
@@ -1102,6 +1113,7 @@ zle = [0.0, 0.0]
 chord = [c, c]
 theta = [0.0, 0.0]*pi/180
 phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 1
 nc = 4
 spacing_s = Uniform()
@@ -1131,7 +1143,7 @@ dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
 
 # create vortex rings
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # create vector containing all surfaces
 surfaces = [surface]
@@ -1219,7 +1231,8 @@ t = Vector{Vector{Float64}}(undef, length(k))
 CF = Vector{Vector{Vector{Float64}}}(undef, length(k))
 CM = Vector{Vector{Vector{Float64}}}(undef, length(k))
 
-for i = 1:length(k)
+i = 1
+#for i = 1:length(k)
 
     # span length
     b = AR*c[i]
@@ -1231,6 +1244,7 @@ for i = 1:length(k)
     chord = [c[i], c[i]]
     theta = [0.0, 0.0]
     phi = [0.0, 0.0]
+    fc = fill((xc) -> 0, 2) # camberline function for each section
     ns = 13
     nc = 4
     spacing_s = Uniform()
@@ -1265,7 +1279,7 @@ for i = 1:length(k)
 
     # surface panels
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # create vector containing all surfaces
     surfaces = [surface]
@@ -1277,7 +1291,7 @@ for i = 1:length(k)
     # extract forces at each time step (uses instantaneous velocity as reference)
     CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
 
-end
+#end
 
 nothing #hide
 ```
@@ -1324,80 +1338,6 @@ nothing #hide
 
 ![](heaving-rectangular-wing.svg)
 
-## Deforming Geometries
+Visualizing the `k=0.5` case in ParaView yields the following animation.
 
-VortexLattice also has the capabilities to model deforming geometries, including for scenarios such as flapping flight.
-
-```julia
-# Katz and Plotkin: Figures 13.34 and 13.35
-# AR = [4, 8, 12, 20, ∞]
-# Vinf*Δt/c = 1/16
-# α = 5°
-
-using VortexLattice
-
-AR = 4
-
-# chord length
-c = 1
-
-# span length
-b = AR*c
-
-# planform area
-S = b*c
-
-# geometry
-xle = [0.0, 0.0]
-yle = [-b/2, b/2]
-zle = [0.0, 0.0]
-chord = [c, c]
-theta = [0.0, 0.0]
-phi = [0.0, 0.0]
-ns = 13
-nc = 4
-spacing_s = Uniform()
-spacing_c = Uniform()
-mirror = false
-symmetric = false
-
-# reference parameters
-cref = c
-bref = b
-Sref = S
-rref = [0.0, 0.0, 0.0]
-Vinf = 1.0
-ref = Reference(Sref, cref, bref, rref, Vinf)
-
-# freestream parameters
-alpha = 5.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
-
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 10.0, step=1/16)
-
-# time step
-dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
-
-# create vortex rings
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
-
-# create vector containing surfaces at each time step
-surfaces = Vector{Vector{Matrix{SurfacePanel{Float64}}}}(undef, length(t))
-for i = 1:length(t)
-    surfaces[i] = [translate(surface), ]
-end
-
-# run analysis
-system, surface_history, property_history, wake_history =
-    unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
-
-# extract forces at each time step
-CF, CM = body_forces_history(system, surface_history,
-    property_history; frame=Wind())
-
-nothing #hide
-```
+![](heaving-rectangular-wing.gif)
