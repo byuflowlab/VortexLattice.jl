@@ -11,32 +11,40 @@ const VINF = 1.0
 const QINF = 0.5*RHO*VINF^2
 
 include("panel.jl")
-export AbstractPanel, Horseshoe, Ring
-export translate, translate!, reflect
+export SurfacePanel, WakePanel, TrefftzPanel
+export translate, translate!, reflect, set_normal
+
+include("wake.jl")
+export Wake
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
-export grid_to_horseshoe_vortices, grid_to_vortex_rings
-export wing_to_horseshoe_vortices, wing_to_vortex_rings
+export grid_to_surface_panels, wing_to_surface_panels
+export translate, translate!, reflect
 
 include("reference.jl")
 export Reference
+export AbstractFrame, Body, Stability, Wind
 
 include("freestream.jl")
 export Freestream
-export body_to_stability, stability_to_body
-export stability_to_wind, wind_to_stability
-export wind_to_body, body_to_wind
+
+include("induced.jl")
 
 include("circulation.jl")
-export influence_coefficients, influence_coefficients!
-export normal_velocity, normal_velocity!
-export circulation
+
+include("system.jl")
+export System
+export PanelProperties, get_panel_properties
+
+include("analyses.jl")
+export steady_analysis, steady_analysis!
+export prescribed_motion
+export unsteady_analysis, unsteady_analysis!
 
 include("nearfield.jl")
-export AbstractFrame, Body, Stability, Wind
-export PanelProperties
-export near_field_forces
+export body_forces
+export body_forces_history
 
 include("farfield.jl")
 export far_field_drag

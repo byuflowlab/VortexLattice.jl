@@ -1,25 +1,63 @@
 """
-    body_derivatives(panels, ref, fs, symmetric, AIC; xhat=[1,0,0])
+    body_derivatives(system, surface, reference, freestream; kwargs...)
 
 Returns the derivatives of the body forces and moments with respect to the
 freestream velocity components `(u, v, w)` and the angular velocity components
 `(p, q, r)` in the body frame.
 
 The derivatives are returned as two named tuples: `dCF, dCM`
+
+Note that the derivatives with respect to the freestream variables of the panel
+forces must have been previously computed and stored in `system`
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Surface, represented by matrices of panels of shape (nc, ns) where
+    `nc` is the number of chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating induced velocities.
 """
-function body_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
+function body_derivatives(system, surface::AbstractMatrix, ref, fs; symmetric)
 
-    b, db = normal_velocity_derivatives(panels, ref, fs)
+    return body_derivatives(system, [surface], ref, fs; symmetric = [symmetric])
+end
 
-    Γ, dΓ = circulation_derivatives(AIC, b, db)
+"""
+    body_derivatives(system, surfaces, reference, freestream; kwargs...)
 
-    CF, CM, dCF, dCM, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        symmetric, Γ, dΓ; xhat=xhat)
+Returns the derivatives of the body forces and moments with respect to the
+freestream velocity components `(u, v, w)` and the angular velocity components
+`(p, q, r)` in the body frame.
+
+The derivatives are returned as two named tuples: `dCF, dCM`
+
+Note that the derivatives with respect to the freestream variables of the panel
+forces must have been previously computed and stored in `system`
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels in `surface`
+    was used when calculating panel induced velocities.
+"""
+function body_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs; symmetric)
+
+    CF, CM, dCF, dCM = body_forces_derivatives(system, surfaces, ref, fs; symmetric)
 
     # unpack derivatives
     (CF_a, CF_b, CF_p, CF_q, CF_r) = dCF
     (CM_a, CM_b, CM_p, CM_q, CM_r) = dCM
-
 
     # convert derivatives to be with respect to (u, v, w) instead of (alpha, beta)
     u, v, w = freestream_velocity(fs)
@@ -47,22 +85,63 @@ function body_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
 end
 
 """
-    stability_derivatives(panels, ref, fs, symmetric, AIC; xhat=[1,0,0])
+    stability_derivatives(system, surfaces, reference, freestream; kwargs...)
 
 Returns the derivatives of the body forces and moments in the stability frame
 with respect to the freestream velocity components `(alpha, beta)` and the angular
 velocity components `(p, q, r)` in the stability frame.
 
 The derivatives are returned as two named tuples: `dCF, dCM`
+
+Note that the derivatives with respect to the freestream variables of the panel
+forces must have been previously computed and stored in `system`
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Surface, represented by matrices of panels of shape (nc, ns) where
+    `nc` is the number of chordwise panels and `ns` is the number of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating panel induced velocities.
 """
-function stability_derivatives(panels, ref, fs, symmetric, AIC; xhat=SVector(1,0,0))
+function stability_derivatives(system, surface::AbstractMatrix, ref, fs;
+    symmetric = false)
 
-    b, db = normal_velocity_derivatives(panels, ref, fs)
+    return stability_derivatives(system, [surface], ref, fs;
+        symmetric = [symmetric])
+end
 
-    Γ, dΓ = circulation_derivatives(AIC, b, db)
+"""
+    stability_derivatives(system, surfaces, reference, freestream; kwargs...)
 
-    CFb, CMb, dCFb, dCMb, panelprops = near_field_forces_derivatives(panels, ref, fs,
-        symmetric, Γ, dΓ; xhat=xhat)
+Returns the derivatives of the body forces and moments in the stability frame
+with respect to the freestream velocity components `(alpha, beta)` and the angular
+velocity components `(p, q, r)` in the stability frame.
+
+The derivatives are returned as two named tuples: `dCF, dCM`
+
+Note that the derivatives with respect to the freestream variables of the panel
+forces must have been previously computed and stored in `system`
+
+# Arguments:
+ - `system`: Object of type `System` which holds system properties
+ - `surfaces`: Vector of surfaces, represented by matrices of panels of shape
+    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
+    of spanwise panels
+ - `reference`: reference parameters (see `Reference`)
+ - `freestream`: freestream parameters (see `Freestream`)
+
+# Keyword Arguments
+ - `symmetric`: (required) Flag indicating whether a mirror image of the panels
+    in `surface` was used when calculating panel induced velocities.
+"""
+function stability_derivatives(system, surfaces::AbstractVector{<:AbstractMatrix},
+    ref, fs; symmetric)
+
+    CFb, CMb, dCFb, dCMb = body_forces_derivatives(system, surfaces, ref, fs; symmetric)
 
     # unpack derivatives
     (CFb_a, CFb_b, CFb_pb, CFb_qb, CFb_rb) = dCFb

@@ -25,3 +25,34 @@ end
 
 Base.eltype(::Type{Reference{TF}}) where TF = TF
 Base.eltype(::Reference{TF}) where TF = TF
+
+# --- reference frames --- #
+
+"""
+    AbstractFrame
+
+Supertype for the different possible reference frames used by this package.
+"""
+abstract type AbstractFrame end
+
+"""
+   Body <: AbstractFrame
+
+Reference frame aligned with the global X-Y-Z axes
+"""
+struct Body <: AbstractFrame end
+
+"""
+    Stability <: AbstractFrame
+
+Reference frame rotated from the body frame about the y-axis to be aligned with
+the freestream `alpha`.
+"""
+struct Stability <: AbstractFrame end
+
+"""
+    Wind <: AbstractFrame
+
+Reference frame rotated to be aligned with the freestream `alpha` and `beta`
+"""
+struct Wind <: AbstractFrame end
