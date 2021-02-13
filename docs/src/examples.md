@@ -192,8 +192,8 @@ nothing # hide
 ```@example planar-wing
 using PrettyTables # hide
 using Markdown # hide
-# hide
-CLa_avl =   4.663214 # hide    
+
+CLa_avl =   4.663214 # hide
 CLb_avl =   0.0 # hide
 CYa_avl =   0.0 # hide
 CYb_avl =  -0.000002 # hide
@@ -206,7 +206,7 @@ Cnb_avl =   0.000452 # hide
 CLp_avl =   0.0 # hide
 CLq_avl =   5.649411 # hide
 CLr_avl =   0.0 # hide
-CYp_avl =   0.049063 # hide   
+CYp_avl =   0.049063 # hide
 CYq_avl =   0.0 # hide
 CYr_avl =  -0.000828 # hide
 Clp_avl =  -0.524750 # hide
@@ -215,10 +215,10 @@ Clr_avl =   0.064456 # hide
 Cmp_avl =   0.0 # hide
 Cmq_avl =  -1.270212 # hide
 Cmr_avl =   0.0 # hide
-Cnp_avl =  -0.019175 # hide  
+Cnp_avl =  -0.019175 # hide
 Cnq_avl =   0.0 # hide
 Cnr_avl =  -0.000931 # hide
-# hide
+
 table = [ # hide
 "``C_{La}``" CLa CLa_avl CLa-CLa_avl; # hide
 "``C_{Lb}``" CLb CLb_avl CLb-CLb_avl; # hide
@@ -247,13 +247,13 @@ table = [ # hide
 "``C_{nr}``" Cnr Cnr_avl Cnr-Cnr_avl; # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
-# hide
+
 str = pretty_table(String, table, header; # hide
     backend=:text, # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
-# hide
+
 Markdown.parse(str) # hide
 ```
 
