@@ -71,35 +71,35 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 The aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.
 
 ```@example planar-wing
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.00247 #hide
-CL_avl = 0.24454 #hide
-Cm_avl = -0.02091 #hide
-CDiff_avl = 0.00248 #hide
+CD_avl = 0.00247 # hide
+CL_avl = 0.24454 # hide
+Cm_avl = -0.02091 # hide
+CDiff_avl = 0.00248 # hide
 
-table = [  #hide
-"``C_L``" CL CL_avl CL-CL_avl;  #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl;  #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl;  #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl  #hide
-]  #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"]  #hide
+table = [  # hide
+"``C_L``" CL CL_avl CL-CL_avl;  # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl;  # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl;  # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl  # hide
+]  # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"]  # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 We can also generate files to visualize the results in Paraview using the function `write_vtk`.
@@ -138,35 +138,35 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 Once again, the aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.
 
 ```@example planar-wing
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.00247 #hide
-CL_avl = 0.24454 #hide
-Cm_avl = -0.02091 #hide
-CDiff_avl = 0.00248 #hide
+CD_avl = 0.00247 # hide
+CL_avl = 0.24454 # hide
+Cm_avl = -0.02091 # hide
+CDiff_avl = 0.00248 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 The stability derivatives are also very close to those predicted by AVL.
@@ -186,75 +186,75 @@ Clq, Cmq, Cnq = dCM.q
 CDr, CYr, CLr = dCF.r
 Clr, Cmr, Cnr = dCM.r
 
-nothing #hide
+nothing # hide
 ```
 
 ```@example planar-wing
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CLa_avl =   4.663214 #hide    
-CLb_avl =   0.0 #hide
-CYa_avl =   0.0     #hide
-CYb_avl =  -0.000002 #hide
-Cla_avl =   0.0     #hide
-Clb_avl =  -0.025435 #hide
-Cma_avl =  -0.397758     #hide
-Cmb_avl =   0.0 #hide
-Cna_avl =   0.0 #hide
-Cnb_avl =   0.000452 #hide
-CLp_avl =   0.0   #hide
-CLq_avl =   5.649411    #hide
-CLr_avl =   0.0 #hide
-CYp_avl =   0.049063  #hide   
-CYq_avl =   0.0     #hide
-CYr_avl =  -0.000828 #hide
-Clp_avl =  -0.524750     #hide
-Clq_avl =   0.0   #hide
-Clr_avl =   0.064456 #hide
-Cmp_avl =   0.0    #hide
-Cmq_avl =  -1.270212   #hide
-Cmr_avl =   0.0 #hide
-Cnp_avl =  -0.019175  #hide  
-Cnq_avl =   0.0   #hide
-Cnr_avl =  -0.000931 #hide
+CLa_avl =   4.663214 # hide    
+CLb_avl =   0.0 # hide
+CYa_avl =   0.0 # hide
+CYb_avl =  -0.000002 # hide
+Cla_avl =   0.0     # hide
+Clb_avl =  -0.025435 # hide
+Cma_avl =  -0.397758     # hide
+Cmb_avl =   0.0 # hide
+Cna_avl =   0.0 # hide
+Cnb_avl =   0.000452 # hide
+CLp_avl =   0.0   # hide
+CLq_avl =   5.649411    # hide
+CLr_avl =   0.0 # hide
+CYp_avl =   0.049063  # hide   
+CYq_avl =   0.0     # hide
+CYr_avl =  -0.000828 # hide
+Clp_avl =  -0.524750     # hide
+Clq_avl =   0.0   # hide
+Clr_avl =   0.064456 # hide
+Cmp_avl =   0.0    # hide
+Cmq_avl =  -1.270212   # hide
+Cmr_avl =   0.0 # hide
+Cnp_avl =  -0.019175  # hide  
+Cnq_avl =   0.0   # hide
+Cnr_avl =  -0.000931 # hide
 
-table = [ #hide
-"``C_{La}``" CLa CLa_avl CLa-CLa_avl; #hide
-"``C_{Lb}``" CLb CLb_avl CLb-CLb_avl; #hide
-"``C_{Ya}``" CYa CYa_avl CYa-CYa_avl; #hide
-"``C_{Yb}``" CYb CYb_avl CYb-CYb_avl; #hide
-"``C_{la}``" Cla Cla_avl Cla-Cla_avl; #hide
-"``C_{lb}``" Clb Clb_avl Clb-Clb_avl; #hide
-"``C_{ma}``" Cma Cma_avl Cma-Cma_avl; #hide
-"``C_{mb}``" Cmb Cmb_avl Cmb-Cmb_avl; #hide
-"``C_{na}``" Cna Cna_avl Cna-Cna_avl; #hide
-"``C_{nb}``" Cnb Cnb_avl Cnb-Cnb_avl; #hide
-"``C_{Lp}``" CLp CLp_avl CLp-CLp_avl; #hide
-"``C_{Lq}``" CLq CLq_avl CLq-CLq_avl; #hide
-"``C_{Lr}``" CLr CLr_avl CLr-CLr_avl; #hide
-"``C_{Yp}``" CYp CYp_avl CYp-CYp_avl; #hide
-"``C_{Yq}``" CYq CYq_avl CYq-CYq_avl; #hide
-"``C_{Yr}``" CYr CYr_avl CYr-CYr_avl; #hide
-"``C_{lp}``" Clp Clp_avl Clp-Clp_avl; #hide
-"``C_{lq}``" Clq Clq_avl Clq-Clq_avl; #hide
-"``C_{lr}``" Clr Clr_avl Clr-Clr_avl; #hide
-"``C_{mp}``" Cmp Cmp_avl Cmp-Cmp_avl; #hide
-"``C_{mq}``" Cmq Cmq_avl Cmq-Cmq_avl; #hide
-"``C_{mr}``" Cmr Cmr_avl Cmr-Cmr_avl; #hide
-"``C_{np}``" Cnp Cnp_avl Cnp-Cnp_avl; #hide
-"``C_{nq}``" Cnq Cnq_avl Cnq-Cnq_avl; #hide
-"``C_{nr}``" Cnr Cnr_avl Cnr-Cnr_avl; #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_{La}``" CLa CLa_avl CLa-CLa_avl; # hide
+"``C_{Lb}``" CLb CLb_avl CLb-CLb_avl; # hide
+"``C_{Ya}``" CYa CYa_avl CYa-CYa_avl; # hide
+"``C_{Yb}``" CYb CYb_avl CYb-CYb_avl; # hide
+"``C_{la}``" Cla Cla_avl Cla-Cla_avl; # hide
+"``C_{lb}``" Clb Clb_avl Clb-Clb_avl; # hide
+"``C_{ma}``" Cma Cma_avl Cma-Cma_avl; # hide
+"``C_{mb}``" Cmb Cmb_avl Cmb-Cmb_avl; # hide
+"``C_{na}``" Cna Cna_avl Cna-Cna_avl; # hide
+"``C_{nb}``" Cnb Cnb_avl Cnb-Cnb_avl; # hide
+"``C_{Lp}``" CLp CLp_avl CLp-CLp_avl; # hide
+"``C_{Lq}``" CLq CLq_avl CLq-CLq_avl; # hide
+"``C_{Lr}``" CLr CLr_avl CLr-CLr_avl; # hide
+"``C_{Yp}``" CYp CYp_avl CYp-CYp_avl; # hide
+"``C_{Yq}``" CYq CYq_avl CYq-CYq_avl; # hide
+"``C_{Yr}``" CYr CYr_avl CYr-CYr_avl; # hide
+"``C_{lp}``" Clp Clp_avl Clp-Clp_avl; # hide
+"``C_{lq}``" Clq Clq_avl Clq-Clq_avl; # hide
+"``C_{lr}``" Clr Clr_avl Clr-Clr_avl; # hide
+"``C_{mp}``" Cmp Cmp_avl Cmp-Cmp_avl; # hide
+"``C_{mq}``" Cmq Cmq_avl Cmq-Cmq_avl; # hide
+"``C_{mr}``" Cmr Cmr_avl Cmr-Cmr_avl; # hide
+"``C_{np}``" Cnp Cnp_avl Cnp-Cnp_avl; # hide
+"``C_{nq}``" Cnq Cnq_avl Cnq-Cnq_avl; # hide
+"``C_{nr}``" Cnr Cnr_avl Cnr-Cnr_avl; # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 Visualizing the geometry now shows the circulation distribution across the entire wing.
@@ -323,35 +323,35 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 The results predicted by VortexLattice are close to those predicted by AVL, with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.
 
 ```@example wing-with-dihedral
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.00248 #hide
-CL_avl = 0.24808 #hide
-Cm_avl = -0.02250 #hide
-CDiff_avl = 0.0024671 #hide
+CD_avl = 0.00248 # hide
+CL_avl = 0.24808 # hide
+Cm_avl = -0.02250 # hide
+CDiff_avl = 0.0024671 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 If we set the normal vectors in VortexLattice equal to those used in AVL, the results are even closer, though not necessarily more accurate.
@@ -405,33 +405,33 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 ```@example wing-with-dihedral
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.00248 #hide
-CL_avl = 0.24808 #hide
-Cm_avl = -0.02250 #hide
-CDiff_avl = 0.0024671 #hide
+CD_avl = 0.00248 # hide
+CL_avl = 0.24808 # hide
+Cm_avl = -0.02250 # hide
+CDiff_avl = 0.0024671 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 ```julia
@@ -534,35 +534,35 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 The results predicted by VortexLattice are close to those predicted by AVL (with the finite core model disabled in AVL), with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.
 
 ```@example wing-tail
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.01060 #hide
-CL_avl = 0.60478 #hide
-Cm_avl = -0.02700 #hide
-CDiff_avl = 0.0104282 #hide
+CD_avl = 0.01060 # hide
+CL_avl = 0.60478 # hide
+Cm_avl = -0.02700 # hide
+CDiff_avl = 0.0104282 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 If we set the normal vectors in VortexLattice equal to those used in AVL, the results are closer, though not necessarily more accurate.
@@ -614,33 +614,33 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 ```@example wing-tail
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.01060 #hide
-CL_avl = 0.60478 #hide
-Cm_avl = -0.02700 #hide
-CDiff_avl = 0.0104282 #hide
+CD_avl = 0.01060 # hide
+CL_avl = 0.60478 # hide
+Cm_avl = -0.02700 # hide
+CDiff_avl = 0.0104282 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.  
@@ -741,35 +741,35 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-nothing #hide
+nothing # hide
 ```
 
 The resulting aerodynamic coefficients now match very closely with AVL.
 
 ```@example wing-tail
-using PrettyTables #hide
-using Markdown #hide
+using PrettyTables # hide
+using Markdown # hide
 
-CD_avl = 0.01060 #hide
-CL_avl = 0.60478 #hide
-Cm_avl = -0.02700 #hide
-CDiff_avl = 0.0104282 #hide
+CD_avl = 0.01060 # hide
+CL_avl = 0.60478 # hide
+Cm_avl = -0.02700 # hide
+CDiff_avl = 0.0104282 # hide
 
-table = [ #hide
-"``C_L``" CL CL_avl CL-CL_avl; #hide
-"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
-"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
-"``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-] #hide
-header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
+table = [ # hide
+"``C_L``" CL CL_avl CL-CL_avl; # hide
+"``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; # hide
+"``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; # hide
+"``C_M``" Cm Cm_avl Cm-Cm_avl # hide
+] # hide
+header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; #hide
-    backend=:text, #hide
-    tf = tf_markdown, #hide
-    alignment=[:l, :r, :r, :r], #hide
-    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) #hide
+str = pretty_table(String, table, header; # hide
+    backend=:text, # hide
+    tf = tf_markdown, # hide
+    alignment=[:l, :r, :r, :r], # hide
+    formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
 
-Markdown.parse(str) #hide
+Markdown.parse(str) # hide
 ```
 
 By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.
@@ -866,7 +866,7 @@ for i = 1:length(AR)
 
 end
 
-nothing #hide
+nothing # hide
 ```
 
 We can visualize the solution using the `write_vtk` function.
@@ -902,9 +902,9 @@ end
 
 plot!(show=true)
 
-savefig("rectangular-wing-sudden-acceleration-cl.svg") #hide
+savefig("rectangular-wing-sudden-acceleration-cl.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](rectangular-wing-sudden-acceleration-cl.svg)
@@ -929,9 +929,9 @@ end
 
 plot!(show=true)
 
-savefig("rectangular-wing-sudden-acceleration-cd.svg") #hide
+savefig("rectangular-wing-sudden-acceleration-cd.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](rectangular-wing-sudden-acceleration-cd.svg)
@@ -1020,7 +1020,7 @@ for i = 1:length(AR)
 
 end
 
-nothing #hide
+nothing # hide
 ```
 
 As can be seen, the transient lift and drag coefficients for the two setups are identical.
@@ -1048,9 +1048,9 @@ end
 
 plot!(show=true)
 
-savefig("moving-rectangular-wing-sudden-acceleration-cl.svg") #hide
+savefig("moving-rectangular-wing-sudden-acceleration-cl.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](moving-rectangular-wing-sudden-acceleration-cl.svg)
@@ -1075,9 +1075,9 @@ end
 
 plot!(show=true)
 
-savefig("moving-rectangular-wing-sudden-acceleration-cd.svg") #hide
+savefig("moving-rectangular-wing-sudden-acceleration-cd.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](moving-rectangular-wing-sudden-acceleration-cd.svg)
@@ -1165,7 +1165,7 @@ system, surface_history, property_history, wake_history = unsteady_analysis(
 # extract transient forces
 CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 
-nothing #hide
+nothing # hide
 ```
 
 The results from VortexLattice compare very well with the analytical solution provided by Wagner.  As discussed in Low Speed Aerodynamics by Katz and Plotkin, the difference between the curves can be attributed to the finite acceleration rate during the first time step, which increases the lift sharply during the acceleration and then increases it moderately later.
@@ -1196,9 +1196,9 @@ plot!(t, Φ.(2*t), label = "Wagner's Function")
 
 plot!(show=true)
 
-savefig("rectangular-wing-sudden-acceleration-wagner.svg") #hide
+savefig("rectangular-wing-sudden-acceleration-wagner.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](rectangular-wing-sudden-acceleration-wagner.svg)
@@ -1296,7 +1296,7 @@ for i = 1:length(k)
 
 end
 
-nothing #hide
+nothing # hide
 ```
 
 Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.
@@ -1334,9 +1334,9 @@ end
 
 plot!(show=true)
 
-savefig("heaving-rectangular-wing.svg") #hide
+savefig("heaving-rectangular-wing.svg") # hide
 
-nothing #hide
+nothing # hide
 ```
 
 ![](heaving-rectangular-wing.svg)
