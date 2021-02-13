@@ -267,7 +267,7 @@ write_vtk("mirrored-planar-wing", surfaces, properties; symmetric)
 
 ![](mirrored-planar-wing.png)
 
-## Steady State Analysis of a Flat Plate Wing with Dihedral
+## Steady State Analysis of a Wing with Dihedral
 
 This example shows how to calculate aerodynamic coefficients and stability derivatives for a simple wing with dihedral.
 
@@ -342,7 +342,7 @@ table = [ #hide
 "``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
 "``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
 "``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-]
+] #hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
 
 str = pretty_table(String, table, header; #hide
@@ -358,13 +358,12 @@ If we set the normal vectors in VortexLattice equal to those used in AVL, the re
 
 ```@example wing-with-dihedral
 
+using LinearAlgebra
+
 # function to construct a normal vector the way AVL does
 #  - `ds` is a line representing the leading edge
 #  - `theta` is the incidence angle, taken as a rotation (+ by RH rule) about
 #        the surface's spanwise axis projected onto the Y-Z plane.
-
-using LinearAlgebra
-
 function avl_normal_vector(ds, theta)
 
     st, ct = sincos(theta)
@@ -423,7 +422,7 @@ table = [ #hide
 "``C_{Di}`` (nearfield)" CD CD_avl CD-CD_avl; #hide
 "``C_{Di}`` (farfield)" CDiff CDiff_avl CDiff-CDiff_avl; #hide
 "``C_M``" Cm Cm_avl Cm-Cm_avl #hide
-]
+] #hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] #hide
 
 str = pretty_table(String, table, header; #hide
@@ -570,13 +569,12 @@ If we set the normal vectors in VortexLattice equal to those used in AVL, the re
 
 ```@example wing-tail
 
+using LinearAlgebra
+
 # function to construct a normal vector the way AVL does
 #  - `ds` is a line representing the leading edge
 #  - `theta` is the incidence angle, taken as a rotation (+ by RH rule) about
 #        the surface's spanwise axis projected onto the Y-Z plane.
-
-using LinearAlgebra
-
 function avl_normal_vector(ds, theta)
 
     st, ct = sincos(theta)
@@ -929,7 +927,7 @@ for i = 1:length(AR)
     plot!(t[2:end], CD, label="AR = $(AR[i])")
 end
 
-plot!(show = true)
+plot!(show=true)
 
 savefig("rectangular-wing-sudden-acceleration-cd.svg") #hide
 
@@ -1071,11 +1069,11 @@ plot(
     )
 
 for i = 1:length(AR)
-    CD_t = [CF_t[i][j][1] for j = 1:length(CF_t[i])]
-    plot!(t[2:end], CD_t, label="AR = $(AR[i])")
+    CD = [CF_t[i][j][1] for j = 1:length(CF_t[i])]
+    plot!(t[2:end], CD, label="AR = $(AR[i])")
 end
 
-plot!(show = true)
+plot!(show=true)
 
 savefig("moving-rectangular-wing-sudden-acceleration-cd.svg") #hide
 
