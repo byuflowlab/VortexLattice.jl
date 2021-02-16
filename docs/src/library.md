@@ -167,6 +167,11 @@ VortexLattice.circulation_derivatives
 VortexLattice.circulation_derivatives!
 ```
 
+### Time-Domain Analysis
+```@docs
+propagate_system!
+```
+
 ### Near-Field Analysis
 ```@docs
 VortexLattice.near_field_forces!
