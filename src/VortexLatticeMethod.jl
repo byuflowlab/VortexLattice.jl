@@ -40,6 +40,7 @@ struct Panel{TF}
     rr::Array{TF}
     rcp::Array{TF}
     theta::TF
+    chord::TF
 end
 
 # chord::TF
@@ -59,13 +60,13 @@ struct Freestream{TF, TV, TO}
     alpha::TF
     beta::TO
     Omega::Array{TF}
-    vother::TV  
+    vother::TV
 end
 # struct Freestream{TF, TV}
 #     alpha::TF
 #     beta::TF
 #     Omega::Array{TF}
-#     vother::TV  
+#     vother::TV
 # end # RMA
 
 
@@ -186,16 +187,16 @@ function body_to_wind(fs::Freestream)
     # stability derivatives
     dRa = SDeriv([-sin(alpha) 0.0 cos(alpha);
             0 0 0;
-            -cos(alpha) 0 -sin(alpha)], 
+            -cos(alpha) 0 -sin(alpha)],
             zeros(3, 3), zeros(3, 3), zeros(3, 3), zeros(3, 3))
-    dRb = SDeriv(zeros(3, 3), 
+    dRb = SDeriv(zeros(3, 3),
             [-sin(beta) -cos(beta) 0;
             cos(beta) -sin(beta) 0.0;
-            0 0 0.0], 
+            0 0 0.0],
             zeros(3, 3), zeros(3, 3), zeros(3, 3))
 
     dR = Rb*dRa + dRb*Ra
-    
+
     return R, dR
 end
 
@@ -213,11 +214,11 @@ direction, at a control point located at r1 relative to the start of the left tr
 and r2 relative to the start of the right trailing vortex.
 """
 function vhat_trailing(r1, r2)
-    
+
     nr1 = norm(r1)
     nr2 = norm(r2)
     xhat = [1.0; 0; 0]
-    
+
     f1 = cross(r1, xhat)/(nr1 - r1[1])/nr1
     f2 = cross(r2, xhat)/(nr2 - r2[1])/nr2
 
@@ -238,13 +239,13 @@ function vhat_horseshoe(r1, r2)
 
     # contribution from trailing vortices
     Vhat = vhat_trailing(r1, r2)
-    
+
     # contribution from bound vortex
     nr1 = norm(r1)
     nr2 = norm(r2)
     f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))
     f2 = (1.0/nr1 + 1.0/nr2)
-    
+
     Vhat += (f1*f2)/(4*pi)
 
     return Vhat
@@ -259,7 +260,7 @@ vortices in the +x direction.  The velocity is computed at point rcp
 from a panel defined by position rl and rr.
 """
 function vhat(rcp, rl, rr, symmetric, include_bound)
-    
+
     if include_bound
         vfunc = vhat_horseshoe
     else
@@ -267,14 +268,14 @@ function vhat(rcp, rl, rr, symmetric, include_bound)
     end
 
     r1 = rcp - rl
-    r2 = rcp - rr        
+    r2 = rcp - rr
     Vhat = vfunc(r1, r2)
 
     if symmetric && not_on_symmetry_plane(rl, rr) # add contribution from other side
         # flip sign for y, but r1 is on left which now corresponds to rr and vice vesa
 
         vfunc = vhat_horseshoe  # always include bound vortex from other side
-        
+
         r1 = rcp - flipy(rr)
         r2 = rcp - flipy(rl)
         Vhat += vfunc(r1, r2)
@@ -304,7 +305,7 @@ function normal_vector(p::Panel)
     sphi = dz/ds
     cphi = dy/ds
 
-    nhat = [sin(p.theta); 
+    nhat = [sin(p.theta);
             -cos(p.theta)*sphi;
             cos(p.theta)*cphi]
 
@@ -324,7 +325,7 @@ function aic(panels::Array{Panel, 1}, symmetric)
     N = length(panels)
 
     include_bound = true  # include bound vortices
-    
+
     AIC = zeros(N, N)
     for i = 1:N  # CP
 
@@ -470,17 +471,17 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     Vindi1 = zeros(3)
     dVindi1 = SDeriv(3)
     rmid = mid_point(panels[1])
-    for j = 1:1  # vortices  
+    for j = 1:1  # vortices
         Vij = vhat(rmid, panels[j].rl, panels[j].rr, symmetric, 1 != j)  # include bound vortices if i != j
         Vindi1 += Vij*Gamma[j]
-    
+
         dVindi1 += Vij*dGamma[j]
     end
     Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
     Vi = Vindi1 + Vext
-    
+
     dVi = dVindi1 + dVext
-    
+
     # forces and moments
     Delta_s = panels[1].rr - panels[1].rl
     Fbi = RHO*Gamma[1]*cross(Vi, Delta_s)
@@ -493,7 +494,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
     Fpvec = zeros(3, N) .* Fbi   # distributed forces
     Vtotal = zeros(3, N) .* Vi  # total velocities
     ds = zeros(N)  # panel size
-    
+
     dFb = SDeriv(3)
     dMb = SDeriv(3)
 
@@ -504,19 +505,19 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
 
         rmid = mid_point(panels[i])  # compute induced velocity at quarter-quard midpoints (rather than at control points)
 
-        for j = 1:N  # vortices  
+        for j = 1:N  # vortices
             Vij = vhat(rmid, panels[j].rl, panels[j].rr, symmetric, i != j)  # include bound vortices if i != j
             Vindi += Vij*Gamma[j]
-        
+
             dVindi += Vij*dGamma[j]
         end
 
         # add external velocity
         Vext, dVext = ext_velocity(fs, rmid, ref.rcg)
         Vi = Vindi + Vext
-        
+
         dVi = dVindi + dVext
-        
+
         # forces and moments
         Delta_s = panels[i].rr - panels[i].rl
         Fbi = RHO*Gamma[i]*cross(Vi, Delta_s)
@@ -527,7 +528,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         dFbi = RHO*cross(Gamma[i]*dVi + dGamma[i]*Vi, Delta_s)
         dFb += dFbi
         dMb += cross(rmid - ref.rcg, dFbi)
-    
+
         # force per unit length along wing (y and z)
         ds[i] = sqrt(Delta_s[2]^2 + Delta_s[3]^2)
         # println("Sherlock! VortexLatticeMethod: 503:")
@@ -546,7 +547,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         Fb[2] = 0.0
         Mb[1] = 0.0
         Mb[3] = 0.0
-        
+
         dFb *= 2
         dMb *= 2
         dFb[2] = 0.0
@@ -593,7 +594,7 @@ function project_panels(panels::Array{Panel, 1}, fs::Freestream)
         rr_wind = Rot*panels[i].rr
         rcp_wind = Rot*panels[i].rcp
 
-        newpanels[i] = Panel(rl_wind, rr_wind, rcp_wind, panels[i].theta)
+        newpanels[i] = Panel(rl_wind, rr_wind, rcp_wind, panels[i].theta, panels[i].chord)
     end
 
     return newpanels
@@ -609,7 +610,7 @@ function normal_vector_magnitude_2d(p::Panel)
     delta = p.rr - p.rl
     dy = delta[2]
     dz = delta[3]
-    
+
     nhat_ds = [0.0; -dz; dy]
 
     return nhat_ds
@@ -625,7 +626,7 @@ function Disubsub(rj, Gammaj, ri, Gammai, nhat_ds_i)
     rij[1] = 0.0  # 2D plane (no x-component)
     Vthetai = cross([Gammaj; 0.0; 0.0], rij) / (2*pi*norm(rij)^2)
     Vn_ds = -dot(Vthetai, nhat_ds_i)
-    
+
     Di = RHO/2.0*Gammai*Vn_ds
 
     return Di
@@ -653,17 +654,17 @@ function Disub(panel_j, Gamma_j, panel_i, Gamma_i, symmetric)
 
     return Di
 end
-    
+
 
 
 """
 Far-field method to compute induced drag.
 """
 function Di_trefftz(panels::Array{Panel, 1}, fs::Freestream, Gamma, symmetric)
-    
+
     # rotate into wind coordinate system
     newpanels = project_panels(panels, fs)
-    
+
     N = length(newpanels)
     Di = 0.0
 
@@ -672,7 +673,7 @@ function Di_trefftz(panels::Array{Panel, 1}, fs::Freestream, Gamma, symmetric)
             Di += Disub(newpanels[j], Gamma[j], newpanels[i], Gamma[i], symmetric)
         end
     end
-    
+
     if symmetric
         Di *= 2
     end
@@ -691,7 +692,7 @@ end
 
 Run the vortex lattice method.
 
-# Returns 
+# Returns
 - CF: force coefficients, wind axes
 - CM: moment coefficients, wind axes, about provided c.g.
 - ymid, zmid: middle points along quarter chord bound vortex
@@ -713,7 +714,7 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # normalize forces/moments
     CF = F/(qinf*Sref)
     CM = M./(qinf*Sref*[bref; cref; bref])
-    
+
     # dCF = dF/(qinf*Sref)
     # dCM = SDeriv(3)
     # dCM[1] = dM[1]/(qinf*Sref*bref)  # I'm sure there's a better way to overload this.
@@ -725,9 +726,9 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
 
     # trefftz plane analysis for drag
     # CDiff = Di_trefftz(panels, fs, Gamma, symmetric) / (qinf*Sref)
-    CDiff = 0.0  
+    CDiff = 0.0
 
-    # # normalize p, q, r    
+    # # normalize p, q, r
     # dCF = SDeriv(dCF.alpha, dCF.beta, dCF.p*2*VINF/bref, dCF.q*2*VINF/cref, dCF.r*2*VINF/bref)
     # dCM = SDeriv(dCM.alpha, dCM.beta, dCM.p*2*VINF/bref, dCM.q*2*VINF/cref, dCM.r*2*VINF/bref)
 
@@ -736,16 +737,15 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # lift and cl dist
     ymid = [mid_point(p)[2] for p in panels]
     zmid = [mid_point(p)[3] for p in panels]
-    # chord = [p.chord for p in panels]
+    chord = [p.chord for p in panels]
     # Np = sqrt.(Fp[2, :].^2 + Fp[3, :].^2)  # normal force to panel
     # cl = Np./(qinf*chord)  # so it's not exactly cl for nonplanar wings
     # l = Np/(qinf*cref)
 
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
-    
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
-    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*Sref), ds, Vvec/VINF, Gamma/VINF)
+    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*chord), ds, Vvec/VINF, Gamma/VINF)
 end
 
 
