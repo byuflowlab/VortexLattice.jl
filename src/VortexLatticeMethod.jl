@@ -467,7 +467,7 @@ end
 
 Computes the forces and moments acting on the aircraft using the given circulation.
 """
-function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, Gamma, dGamma, symmetric)
+function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, Gamma, dGamma, symmetric; localqinf=true)
     Vindi1 = zeros(3)
     dVindi1 = SDeriv(3)
     rmid = mid_point(panels[1])
@@ -497,6 +497,8 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
 
     dFb = SDeriv(3)
     dMb = SDeriv(3)
+
+    chords = [p.chord for p in panels] # vector of chords
 
     for i = 1:N  # control points
 
@@ -534,7 +536,8 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         # println("Sherlock! VortexLatticeMethod: 503:")
         # println("\tFbi = ",Fbi)
         # println("\tds[i] = ",ds[i])
-        Fpvec[:, i] = Fbi/ds[i]  #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
+        qinf = localqinf ? 0.5 * RHO * norm(Vi)^2 : 0.5 * RHO * VINF^2
+        Fpvec[:, i] = Fbi/ds[i] / qinf / chords[i] # assume constant chord #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
 
         # save in array
         Vtotal[:, i] = Vi
@@ -699,10 +702,10 @@ Run the vortex lattice method.
 - l, cl: lift distribution (Lp/(q cref)), lift coefficient distribution (Lp/(q c))
 - dCF, dCM: stability derivatives, wind axes
 """
-function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric)
+function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetric; localqinf=true)
 
     Gamma, dGamma = circulation(panels, ref, fs, symmetric)
-    F, M, dF, dM, Fp, ds, Vvec = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric)
+    F, M, dF, dM, cf, ds, Vvec = forces_moments(panels, ref, fs, Gamma, dGamma, symmetric; localqinf=localqinf)
 
 
     # force and moment coefficients
@@ -737,7 +740,6 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # lift and cl dist
     ymid = [mid_point(p)[2] for p in panels]
     zmid = [mid_point(p)[3] for p in panels]
-    chord = [p.chord for p in panels]
     # Np = sqrt.(Fp[2, :].^2 + Fp[3, :].^2)  # normal force to panel
     # cl = Np./(qinf*chord)  # so it's not exactly cl for nonplanar wings
     # l = Np/(qinf*cref)
@@ -745,7 +747,7 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
-    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, Fp./(qinf*chord), ds, Vvec/VINF, Gamma/VINF)
+    return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, cf, ds, Vvec/VINF, Gamma/VINF)
 end
 
 

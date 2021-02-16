@@ -18,12 +18,13 @@ function spanwise_spacing(n, stype)
 
     elseif stype == "c"  # cosine
 
-        theta = range(0, pi, length=n)
-        eta = (1.0 .- cos.(theta))/2.0
+        theta = range(pi/2, 0, length=n)
+        eta = cos.(theta)
+        eta[1] = 0.0
 
         # note that control points are also placed with cosine spacing as this improves accuracy tremendously
         theta_mid = linearinterp(0.5, theta[1:end-1], theta[2:end])
-        eta_mid = (1.0 .- cos.(theta_mid))/2.0
+        eta_mid = cos.(theta_mid)
 
     else
         error("invalid spacing type: ")
