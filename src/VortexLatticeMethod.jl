@@ -537,7 +537,7 @@ function forces_moments(panels::Array{Panel, 1}, ref::Reference, fs::Freestream,
         # println("\tFbi = ",Fbi)
         # println("\tds[i] = ",ds[i])
         qinf = localqinf ? 0.5 * RHO * norm(Vi)^2 : 0.5 * RHO * VINF^2
-        println("Sherlock! qinf = $qinf")
+        # println("Sherlock! qinf = $qinf")
         Fpvec[:, i] = Fbi/ds[i] / qinf / chords[i] # assume constant chord #*0.5*RHO*norm(Vi)^2*panels[i].chord)  # normalize by local velocity not freestream
 
         # save in array
@@ -748,6 +748,7 @@ function solve(panels::Array{Panel, 1}, ref::Reference, fs::Freestream, symmetri
     # l = 2*Gamma.*Vmag./(VINF^2.*cref)
     # cl = 2*Gamma.*Vmag./(Vmag.^2.*chord)
     # return CF, CM, ymid, zmid, l, cl, dCF, dCM
+    println("Sherlock! Updated")
     return Outputs(CF, CM, dCF, dCM, CDiff, ymid, zmid, cf, ds, Vvec/VINF, Gamma/VINF)
 end
 
