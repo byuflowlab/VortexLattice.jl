@@ -570,3 +570,68 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
     # return the modified system and time history
     return system, surface_history, property_history, wake_history
 end
+
+"""
+    chordwise_lift_coefficients(system, grid;
+        )
+
+Calculate local lift coefficient of each spanwise section according to:
+
+\$\$c_l = \\frac{dL/dy}{q_\\infty c}\$\$
+
+where \$dL/dy\$ is the lift per unit span, \$q_\\infty\$ is the dynamic pressure, and \$c\$ is the chord.
+
+Return a vector of length equal to the number of spanwise panels containing the lift coefficient.
+
+Note: this must be run after solving the [`System`](@ref) object.
+
+# Arguments
+ - `system`: instance of the [`System`](@ref) struct.
+ - `grid`: array of panels defining the aircraft geometry.
+
+ # Optional Arguments
+ - `chords`: chords may be defined manually by the user for speed
+ - `ys`: spanwise location of each panel may be specified by the user for speed
+ - `dys`: length of each panel may be specified by the user for speed
+ - `cfs`: array of force coefficients may be preallocated by the user for speed
+"""
+function spanwise_lift_coefficients(system::System{TF}, grid::Array{SurfacePanel{TF},3}, reference::Reference{TF};
+    chords = nothing,
+    ys = nothing,
+    dys = nothing,
+    cfs = nothing
+    ) where TF
+    # get lattice dimensions
+    nc, ns = size(system.properties[1])
+    # get chords
+    if isnothing(chords)
+        corner_chords = [grid[1,end,i] - grid[1,1,i] for i in 1:ns+1]
+        # interpolate to control point locations
+        chords = [(corner_chords[i] + corner_chords[i+1])/2 for i in 1:ns]
+    end
+    if isnothing(ys)
+        # get control point y coordinates
+        ys = [(grid[2,1,i+1] + grid[2,1,i])/2 for i in 1:ns]
+    end
+    if isnothing(dys)
+        # get spanwise lengths of each panel
+        dys = [grid[2,1,i+1] - grid[2,1,i] for i in 1:ns]
+    end
+    # get force coefficients
+    if isnothing(cfs)
+        cfs = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
+    end
+    for i = 1:ns # number of panels
+        # sum chordwise force coefficients and store
+        cfs[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
+        cfs[:,i] += sum([panel.cfr for panel in system.properties[1][:,i]])
+        cfs[:,i] += sum([panel.cfb for panel in system.properties[1][:,i]])
+    end
+    # re-normalize
+    for i=1:3;
+        cfs[i,:] ./= (dys .* chords) # per unit span, divided by chord
+    end
+    cfs *= reference.S # un-normalize by reference area S
+
+    return ys, cfs
+end
