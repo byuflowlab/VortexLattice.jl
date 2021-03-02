@@ -572,7 +572,11 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
 end
 
 """
-    chordwise_lift_coefficients(system, grid;
+    chordwise_lift_coefficients(system, grid, reference;
+        chords = nothing,
+        ys = nothing,
+        dys = nothing,
+        cfs = nothing
         )
 
 Calculate local lift coefficient of each spanwise section according to:
@@ -587,51 +591,86 @@ Note: this must be run after solving the [`System`](@ref) object.
 
 # Arguments
  - `system`: instance of the [`System`](@ref) struct.
- - `grid`: array of panels defining the aircraft geometry.
+ - `grid`: vector of arrays of grid corners with dimensions (nsurfaces,3,nchordwisepanels,nspanwisepanels) defining the aircraft geometry.
+ - `reference`: instance of the [`Reference`](@ref) object.
 
  # Optional Arguments
- - `chords`: chords may be defined manually by the user for speed
- - `ys`: spanwise location of each panel may be specified by the user for speed
- - `dys`: length of each panel may be specified by the user for speed
- - `cfs`: array of force coefficients may be preallocated by the user for speed
+ - `chords`: array of vectors with dimensions (nsurfaces,npanels); each vector contains chord lengths for each panel of its lifting surface; may be defined manually by the user for speed
+ - `ys`: array of vectors with dimensions (nsurfaces,npanels); each vector contains spanwise locations of each panel of its lifting surface; may be defined manually by the user for speed
+ - `dys`: array of vectors with dimensions (nsurfaces,npanels); each vector contains spanwise lengths for each panel of its lifting surface; may be defined manually by the user for speed
+ - `cfs`: array of arrays with dimensions (nsurfaces,3,npanels); each array contains force coefficients of each panel of its lifting surface; may be defined manually by the user for speed
 """
-function spanwise_lift_coefficients(system::System{TF}, grid::Array{SurfacePanel{TF},3}, reference::Reference{TF};
+function spanwise_force_coefficients(system::System{TF}, grids::Array{Array{TF,3},1}, reference::Reference{TF};
     chords = nothing,
     ys = nothing,
     dys = nothing,
-    cfs = nothing
+    cfs = nothing,
+    returnoptions = false
     ) where TF
-    # get lattice dimensions
-    nc, ns = size(system.properties[1])
-    # get chords
-    if isnothing(chords)
-        corner_chords = [grid[1,end,i] - grid[1,1,i] for i in 1:ns+1]
-        # interpolate to control point locations
-        chords = [(corner_chords[i] + corner_chords[i+1])/2 for i in 1:ns]
-    end
+    nsystems = length(system.properties)
     if isnothing(ys)
-        # get control point y coordinates
-        ys = [(grid[2,1,i+1] + grid[2,1,i])/2 for i in 1:ns]
+        ys = Vector{Vector{TF}}(undef,nsystems)
     end
-    if isnothing(dys)
-        # get spanwise lengths of each panel
-        dys = [grid[2,1,i+1] - grid[2,1,i] for i in 1:ns]
-    end
-    # get force coefficients
     if isnothing(cfs)
-        cfs = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
+        cfs = Vector{Array{TF,2}}(undef,nsystems)
     end
-    for i = 1:ns # number of panels
-        # sum chordwise force coefficients and store
-        cfs[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
-        cfs[:,i] += sum([panel.cfr for panel in system.properties[1][:,i]])
-        cfs[:,i] += sum([panel.cfb for panel in system.properties[1][:,i]])
+    if returnoptions && isnothing(dys)
+        dys = Vector{Vector{TF}}(undef,nsystems)
     end
-    # re-normalize
-    for i=1:3;
-        cfs[i,:] ./= (dys .* chords) # per unit span, divided by chord
+    if returnoptions && isnothing(chords)
+        chords = Vector{Vector{TF}}(undef,nsystems)
     end
-    cfs *= reference.S # un-normalize by reference area S
-
-    return ys, cfs
+    # iterate through lifting surfaces
+    for isurface in 1:nsystems
+        # get grid
+        grid = grids[isurface]
+        # get lattice dimensions
+        nc, ns = size(system.properties[isurface])
+        # get chords
+        if !isnothing(chords) && isassigned(chords, isurface)
+            chord = chords[isurface]
+        else
+            corner_chord = [grid[1,end,i] - grid[1,1,i] for i in 1:ns+1]
+            # interpolate to control point locations
+            chord = [(corner_chord[i] + corner_chord[i+1])/2 for i in 1:ns]
+            if returnoptions; chords[isurface] = chord; end
+        end
+        # get control point y coordinates
+        if isassigned(ys, isurface)
+            y = ys[isurface]
+        else
+            y = [(grid[2,1,i+1] + grid[2,1,i])/2 for i in 1:ns]
+            ys[isurface] = y
+        end
+        # get spanwise lengths of each panel
+        if !isnothing(dys) && isassigned(dys, isurface)
+            dy = dys[isurface]
+        else
+            dy = [grid[2,1,i+1] - grid[2,1,i] for i in 1:ns]
+            if returnoptions; dys[isurface] = dy; end
+        end
+        # get force coefficients
+        if isassigned(cfs, isurface)
+            cf = cfs[isurface]
+        else
+            cf = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
+            cfs[isurface] = cf
+        end
+        for i = 1:ns # number of panels
+            # sum chordwise force coefficients and store
+            cf[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
+            cf[:,i] += sum([panel.cfr for panel in system.properties[1][:,i]])
+            cf[:,i] += sum([panel.cfb for panel in system.properties[1][:,i]])
+        end
+        # re-normalize
+        for i=1:3;
+            cf[i,:] ./= (dy .* chord) # per unit span, divided by chord
+        end
+        cf .*= reference.S # un-normalize by reference area S
+    end
+    if !returnoptions
+        return ys, cfs
+    else
+        return ys, cfs, chords, dys
+    end
 end
