@@ -1,6 +1,6 @@
 # Examples
 
-These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.  Many of these examples also provide a verification for the implementation of the vortex lattice method in this package.  
+These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.  Many of these examples also provide a verification for the implementation of the vortex lattice method in this package.
 
 ```@contents
 Pages = ["examples.md"]
@@ -70,6 +70,24 @@ CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
+
+# calculate local lift coefficients at each spanwise section
+ys, cfs, chords, dys = VL.spanwise_force_coefficients(system, [grid], ref;
+    chords = nothing,
+    ys = nothing,
+    dys = nothing,
+    cfs = nothing,
+    returnoptions = true
+    )
+
+# since `returnoptions = true` was set, the function returned intermediate variables that can be preallocated for speed
+ys, cfs = VL.spanwise_force_coefficients(system, [grid], ref;
+    chords = chords,
+    ys = ys,
+    dys = dys,
+    cfs = cfs,
+    returnoptions = false
+    )
 
 nothing # hide
 ```
@@ -643,7 +661,7 @@ str = pretty_table(String, table, header; # hide
 Markdown.parse(str) # hide
 ```
 
-To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.  
+To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.
 
 ```@example wing-tail
 using VortexLattice
