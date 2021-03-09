@@ -442,7 +442,7 @@ end
 """
     propagate_system!(system, [surfaces, ] freestream, dt; kwargs...)
 
-Propogate the state variables in `system` forward one time step using the
+Propagate the state variables in `system` forward one time step using the
 unsteady vortex lattice method system of equations.
 
 # Arguments
