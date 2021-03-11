@@ -572,9 +572,9 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
 end
 
 """
-    chordwise_lift_coefficients(system, reference, grids)
+    spanwise_lift_coefficients(system, reference, grids)
 
-    chordwise_lift_coefficients(system, reference, ys, dys, chords)
+    spanwise_lift_coefficients(system, reference, ys, dys, chords)
 
 Calculate local lift coefficient of each spanwise section according to:
 
