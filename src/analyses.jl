@@ -572,12 +572,9 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
 end
 
 """
-    chordwise_lift_coefficients(system, grid, reference;
-        chords = nothing,
-        ys = nothing,
-        dys = nothing,
-        cfs = nothing
-        )
+    chordwise_lift_coefficients(system, reference, grids)
+
+    chordwise_lift_coefficients(system, reference, ys, dys, chords)
 
 Calculate local lift coefficient of each spanwise section according to:
 
@@ -585,77 +582,62 @@ Calculate local lift coefficient of each spanwise section according to:
 
 where \$dL/dy\$ is the lift per unit span, \$q_\\infty\$ is the dynamic pressure, and \$c\$ is the chord.
 
-Return a vector of length equal to the number of spanwise panels containing the lift coefficient.
+Return:
+
+ - `cfs`: a vector of length equal to the number of surfaces NS, each containing an array of (3,N) containing the x, y, and z direction force coefficients, respectively, of each of the N panels.
+ - `ys`: a vector of length NS where each member is a vector of length N containing the y coordinate of each control point
+ - `dys`: a vector of length NS where each member is a vector of length N containing panel widths
+ - `chords`: a vector of length NS where each member is a vector of length N containing chord lengths.
 
 Note: this must be run after solving the [`System`](@ref) object.
 
 # Arguments
- - `system`: instance of the [`System`](@ref) struct.
- - `grid`: vector of arrays of grid corners with dimensions (nsurfaces,3,nchordwisepanels,nspanwisepanels) defining the aircraft geometry.
- - `reference`: instance of the [`Reference`](@ref) object.
 
- # Optional Arguments
- - `chords`: array of vectors with dimensions (nsurfaces,npanels); each vector contains chord lengths for each panel of its lifting surface; may be defined manually by the user for speed
- - `ys`: array of vectors with dimensions (nsurfaces,npanels); each vector contains spanwise locations of each panel of its lifting surface; may be defined manually by the user for speed
- - `dys`: array of vectors with dimensions (nsurfaces,npanels); each vector contains spanwise lengths for each panel of its lifting surface; may be defined manually by the user for speed
- - `cfs`: array of arrays with dimensions (nsurfaces,3,npanels); each array contains force coefficients of each panel of its lifting surface; may be defined manually by the user for speed
+ - `system`: instance of the [`System`](@ref) struct.
+ - `reference`: instance of the [`Reference`](@ref) object.
+ - `grids`: vector of arrays of grid corners with dimensions (nsurfaces,3,nchordwisepanels,nspanwisepanels) defining the aircraft geometry.
+
+ Alternatively, `ys`, `dys`, and `chords` may be specified instead of `grids` for speed.
+
+ In this case returns:
+
+ - `cfs`: a vector of length equal to the number of surfaces NS, each containing an array of (3,N) containing the x, y, and z direction force coefficients, respectively, of each of the N panels.
+
+ # Alternate Arguments
+
+ - `system`: instance of the [`System`](@ref) struct.
+ - `reference`: instance of the [`Reference`](@ref) object.
+ - `ys`: a vector of length NS where each member is a vector of length N containing the y coordinate of each control point
+ - `dys`: a vector of length NS where each member is a vector of length N containing panel widths
+ - `chords`: a vector of length NS where each member is a vector of length N containing chord lengths.
+
 """
-function spanwise_force_coefficients(system::System{TF}, grids::Array{Array{TF,3},1}, reference::Reference{TF};
-    chords = nothing,
-    ys = nothing,
-    dys = nothing,
-    cfs = nothing,
-    returnoptions = false
-    ) where TF
+function spanwise_force_coefficients(system::System{TF}, reference::Reference{TF}, grids::Array{Array{TF,3},1}) where TF
     nsystems = length(system.properties)
-    if isnothing(ys)
-        ys = Vector{Vector{TF}}(undef,nsystems)
-    end
-    if isnothing(cfs)
-        cfs = Vector{Array{TF,2}}(undef,nsystems)
-    end
-    if returnoptions && isnothing(dys)
-        dys = Vector{Vector{TF}}(undef,nsystems)
-    end
-    if returnoptions && isnothing(chords)
-        chords = Vector{Vector{TF}}(undef,nsystems)
-    end
-    # iterate through lifting surfaces
-    for isurface in 1:nsystems
-        # get grid
-        grid = grids[isurface]
+    ys = Vector{Vector{TF}}(undef,nsystems)
+    cfs = Vector{Array{TF,2}}(undef,nsystems)
+    dys = Vector{Vector{TF}}(undef,nsystems)
+    chords = Vector{Vector{TF}}(undef,nsystems)    # iterate through lifting surfaces
+    for isurface in 1:nsystems        # get grid
+        if !isnothing(grids)
+            grid = grids[isurface]
+        end
         # get lattice dimensions
         nc, ns = size(system.properties[isurface])
         # get chords
-        if !isnothing(chords) && isassigned(chords, isurface)
-            chord = chords[isurface]
-        else
-            corner_chord = [grid[1,end,i] - grid[1,1,i] for i in 1:ns+1]
-            # interpolate to control point locations
-            chord = [(corner_chord[i] + corner_chord[i+1])/2 for i in 1:ns]
-            if returnoptions; chords[isurface] = chord; end
-        end
+        corner_chord = [grid[1,end,i] - grid[1,1,i] for i in 1:ns+1]
+        # interpolate to control point locations
+        chord = [(corner_chord[i] + corner_chord[i+1])/2 for i in 1:ns]
+        chords[isurface] = chord
         # get control point y coordinates
-        if isassigned(ys, isurface)
-            y = ys[isurface]
-        else
-            y = [(grid[2,1,i+1] + grid[2,1,i])/2 for i in 1:ns]
-            ys[isurface] = y
-        end
+        y = [(grid[2,1,i+1] + grid[2,1,i])/2 for i in 1:ns]
+        ys[isurface] = y
         # get spanwise lengths of each panel
-        if !isnothing(dys) && isassigned(dys, isurface)
-            dy = dys[isurface]
-        else
-            dy = [grid[2,1,i+1] - grid[2,1,i] for i in 1:ns]
-            if returnoptions; dys[isurface] = dy; end
-        end
+        dy = [grid[2,1,i+1] - grid[2,1,i] for i in 1:ns]
+        dys[isurface] = dy
         # get force coefficients
-        if isassigned(cfs, isurface)
-            cf = cfs[isurface]
-        else
-            cf = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
-            cfs[isurface] = cf
-        end
+        cf = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
+        cfs[isurface] = cf
         for i = 1:ns # number of panels
             # sum chordwise force coefficients and store
             cf[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
@@ -668,9 +650,35 @@ function spanwise_force_coefficients(system::System{TF}, grids::Array{Array{TF,3
         end
         cf .*= reference.S # un-normalize by reference area S
     end
-    if !returnoptions
-        return ys, cfs
-    else
-        return ys, cfs, chords, dys
+    return cfs, ys, dys, chords
+end
+
+function spanwise_force_coefficients(system::System{TF}, reference::Reference{TF}, ys::Array{Array{TF,1},1}, dys::Array{Array{TF,1},1}, chords::Array{Array{TF,1},1}) where TF
+    nsystems = length(system.properties)
+    cfs = Vector{Array{TF,2}}(undef,nsystems)
+    # iterate through lifting surfaces
+    for isurface in 1:nsystems
+        # get lattice dimensions
+        nc, ns = size(system.properties[isurface])
+        # get geometry
+        chord = chords[isurface]
+        y = ys[isurface]
+        dy = dys[isurface]
+        # create cf
+        cf = zeros(3,ns) # initialize spanwise force coefficients matrix (1 3-tuple per panel)
+        cfs[isurface] = cf
+        for i = 1:ns # number of panels
+            # sum chordwise force coefficients and store
+            cf[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
+            cf[:,i] += sum([panel.cfr for panel in system.properties[1][:,i]])
+            cf[:,i] += sum([panel.cfb for panel in system.properties[1][:,i]])
+        end
+        # re-normalize
+        for i=1:3;
+            cf[i,:] ./= (dy .* chord) # per unit span, divided by chord
+        end
+        cf .*= reference.S # un-normalize by reference area S
     end
+
+    return cfs
 end

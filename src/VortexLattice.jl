@@ -38,7 +38,7 @@ export PanelProperties, get_surface_properties
 include("analyses.jl")
 export steady_analysis, steady_analysis!
 export unsteady_analysis, unsteady_analysis!
-export spanwise_lift_coefficients
+export spanwise_force_coefficients
 
 include("nearfield.jl")
 export body_forces
