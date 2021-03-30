@@ -71,24 +71,6 @@ CDiff = far_field_drag(system)
 CD, CY, CL = CF
 Cl, Cm, Cn = CM
 
-# calculate local lift coefficients at each spanwise section
-ys, cfs, chords, dys = VL.spanwise_force_coefficients(system, [grid], ref;
-    chords = nothing,
-    ys = nothing,
-    dys = nothing,
-    cfs = nothing,
-    returnoptions = true
-    )
-
-# since `returnoptions = true` was set, the function returned intermediate variables that can be preallocated for speed
-ys, cfs = VL.spanwise_force_coefficients(system, [grid], ref;
-    chords = chords,
-    ys = ys,
-    dys = dys,
-    cfs = cfs,
-    returnoptions = false
-    )
-
 nothing # hide
 ```
 
