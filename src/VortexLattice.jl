@@ -43,6 +43,7 @@ export spanwise_force_coefficients
 include("nearfield.jl")
 export body_forces
 export body_forces_history
+export lifting_line_properties
 
 include("farfield.jl")
 export far_field_drag

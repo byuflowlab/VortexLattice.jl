@@ -858,6 +858,167 @@ function body_forces_history(system, surface_history::AbstractVector{<:AbstractV
     return CF, CM
 end
 
+
+"""
+    lifting_line_properties([system,] grids)
+
+Construct a lifting line representation of the surfaces in `grids` at
+the quarter-chord of each surface.
+
+Return the quarter-chord coordinates, chord lengths at the quarter-chord
+coordinates, force coefficients (per unit span) for each spanwise segment, and
+moment coefficients (per unit span) for each spanwise segment.
+
+If the argument `system` is omitted, return only the quarter-chord coordinates
+and the chord lengths.
+
+If the argument `system` is not omitted, this function requires that a
+near-field analysis has been performed on `system` to obtain panel forces.
+
+# Arguments
+ - `system`: (optional) Object of type [`System`](@ref) that holds precalculated
+    system properties.
+ - `grids`: Vector with length equal to the number of surfaces.  Each element of
+    the vector is a grid with shape (3, nc, ns) which defines the discretization
+    of a surface into panels. `nc` is the number of chordwise panels and `ns` is
+    the number of spanwise panels.
+
+# Return Arguments:
+ - `r`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
+    of the resulting lifting line coordinates
+ - `c`: Vector with length equal to the number of surfaces, with each element
+    being a vector of length `ns+1` which contains the chord lengths at each
+    lifting line coordinate.
+ - `cf`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z direction
+    force coefficients (per unit span) for each spanwise segment.
+ - `cm`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z direction
+    moment coefficients (per unit span) for each spanwise segment.
+"""
+lifting_line_properties
+
+function lifting_line_properties(grids)
+    TF = eltype(eltype(grids))
+    nsurf = length(grids)
+    r = Vector{Matrix{TF}}(undef, nsurf)
+    c = Vector{Vector{TF}}(undef, nsurf)
+    for isurf = 1:nsurf
+        ns = size(grids[isurf], 3) - 1
+        r[isurf] = Matrix{TF}(undef, 3, ns+1)
+        c[isurf] = Vector{TF}(undef, ns+1)
+    end
+    return lifting_line_properties!(r, c, grids)
+end
+
+function lifting_line_properties(system, grids)
+    TF = promote_type(eltype(system), eltype(eltype(grids)))
+    nsurf = length(grids)
+    r = Vector{Matrix{TF}}(undef, nsurf)
+    c = Vector{Vector{TF}}(undef, nsurf)
+    cf = Vector{Matrix{TF}}(undef, nsurf)
+    cm = Vector{Matrix{TF}}(undef, nsurf)
+    for isurf = 1:nsurf
+        ns = size(grids[isurf], 3) - 1
+        r[isurf] = Matrix{TF}(undef, 3, ns+1)
+        c[isurf] = Vector{TF}(undef, ns+1)
+        cf[isurf] = Matrix{TF}(undef, 3, ns)
+        cm[isurf] = Matrix{TF}(undef, 3, ns)
+    end
+    return lifting_line_properties!(r, c, cf, cm, system, grids)
+end
+
+"""
+    lifting_line_properties!(r, c, grids)
+    lifting_line_properties!(r, c, cf, cm, system, grids)
+
+In-place version of [`lifting_line_properties`](@ref)
+"""
+lifting_line_properties!
+
+function lifting_line_properties!(r, c, grids)
+    nsurf = length(grids)
+    # iterate through each lifting surface
+    for isurf = 1:nsurf
+        # extract current grid
+        grid = grids[isurf]
+        # dimensions of this grid
+        nc = size(grid, 2)
+        ns = size(grid, 3)
+        # loop through each spanwise section
+        for j = 1:ns
+            # get leading and trailing edges
+            le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
+            te = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
+            # get quarter-chord
+            r[isurf][:,j] = linearinterp(0.25, le, te)
+            # get chord length
+            c[isurf][j] = norm(le - te)
+        end
+    end
+    return r, c
+end
+
+function lifting_line_properties!(r, c, cf, cm, system, grids)
+
+    # number of surfaces
+    nsurf = length(grids)
+
+    # check that a near field analysis has been performed
+    @assert system.near_field_analysis[] "Near field analysis required"
+
+    # extract reference properties
+    ref = system.reference[]
+
+    # set geometric properties
+    lifting_line_properties!(r, c, grids)
+
+    # iterate through each lifting surface
+    for isurf = 1:nsurf
+        nc, ns = size(system.surfaces[isurf])
+        # extract current surface panels and panel properties
+        panels = system.surfaces[isurf]
+        properties = system.properties[isurf]
+        # loop through each chordwise set of panels
+        for j = 1:ns
+            # calculate segment length
+            rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
+            rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
+            ds = norm(rrs - rls)
+            # calculate reference location
+            rs = (rls + rrs)/2
+            # calculate reference chord
+            cs = (c[isurf][j] + c[isurf][j+1])/2
+            # calculate section force and moment coefficients
+            cf[isurf][:,j] .= 0.0
+            cm[isurf][:,j] .= 0.0
+            for i = 1:nc
+                # add influence of bound vortex
+                rb = top_center(panels[i,j])
+                cfb = properties[i,j].cfb
+                cf[isurf][:,j] .+= cfb
+                cm[isurf][:,j] .+= cross(rb - rs, cfb)
+                # add influence of left vortex leg
+                rl = left_center(panels[i,j])
+                cfl = properties[i,j].cfl
+                cf[isurf][:,j] .+= cfl
+                cm[isurf][:,j] .+= cross(rl - rs, cfl)
+                # add influence of right vortex leg
+                rr = right_center(panels[i,j])
+                cfr = properties[i,j].cfr
+                cf[isurf][:,j] .+= cfr
+                cm[isurf][:,j] .+= cross(rr - rs, cfr)
+            end
+            # update normalization
+            cf[isurf][:,j] .*= ref.S/(ds*cs)
+            cm[isurf][:,j] .*= ref.S/(ds*cs^2)
+        end
+    end
+
+    return r, c, cf, cm
+end
+
 """
     body_to_frame(CF, CM, reference, freestream, frame)
 
