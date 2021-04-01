@@ -669,13 +669,16 @@ function spanwise_force_coefficients(system::System{TF}, reference::Reference{TF
         cfs[isurface] = cf
         for i = 1:ns # number of panels
             # sum chordwise force coefficients and store
-            cf[:,i] .= sum([panel.cfl for panel in system.properties[1][:,i]])
-            cf[:,i] += sum([panel.cfr for panel in system.properties[1][:,i]])
-            cf[:,i] += sum([panel.cfb for panel in system.properties[1][:,i]])
+            cf[:,i] .= sum([panel.cfl for panel in system.properties[isurface][:,i]])
+            cf[:,i] += sum([panel.cfr for panel in system.properties[isurface][:,i]])
+            cf[:,i] += sum([panel.cfb for panel in system.properties[isurface][:,i]])
         end
         # re-normalize
         for i=1:3;
-            cf[i,:] ./= (dy .* chord) # per unit span, divided by chord
+            cf[i,:] ./= (chord .* dy) # divided by chord
+            # NOTE: cf is originially defined as CF = F / qinf / Sref
+            # now we redefine by:
+            # cf = F / qinf / Sref * (Sref / c / dy)
         end
         cf .*= reference.S # un-normalize by reference area S
     end
