@@ -858,38 +858,26 @@ function body_forces_history(system, surface_history::AbstractVector{<:AbstractV
     return CF, CM
 end
 
-
 """
-    lifting_line_properties([system,] grids)
+    lifting_line_coefficients(system, r, c)
 
-Construct a lifting line representation of the surfaces in `grids` at
-the quarter-chord of each surface.
+Return the force and moment coefficients (per unit span) for each spanwise segment
+of a lifting line representation of the geometry.
 
-Return the quarter-chord coordinates, chord lengths at the quarter-chord
-coordinates, force coefficients (per unit span) for each spanwise segment, and
-moment coefficients (per unit span) for each spanwise segment.
-
-If the argument `system` is omitted, return only the quarter-chord coordinates
-and the chord lengths.
-
-If the argument `system` is not omitted, this function requires that a
-near-field analysis has been performed on `system` to obtain panel forces.
+This function requires that a near-field analysis has been performed on `system`
+to obtain panel forces.
 
 # Arguments
- - `system`: (optional) Object of type [`System`](@ref) that holds precalculated
+ - `system`: Object of type [`System`](@ref) that holds precalculated
     system properties.
- - `grids`: Vector with length equal to the number of surfaces.  Each element of
-    the vector is a grid with shape (3, nc, ns) which defines the discretization
-    of a surface into panels. `nc` is the number of chordwise panels and `ns` is
-    the number of spanwise panels.
-
-# Return Arguments:
  - `r`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
     of the resulting lifting line coordinates
  - `c`: Vector with length equal to the number of surfaces, with each element
     being a vector of length `ns+1` which contains the chord lengths at each
     lifting line coordinate.
+
+# Return Arguments:
  - `cf`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns) which contains the x, y, and z direction
     force coefficients (per unit span) for each spanwise segment.
@@ -897,82 +885,34 @@ near-field analysis has been performed on `system` to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-lifting_line_properties
-
-function lifting_line_properties(grids)
-    TF = eltype(eltype(grids))
-    nsurf = length(grids)
-    r = Vector{Matrix{TF}}(undef, nsurf)
-    c = Vector{Vector{TF}}(undef, nsurf)
-    for isurf = 1:nsurf
-        ns = size(grids[isurf], 3) - 1
-        r[isurf] = Matrix{TF}(undef, 3, ns+1)
-        c[isurf] = Vector{TF}(undef, ns+1)
-    end
-    return lifting_line_properties!(r, c, grids)
-end
-
-function lifting_line_properties(system, grids)
-    TF = promote_type(eltype(system), eltype(eltype(grids)))
-    nsurf = length(grids)
-    r = Vector{Matrix{TF}}(undef, nsurf)
-    c = Vector{Vector{TF}}(undef, nsurf)
+function lifting_line_coefficients(system, r, c)
+    TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
+    nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
     cm = Vector{Matrix{TF}}(undef, nsurf)
     for isurf = 1:nsurf
-        ns = size(grids[isurf], 3) - 1
-        r[isurf] = Matrix{TF}(undef, 3, ns+1)
-        c[isurf] = Vector{TF}(undef, ns+1)
+        ns = size(system.surfaces[isurf], 2)
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_properties!(r, c, cf, cm, system, grids)
+    return lifting_line_coefficients!(cf, cm, system, r, c)
 end
 
 """
-    lifting_line_properties!(r, c, grids)
-    lifting_line_properties!(r, c, cf, cm, system, grids)
+    lifting_line_coefficients!(cf, cm, system, r, c)
 
-In-place version of [`lifting_line_properties`](@ref)
+In-place version of [`lifting_line_coefficients`](@ref)
 """
-lifting_line_properties!
-
-function lifting_line_properties!(r, c, grids)
-    nsurf = length(grids)
-    # iterate through each lifting surface
-    for isurf = 1:nsurf
-        # extract current grid
-        grid = grids[isurf]
-        # dimensions of this grid
-        nc = size(grid, 2)
-        ns = size(grid, 3)
-        # loop through each spanwise section
-        for j = 1:ns
-            # get leading and trailing edges
-            le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
-            te = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
-            # get quarter-chord
-            r[isurf][:,j] = linearinterp(0.25, le, te)
-            # get chord length
-            c[isurf][j] = norm(le - te)
-        end
-    end
-    return r, c
-end
-
-function lifting_line_properties!(r, c, cf, cm, system, grids)
+function lifting_line_coefficients!(cf, cm, system, r, c)
 
     # number of surfaces
-    nsurf = length(grids)
+    nsurf = length(system.surfaces)
 
     # check that a near field analysis has been performed
     @assert system.near_field_analysis[] "Near field analysis required"
 
     # extract reference properties
     ref = system.reference[]
-
-    # set geometric properties
-    lifting_line_properties!(r, c, grids)
 
     # iterate through each lifting surface
     for isurf = 1:nsurf
@@ -1016,7 +956,7 @@ function lifting_line_properties!(r, c, cf, cm, system, grids)
         end
     end
 
-    return r, c, cf, cm
+    return cf, cm
 end
 
 """

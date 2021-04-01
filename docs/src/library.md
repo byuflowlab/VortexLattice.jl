@@ -20,6 +20,8 @@ WakePanel
 WakePanel()
 grid_to_surface_panels
 wing_to_surface_panels
+lifting_line_geometry
+lifting_line_geometry!
 set_normal
 translate
 translate!
@@ -59,6 +61,8 @@ PanelProperties
 get_surface_properties
 body_forces(system::System{TF}; frame = Body()) where TF
 body_forces_history
+lifting_line_coefficients
+lifting_line_coefficients!
 ```
 
 ### Far Field Drag

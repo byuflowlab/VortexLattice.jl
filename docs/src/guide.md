@@ -118,12 +118,15 @@ nothing #hide
 
 Sectional coefficients may be calculated using the `lifting_line_properties` function.
 
-```@example planar-wing
+```@example guide
 # combine all grid representations of surfaces into a single vector
 grids = [grid]
 
-# calculate lifting line properties and coefficients
-r, c, cf, cm = lifting_line_properties(system, grids)
+# calculate lifting line geometry
+r, c = lifting_line_geometry(grids)
+
+# calculate lifting line coefficients
+cf, cm = lifting_line_coefficients(system, r, c)
 nothing #hide
 ```
 
