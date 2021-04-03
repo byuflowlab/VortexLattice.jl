@@ -418,19 +418,19 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
                 derivatives = last_step && derivatives)
         end
 
-        # save the surface shape, properties, and resulting shed wake
-        if it in save
-            surface_history[isave] = [copy(system.surfaces[isurf]) for isurf = 1:nsurf]
-            property_history[isave] = [copy(system.properties[isurf]) for isurf = 1:nsurf]
-            wake_history[isave] = [system.wakes[isurf][1:iwake[isurf] + 1, :] for isurf = 1:nsurf]
-            isave += 1
-        end
-
         # increment wake panel counter for each surface
         for isurf = 1:nsurf
             if iwake[isurf] < nwake[isurf]
                 iwake[isurf] += 1
             end
+        end
+
+        # save the surface shape, properties, and resulting shed wake
+        if it in save
+            surface_history[isave] = [copy(system.surfaces[isurf]) for isurf = 1:nsurf]
+            property_history[isave] = [copy(system.properties[isurf]) for isurf = 1:nsurf]
+            wake_history[isave] = [system.wakes[isurf][1:iwake[isurf], :] for isurf = 1:nsurf]
+            isave += 1
         end
 
     end
