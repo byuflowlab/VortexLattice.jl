@@ -936,7 +936,7 @@ nothing # hide
 
 ![](rectangular-wing-sudden-acceleration-cd.svg)
 
-We modeled the problem using a body-fixed reference frame (which for this problem is more straightforward), but we could have also modeled the problem in a global reference frame.
+We modeled the problem in the body-fixed reference frame (which for this problem is more straightforward), but we could have also modeled the problem in the global reference frame.
 
 ```@example rectangular-wing-sudden-acceleration
 # Katz and Plotkin: Figures 13.34 and 13.35
