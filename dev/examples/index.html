@@ -736,7 +736,7 @@ plot!(t[2:end], CL./CLs, label=&quot;VortexLattice&quot;)
 
 plot!(t, Φ.(2*t), label = &quot;Wagner&#39;s Function&quot;)
 
-plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-wagner.svg" alt/></p><h2 id="Heaving-Oscillations-of-a-Rectangular-Wing"><a class="docs-heading-anchor" href="#Heaving-Oscillations-of-a-Rectangular-Wing">Heaving Oscillations of a Rectangular Wing</a><a id="Heaving-Oscillations-of-a-Rectangular-Wing-1"></a><a class="docs-heading-anchor-permalink" href="#Heaving-Oscillations-of-a-Rectangular-Wing" title="Permalink"></a></h2><p>This example shows how to predict the transient forces and moments for a heaving rectangular wing.</p><pre><code class="language-"># Katz and Plotkin: Figures 13.38a
+plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-wagner.svg" alt/></p><h2 id="Heaving-Oscillations-of-a-Rectangular-Wing"><a class="docs-heading-anchor" href="#Heaving-Oscillations-of-a-Rectangular-Wing">Heaving Oscillations of a Rectangular Wing</a><a id="Heaving-Oscillations-of-a-Rectangular-Wing-1"></a><a class="docs-heading-anchor-permalink" href="#Heaving-Oscillations-of-a-Rectangular-Wing" title="Permalink"></a></h2><p>This example shows how to predict the transient forces and moments for a heaving rectangular wing.</p><pre><code class="language-julia"># Katz and Plotkin: Figures 13.38a
 # AR = 4
 # k = ω*c/(2*Vinf) = [0.5, 0.3, 0.1]
 # c = [1.0, 0.6, 0.2]
@@ -822,9 +822,7 @@ for i = 1:length(k)
     # extract forces at each time step (uses instantaneous velocity as reference)
     CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
 
-end
-
-nothing # hide</code></pre><p>Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.</p><pre><code class="language-">using Plots
+end</code></pre><p>Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.</p><pre><code class="language-julia">using Plots
 pyplot()
 
 # lift coefficient plot
@@ -854,8 +852,4 @@ for i = 1:length(k)
     plot!(ωt, CL, label=&quot;\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$&quot;)
 end
 
-plot!(show=true)
-
-savefig(&quot;heaving-rectangular-wing.svg&quot;) # hide
-
-nothing # hide</code></pre><p><img src="heaving-rectangular-wing.svg" alt/></p><p>Visualizing the <code>k=0.5</code> case in ParaView yields the following animation.</p><p><img src="../heaving-rectangular-wing.gif" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../library/">Library »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Wednesday 10 March 2021 01:27">Wednesday 10 March 2021</span>. Using Julia version 1.5.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot!(show=true)</code></pre><p><img src="../heaving-rectangular-wing.svg" alt/></p><p>Visualizing the <code>k=0.5</code> case in ParaView yields the following animation.</p><p><img src="../heaving-rectangular-wing.gif" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../library/">Library »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Tuesday 20 April 2021 02:09">Tuesday 20 April 2021</span>. Using Julia version 1.5.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
