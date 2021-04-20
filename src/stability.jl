@@ -1,23 +1,15 @@
 """
-    body_derivatives(system, surfaces, reference, freestream; kwargs...)
+    body_derivatives(surfaces, properties, dproperties, reference, freestream, symmetric)
 
 Returns the derivatives of the body forces and moments with respect to the
 freestream velocity components `(u, v, w)` and the angular velocity components
 `(p, q, r)` in the body frame.
 
 The derivatives are returned as two named tuples: `dCF, dCM`
-
-Note that the derivatives with respect to the freestream variables of the panel
-forces must have been previously computed and stored in `system`
-
-# Arguments:
- - `system`: Object of type `System` which holds system properties
 """
-function body_derivatives(system)
+function body_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
-    CF, CM, dCF, dCM = body_forces_derivatives(system)
-
-    fs = system.freestream[]
+    CF, CM, dCF, dCM = body_forces_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
     # unpack derivatives
     (CF_a, CF_b, CF_p, CF_q, CF_r) = dCF
@@ -49,26 +41,18 @@ function body_derivatives(system)
 end
 
 """
-    stability_derivatives(system)
+    stability_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
 Returns the derivatives of the body forces and moments in the stability frame
 with respect to the freestream velocity components `(alpha, beta)` and the angular
 velocity components `(p, q, r)` in the stability frame.
 
 The derivatives are returned as two named tuples: `dCF, dCM`
-
-Note that the derivatives with respect to the freestream variables of the panel
-forces must have been previously computed and stored in `system`
-
-# Arguments:
- - `system`: Object of type `System` which holds system properties
 """
-function stability_derivatives(system)
+function stability_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
-    CFb, CMb, dCFb, dCMb = body_forces_derivatives(system)
-
-    fs = system.freestream[]
-    ref = system.reference[]
+    CFb, CMb, dCFb, dCMb = body_forces_derivatives(surfaces, properties,
+        dproperties, ref, fs, symmetric)
 
     # unpack derivatives
     (CFb_a, CFb_b, CFb_pb, CFb_qb, CFb_rb) = dCFb

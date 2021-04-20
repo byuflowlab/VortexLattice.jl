@@ -844,7 +844,7 @@ end
         spacing_s=spacing_s, spacing_c=spacing_c)
 
     surface4 = similar(surface1)
-    VortexLattice.update_surface_panels!(surface4, halfgrid1)
+    VortexLattice.update_surface_panels!(surface4, halfgrid1; preserve_core_size=false)
 
     @test isapprox(halfgrid1, halfgrid2)
 
@@ -881,7 +881,7 @@ end
         spacing_s=spacing_s, spacing_c=spacing_c)
 
     surface4 = similar(surface1)
-    VortexLattice.update_surface_panels!(surface4, grid1)
+    VortexLattice.update_surface_panels!(surface4, grid1; preserve_core_size=false)
 
     @test isapprox(grid1, grid2)
 
@@ -1150,15 +1150,17 @@ end
 
     VortexLattice.influence_coefficients!(AIC1, surfaces;
         symmetric = symmetric,
+        surface_id = surface_id,
         trailing_vortices = fill(false, length(surfaces)),
-        surface_id = surface_id)
+        xhat = [1, 0, 0])
 
     AIC2 = copy(AIC1)
 
-    VortexLattice.update_trailing_edge_coefficients!(AIC2, surfaces;
+    VortexLattice.trailing_edge_coefficients!(AIC2, surfaces;
         symmetric = symmetric,
+        surface_id = surface_id,
         trailing_vortices = fill(false, length(surfaces)),
-        surface_id = surface_id)
+        xhat = [1, 0, 0])
 
     @test isapprox(AIC1, AIC2)
 end

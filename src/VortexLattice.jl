@@ -2,23 +2,23 @@ module VortexLattice
 
 using LinearAlgebra
 using StaticArrays
+using SparseArrays
 using Interpolations
+using DifferentialEquations
+using ForwardDiff
 using WriteVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
 
 include("panel.jl")
-export SurfacePanel, WakePanel, TrefftzPanel
-export reflect, set_normal
-
-include("wake.jl")
-export Wake
+export SurfacePanel, WakePanel, TrefftzPanel, PanelProperties
+export translate, translate!, rotate, rotate!, reflect, set_normal
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_surface_panels, wing_to_surface_panels
-export translate, translate!, rotate, rotate!, reflect
+export lifting_line_geometry, lifting_line_geometry!
 
 include("reference.jl")
 export Reference
@@ -31,25 +31,32 @@ include("induced.jl")
 
 include("circulation.jl")
 
+include("nearfield.jl")
+
+include("farfield.jl")
+
+include("stability.jl")
+
+include("wake.jl")
+
+include("visualization.jl")
+export write_vtk
+
 include("system.jl")
-export System
-export PanelProperties, get_surface_properties
+export SteadySystem, UnsteadySystem
+export get_surface_properties
+
+include("interface.jl")
+export body_forces, body_forces_history
+export lifting_line_coefficients, lifting_line_forces
+export far_field_drag
+export body_derivatives, stability_derivatives
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
 export unsteady_analysis, unsteady_analysis!
 
-include("nearfield.jl")
-export body_forces
-export body_forces_history
-
-include("farfield.jl")
-export far_field_drag
-
-include("stability.jl")
-export body_derivatives, stability_derivatives
-
-include("visualization.jl")
-export write_vtk
+# DifferentialEquations.jl interface
+include("interfaces/diffeq.jl")
 
 end # module

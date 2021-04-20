@@ -1,28 +1,37 @@
 """
-    Freestream([Vinf,] alpha, beta, Omega)
+    Freestream(Vinf, alpha, beta, Omega, additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0))
 
 Defines the freestream and rotational velocity properties.
 
 **Arguments**
 - `Vinf`: Freestream velocity
-- `alpha`: angle of attack (rad)
-- `beta`: sideslip angle (rad)
-- `Omega`: rotation vector (p, q, r) of the body frame about the reference center
+- `alpha`: Angle of attack (rad)
+- `beta`: Sideslip angle (rad)
+- `Omega`: Rotation vector (p, q, r) of the body frame about the reference center
+- `additional_velocity`: Function of the form `Vx, Vy, Vz = f(x, y, z)` which defines
+    additional velocity as a function of location in the global coordinate frame.
+    By default, no additional velocity field is assumed.
 """
 struct Freestream{TF}
     Vinf::TF
     alpha::TF
     beta::TF
     Omega::SVector{3, TF}
+    additional_velocity
 end
 
-function Freestream(Vinf, alpha, beta, Omega)
+function Freestream{TF}(Vinf, alpha, beta, Omega) where TF
+    additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0)
+    return Freestream{TF}(Vinf, alpha, beta, Omega, additional_velocity)
+end
+
+function Freestream(Vinf, alpha, beta, Omega, additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0))
     TF = promote_type(typeof(Vinf), typeof(alpha), typeof(beta), eltype(Omega))
-    return Freestream{TF}(Vinf, alpha, beta, Omega)
+    return Freestream{TF}(Vinf, alpha, beta, Omega, additional_velocity)
 end
 
-Base.eltype(::Type{Freestream{TF}}) where TF = TF
-Base.eltype(::Freestream{TF}) where TF = TF
+Base.eltype(::Type{Freestream{TF}}) where {TF} = TF
+Base.eltype(::Freestream{TF}) where {TF} = TF
 
 """
     body_to_stability(freestream)

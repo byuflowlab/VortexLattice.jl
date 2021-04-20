@@ -1,5 +1,3 @@
-# --- reference quantities --- #
-
 """
     Reference(S, c, b, r)
 

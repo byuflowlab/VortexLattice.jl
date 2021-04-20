@@ -1,60 +1,130 @@
 """
-    get_surface_velocities!(Vcp, Vh, Vv, Vte, current_surface, previous_surface, dt)
+    surface_velocities!(Vcp, Vh, Vv, Vte, surface_velocities)
 
-Calculate the velocities experienced by the surface at the control points, horizontal
-bound vortex centers, vertical bound vortex centers and trailing edge vertices due
-to surface motion.
+Calculate the velocities experienced at the control points `Vcp`, the horizontal
+bound vortex centers `Vh`, the vertical bound vortex centers `Vv`, and the trailing
+edge vertices `Vte` due to surface motion/deformation.
 """
-function get_surface_velocities!(Vcp, Vh, Vv, Vte, current_surface, previous_surface, dt)
+surface_velocities!
 
-    nc, ns = size(current_surface)
-
+# single surface, surface panels input
+function surface_velocities!(Vcp, Vh, Vv, Vte, surface_velocities::AbstractMatrix{<:SurfacePanel})
+    nc, ns = size(surface_velocities)
     # velocity at the control points
     for j = 1:ns, i = 1:nc
-        Vcp[i,j] = (controlpoint(previous_surface[i,j]) - controlpoint(current_surface[i,j]))/dt
+        Vcp[i,j] = -controlpoint(surface_velocities[i,j])
     end
-
     # velocity at the horizontal bound vortices
     for j = 1:ns
         for i = 1:nc
-            Vh[i,j] = (top_center(previous_surface[i,j]) - top_center(current_surface[i,j]))/dt
+            Vh[i,j] = -top_center(surface_velocities[i,j])
         end
-        Vh[end,j] = (bottom_center(previous_surface[end,j]) - bottom_center(current_surface[end,j]))/dt
+        Vh[end,j] = -bottom_center(surface_velocities[end,j])
     end
-
     # velocity at the vertical bound vortices
     for i = 1:nc
         for j = 1:ns
-            Vv[i,j] = (left_center(previous_surface[i,j]) - left_center(current_surface[i,j]))/dt
+            Vv[i,j] = -left_center(surface_velocities[i,j])
         end
-        Vv[i,end] = (right_center(previous_surface[i,end]) - right_center(current_surface[i,end]))/dt
+        Vv[i,end] = -right_center(surface_velocities[i,end])
     end
-
     # velocity at the trailing edge vertices
     for j = 1:ns
-        Vte[j] = (bottom_left(previous_surface[end,j]) - bottom_left(current_surface[end,j]))/dt
+        Vte[j] = -bottom_left(surface_velocities[end,j])
     end
-    Vte[end] = (bottom_right(previous_surface[end,end]) - bottom_right(current_surface[end,end]))/dt
+    Vte[end] = -bottom_right(surface_velocities[end,end])
+    return Vcp, Vh, Vv, Vte
+end
 
+# single surface, grid input
+function surface_velocities!(Vcp, Vh, Vv, Vte, surface_velocities::AbstractArray{TF, 3}) where TF
+    nc = size(surface_velocities, 2) - 1
+    ns = size(surface_velocities, 3) - 1
+    for j = 1:ns
+        # leading edge panel corner velocities
+        r1n = SVector(surface_velocities[1,1,j], surface_velocities[2,1,j], surface_velocities[3,1,j]) # top left velocity
+        r2n = SVector(surface_velocities[1,1,j+1], surface_velocities[2,1,j+1], surface_velocities[3,1,j+1]) # top right velocity
+        r3n = SVector(surface_velocities[1,2,j], surface_velocities[2,2,j], surface_velocities[3,2,j]) # bottom left velocity
+        r4n = SVector(surface_velocities[1,2,j+1], surface_velocities[2,2,j+1], surface_velocities[3,2,j+1]) # bottom right velocity
+        for i = 1:nc-1
+            # corner velocities of current panel
+            r1 = r1n # top left of panel
+            r2 = r2n # top right of panel
+            r3 = r3n # bottom left of panel
+            r4 = r4n # bottom right of panel
+            # corner velocities of next panel
+            r1n = r3 # top left
+            r2n = r4 # top right
+            r3n = SVector(surface_velocities[1,i+2,j], surface_velocities[2,i+2,j], surface_velocities[3,i+2,j]) # bottom left
+            r4n = SVector(surface_velocities[1,i+2,j+1], surface_velocities[2,i+2,j+1], surface_velocities[3,i+2,j+1]) # bottom right
+            # corner velocities of ring vortex
+            rtl = linearinterp(0.25, r1, r3)
+            rtr = linearinterp(0.25, r2, r4)
+            rbl = linearinterp(0.25, r1n, r3n)
+            rbr = linearinterp(0.25, r2n, r4n)
+            # velocity experienced at the control point
+            rtop = linearinterp(0.5, r1, r2)
+            rbot = linearinterp(0.5, r3, r4)
+            Vcp[i,j] = -linearinterp(0.75, rtop, rbot)
+            # velocity experienced at the bound vortices
+            Vh[i,j] = -linearinterp(0.5, rtl, rtr)
+            Vv[i,j] = -linearinterp(0.5, rbl, rtl)
+            Vv[i,j+1] = -linearinterp(0.5, rbr, rtr)
+        end
+        # corner velocities of current panel
+        r1 = r1n # top left
+        r2 = r2n # top right
+        r3 = r3n # bottom left
+        r4 = r4n # bottom right
+        # corner velocities of ring vortex
+        rtl = linearinterp(0.25, r1, r3)
+        rtr = linearinterp(0.25, r2, r4)
+        rbl = r3
+        rbr = r4
+        # velocity experienced at the control point
+        rtop = linearinterp(0.5, r1, r2)
+        rbot = linearinterp(0.5, r3, r4)
+        Vcp[i,j] = -linearinterp(0.75, rtop, rbot)
+        # velocity experienced at the bound vortices
+        Vh[i,j] = -linearinterp(0.5, rtl, rtr)
+        Vv[i,j] = -linearinterp(0.5, rbl, rtl)
+        Vv[i,j+1] = -linearinterp(0.5, rbr, rtr)
+        # velocity experienced at the trailing edge
+        Vte[j] = -rbl
+        Vte[j+1] = -rbr
+    end
+    return Vcp, Vh, Vv, Vte
+end
+
+# multiple surfaces
+function surface_velocities!(Vcp, Vh, Vv, Vte, surface_velocities)
+    for isurf = 1:length(surfaces)
+        surface_velocities!(Vcp[isurf], Vh[isurf], Vv[isurf], Vte[isurf], surface_velocities[isurf])
+    end
+    return Vcp, Vh, Vv, Vte
 end
 
 """
-    normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
-        Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat)
+    normal_velocities!(w, surfaces, reference, freestream)
+    normal_velocities!(w, surfaces, wakes, reference, freestream; Vcp, symmetric,
+        surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
 
-Compute the downwash at the control points on `surfaces` due to the freestream
-velocity, rotational velocity, additional velocity field, surface motion, and
-induced velocity from the wake panels.
-
-This forms the right hand side of the circulation linear system solve.
+Compute the downwash on the surface panels in `surfaces` due to all velocity
+sources except for induced velocities from the surface panels.
 """
-@inline function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
-    Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat)
+normal_velocities
 
+# steady, multiple surfaces
+function normal_velocities!(w, surfaces, ref, fs)
+
+    # number of surfaces
     nsurf = length(surfaces)
 
     # index for keeping track of where we are in the w vector
     iw = 0
+
+    # additional velocity function, wrapped to produce static vector of known type
+    additional_velocity = (r) -> SVector{3, eltype(w)}(fs.additional_velocity(r[1], r[2], r[3]))
 
     # loop through receiving surfaces
     for isurf = 1:nsurf
@@ -78,22 +148,66 @@ This forms the right hand side of the circulation linear system solve.
             V += rotational_velocity(rcp, fs, ref)
 
             # additional velocity field
-            if !isnothing(additional_velocity)
-                V += additional_velocity(rcp)
-            end
+            V += additional_velocity(rcp)
+
+            # get normal component
+            w[iw+i] = -dot(V, nhat)
+        end
+
+        # increment position in AIC matrix
+        iw += length(surface)
+    end
+
+    return w
+end
+
+# unsteady, multiple surfaces
+function normal_velocities!(w, surfaces, wakes, ref, fs; Vcp, symmetric,
+    surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
+
+    # number of surfaces
+    nsurf = length(surfaces)
+
+    # index for keeping track of where we are in the w vector
+    iw = 0
+
+    # additional velocity function, wrapped to produce static vector of known type
+    additional_velocity = (r) -> SVector{3, eltype(w)}(fs.additional_velocity(r[1], r[2], r[3]))
+
+    # loop through receiving surfaces
+    for isurf = 1:nsurf
+
+        # current surface
+        surface = surfaces[isurf]
+
+        # iterate through all control points on this surface
+        for i = 1:length(surface)
+
+            # control point
+            rcp = controlpoint(surface[i])
+
+            # normal vector
+            nhat = normal(surface[i])
+
+            # freestream velocity
+            V = freestream_velocity(fs)
+
+            # rotational velocity
+            V += rotational_velocity(rcp, fs, ref)
+
+            # additional velocity field
+            V += additional_velocity(rcp)
 
             # velocity due to surface motion
-            if !isnothing(Vcp)
-                V += Vcp[isurf][i]
-            end
+            V += Vcp[isurf][i]
 
             # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
+            for jsurf = 1:nsurf
+                if iwake[jsurf] > 0
                     V += induced_velocity(rcp, wakes[jsurf];
+                        nc = iwake[jsurf],
                         finite_core = wake_finite_core[isurf] || (surface_id[isurf] != surface_id[jsurf]),
                         symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
                         trailing_vortices = trailing_vortices[jsurf],
                         xhat = xhat)
                 end
@@ -111,21 +225,20 @@ This forms the right hand side of the circulation linear system solve.
 end
 
 """
-    normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
-        additional_velocity, Vcp, symmetric, nwake, surface_id,
-        wake_finite_core, trailing_vortices, xhat)
+    normal_velocities_and_derivatives!(w, dw, surfaces, reference, freestream)
+    normal_velocities_and_derivatives!(w, dw, surfaces, wakes, ref, fs;
+        Vcp, symmetric, surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
 
-Compute the downwash at the control points on `surfaces` due to the freestream
-velocity, rotational velocity, additional velocity field, surface motion, and
-induced velocity from the wake panels.  Also calculate its derivatives with
-respect to the freestream parameters.
-
-This forms the right hand side of the circulation linear system solve (and its derivatives).
+Compute the downwash on the surface panels in `surfaces` due to all velocity
+sources except for induced velocities from the surface panels.  Also compute the
+derivative of the downwash with respect to the freestream parameters.
 """
-@inline function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
-    additional_velocity, Vcp, symmetric, nwake, surface_id, wake_finite_core,
-    trailing_vortices, xhat)
+normal_velocities_and_derivatives!
 
+# steady with derivatives, multiple surfaces
+function normal_velocities_and_derivatives!(w, dw, surfaces, ref, fs)
+
+    # number of surfaces
     nsurf = length(surfaces)
 
     # unpack derivatives
@@ -133,6 +246,9 @@ This forms the right hand side of the circulation linear system solve (and its d
 
     # index for keeping track of where we are in the w vector
     iw = 0
+
+    # additional velocity function, wrapped to produce static vector of known type
+    additional_velocity = (r) -> SVector{3, eltype(fs)}(fs.additional_velocity(r[1], r[2], r[3]))
 
     # loop through receiving surfaces
     for isurf = 1:nsurf
@@ -162,28 +278,9 @@ This forms the right hand side of the circulation linear system solve (and its d
             V_p, V_q, V_r = dVrot
 
             # additional velocity field
-            if !isnothing(additional_velocity)
-                V += additional_velocity(rcp)
-            end
+            V += additional_velocity(rcp)
 
-            # velocity due to surface motion
-            if !isnothing(Vcp)
-                V += Vcp[isurf][i]
-            end
-
-            # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
-                    V += induced_velocity(rcp, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-                end
-            end
-
-            # right hand side vector
+            # get normal component
             w[iw+i] = -dot(V, nhat)
 
             # associated derivatives
@@ -205,73 +302,114 @@ This forms the right hand side of the circulation linear system solve (and its d
     return w, dw
 end
 
-# --- circulation solve --- #
+# unsteady with derivatives, multiple surfaces
+function normal_velocities_and_derivatives!(w, dw, surfaces, wakes, ref, fs;
+    Vcp, symmetric, surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
 
-"""
-    circulation(AIC, w)
+    # number of surfaces
+    nsurf = length(surfaces)
 
-Solve for the circulation distribution.
-"""
-circulation(AIC, w) = AIC\w
+    # unpack derivatives
+    (w_a, w_b, w_p, w_q, w_r) = dw
+
+    # index for keeping track of where we are in the w vector
+    iw = 0
+
+    # additional velocity function, wrapped to produce static vector of known type
+    additional_velocity = (r) -> SVector{3, eltype(fs)}(fs.additional_velocity(r[1], r[2], r[3]))
+
+    # loop through receiving surfaces
+    for isurf = 1:nsurf
+
+        # current surface
+        surface = surfaces[isurf]
+
+        # iterate through all control points on this surface
+        for i = 1:length(surface)
+
+            # control point
+            rcp = controlpoint(surface[i])
+
+            # normal vector
+            nhat = normal(surface[i])
+
+            # freestream velocity and its derivatives
+            V, dVf = freestream_velocity_derivatives(fs)
+
+            V_a, V_b = dVf
+
+            # rotational velocity and its derivatives
+            Vrot, dVrot = rotational_velocity_derivatives(rcp, fs, ref)
+
+            V += Vrot
+
+            V_p, V_q, V_r = dVrot
+
+            # additional velocity field
+            V += additional_velocity(rcp)
+
+            # velocity due to surface motion
+            V += Vcp[isurf][i]
+
+            # # velocity due to the wake panels
+            # for jsurf = 1:length(wakes)
+            #     if iwake[jsurf] > 0
+            #         V += induced_velocity(rcp, wakes[jsurf];
+            #             nc = iwake[jsurf],
+            #             finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+            #             symmetric = symmetric[jsurf],
+            #             trailing_vortices = trailing_vortices[jsurf],
+            #             xhat = xhat)
+            #     end
+            # end
+
+            # get normal component
+            w[iw+i] = -dot(V, nhat)
+
+            # associated derivatives
+            w_a[iw+i] = -dot(V_a, nhat)
+            w_b[iw+i] = -dot(V_b, nhat)
+            w_p[iw+i] = -dot(V_p, nhat)
+            w_q[iw+i] = -dot(V_q, nhat)
+            w_r[iw+i] = -dot(V_r, nhat)
+
+        end
+
+        # increment position in AIC matrix
+        iw += length(surface)
+    end
+
+    # pack up derivatives
+    dw = (w_a, w_b, w_p, w_q, w_r)
+
+    return w, dw
+end
 
 """
     circulation!(Γ, AIC, w)
 
-Pre-allocated version of `circulation`
+Calculate the circulation strength of the surface panels.
 """
 circulation!(Γ, AIC, w) = ldiv!(Γ, lu(AIC), w)
 
 """
-    circulation_derivatives(AIC, w, dw)
+    circulation_and_derivatives!(Γ, dΓ, AIC, w, dw)
 
-Solve for the circulation distribution and its derivatives with respect to
-the freestream parameters.
+Calculate the circulation strength of the surface panels and its derivatives
+with respect to the freestream variables
 """
-function circulation_derivatives(AIC, w, dw)
-
-    # unpack derivatives
-    (w_a, w_b, w_p, w_q, w_r) = dw
-
-    # factorize AIC matrix (since we'll be reusing it)
-    fAIC = factorize(AIC)
-
-    # solve for circulation and its derivatives
-    Γ = fAIC\w
-
-    Γ_a = fAIC\w_a
-    Γ_b = fAIC\w_b
-    Γ_pb = fAIC\w_p
-    Γ_qb = fAIC\w_q
-    Γ_rb = fAIC\w_r
-
-    # pack up derivatives
-    dΓ = (Γ_a, Γ_b, Γ_pb, Γ_qb, Γ_rb)
-
-    return Γ, dΓ
-end
-
-"""
-    circulation_derivatives!(Γ, dΓ, AIC, w, dw)
-
-Pre-allocated version of `circulation_derivatives`
-"""
-function circulation_derivatives!(Γ, dΓ, AIC, w, dw)
-
+function circulation_and_derivatives!(Γ, dΓ, AIC, w, dw)
     # unpack derivatives
     (Γ_a, Γ_b, Γ_p, Γ_q, Γ_r) = dΓ
     (w_a, w_b, w_p, w_q, w_r) = dw
-
-    # factorize AIC matrix (since we'll be reusing it)
+    # factorize AIC matrix
     fAIC = lu(AIC)
-
     # solve for circulation and its derivatives
     ldiv!(Γ, fAIC, w)
-
     ldiv!(Γ_a, fAIC, w_a)
     ldiv!(Γ_b, fAIC, w_b)
     ldiv!(Γ_p, fAIC, w_p)
     ldiv!(Γ_q, fAIC, w_q)
     ldiv!(Γ_r, fAIC, w_r)
-
     return Γ, dΓ
 end

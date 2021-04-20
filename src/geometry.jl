@@ -182,8 +182,7 @@ with dimensions (i, j) containing the generated panels.
 # Keyword Arguments
 - `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
 - `fcore`: function for setting the finite core size based on the chord length
-       (in the x-direction) and/or the panel width (in the y/z directions).
-       Defaults to `(c, Δs) -> 1e-3`
+       and/or the panel width. Defaults to `(c, Δs) -> 1e-3`
 """
 function grid_to_surface_panels(xyz;
     mirror = false,
@@ -374,8 +373,7 @@ and a matrix with dimensions (i, j) containing the generated panels.
 # Keyword Arguments
  - `mirror`:  mirror the geometry across the X-Z plane? defaults to `false`.
  - `fcore`: function for setting the finite core size based on the chord length
-        (in the x-direction) and/or the panel width (in the y/z directions).
-        Defaults to `(c, Δs) -> 1e-3`
+        and/or the panel width. Defaults to `(c, Δs) -> 1e-3`
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
@@ -509,8 +507,7 @@ with dimensions (i, j) containing the generated panels.
  - `fc`: (optional) camber line function y=f(x) of each airfoil section
  - `mirror`:  mirror the geometry across the X-Z plane?, defaults to `false`
  - `fcore`: function for setting the finite core size based on the chord length
-        (in the x-direction) and/or the panel width (in the y/z directions).
-        Defaults to `(c, Δs) -> 1e-3`
+        and/or the panel width. Defaults to `(c, Δs) -> 1e-3`
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
@@ -708,128 +705,67 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
 end
 
 """
-    update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
+    lifting_line_geometry(grids, xc=0.25)
 
-Updates the surface panels in `surface` to correspond to the grid coordinates in
-`grid`.
+Construct a lifting line representation of the surfaces in `grids` at the
+normalized chordwise location `xc`.  Return the lifting line coordinates
+and chord lengths.
+
+# Arguments
+ - `grids`: Vector with length equal to the number of surfaces.  Each element of
+    the vector is a grid with shape (3, nc, ns) which defines the discretization
+    of a surface into panels. `nc` is the number of chordwise panels and `ns` is
+    the number of spanwise panels.
+ - `xc`: Normalized chordwise location of the lifting line from the leading edge.
+    Defaults to the quarter chord
+
+# Return Arguments:
+ - `r`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
+    of the resulting lifting line coordinates
+ - `c`: Vector with length equal to the number of surfaces, with each element
+    being a vector of length `ns+1` which contains the chord lengths at each
+    lifting line coordinate.
 """
-function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
-
-    TF = eltype(eltype(surface))
-
-    nc, ns = size(surface) # number of chordwise and spanwise panels
-
-    # populate each panel
-    for j = 1:ns
-
-        # get leading edge panel corners
-        r1n = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]) # top left
-        r2n = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]) # top right
-        r3n = SVector(grid[1,2,j], grid[2,2,j], grid[3,2,j]) # bottom left
-        r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
-
-        # also get chord length for setting finite core size
-        cl = norm(grid[:,end,j] - grid[:,1,j])
-        cr = norm(grid[:,end,j+1] - grid[:,1,j+1])
-        c = (cl + cr)/2
-
-        for i = 1:nc-1
-
-            # grid corners of current panel
-            r1 = r1n # top left of panel
-            r2 = r2n # top right of panel
-            r3 = r3n # bottom left of panel
-            r4 = r4n # bottom right of panel
-
-            # grid corners of next panel
-            r1n = r3 # top left
-            r2n = r4 # top right
-            r3n = SVector(grid[1,i+2,j], grid[2,i+2,j], grid[3,i+2,j]) # bottom left
-            r4n = SVector(grid[1,i+2,j+1], grid[2,i+2,j+1], grid[3,i+2,j+1]) # bottom right
-
-            # top left corner of ring vortex
-            rtl = linearinterp(0.25, r1, r3)
-
-            # top right corner of ring vortex
-            rtr = linearinterp(0.25, r2, r4)
-
-            # center of top bound vortex
-            rtc = (rtl + rtr)/2
-
-            # bottom left corner of ring vortex
-            rbl = linearinterp(0.25, r1n, r3n)
-
-            # bottom right corner of ring vortex
-            rbr = linearinterp(0.25, r2n, r4n)
-
-            # center of bottom bound vortex
-            rbc = (rbl + rbr)/2
-
-            # control point
-            rtop = linearinterp(0.5, r1, r2)
-            rbot = linearinterp(0.5, r3, r4)
-            rcp = linearinterp(0.75, rtop, rbot)
-
-            # surface normal
-            ncp = cross(rcp - rtr, rcp - rtl)
-            ncp /= norm(ncp)
-
-            # set finite core size
-            Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
-            core_size = fcore(c, Δs)
-
-            # get chord length of current panel
-            chord = norm((r1 + r2)/2 - (r3 + r4)/2)
-
-            surface[i,j] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
-                ncp, core_size, chord)
-        end
-
-        # grid corners of current panel
-        r1 = r1n # top left
-        r2 = r2n # top right
-        r3 = r3n # bottom left
-        r4 = r4n # bottom right
-
-        # top left corner of ring vortex
-        rtl = linearinterp(0.25, r1, r3)
-
-        # top right corner of ring vortex
-        rtr = linearinterp(0.25, r2, r4)
-
-        # center of top bound vortex
-        rtc = (rtl + rtr)/2
-
-        # bottom left corner of ring vortex
-        rbl = r3
-
-        # bottom right corner of ring vortex
-        rbr = r4
-
-        # center of bottom bound vortex
-        rbc = (rbl + rbr)/2
-
-        # control point
-        rtop = linearinterp(0.5, r1, r2)
-        rbot = linearinterp(0.5, r3, r4)
-        rcp = linearinterp(0.75, rtop, rbot)
-
-        # surface normal
-        ncp = cross(rcp - rtr, rcp - rtl)
-        ncp /= norm(ncp)
-
-        # set finite core size
-        Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
-        core_size = fcore(c, Δs)
-
-        # get chord length of current panel
-        chord = norm((r1 + r2)/2 - (r3 + r4)/2)
-
-        surface[end, j] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp,
-            core_size, chord)
+function lifting_line_geometry(grids, args...)
+    TF = eltype(eltype(grids))
+    nsurf = length(grids)
+    r = Vector{Matrix{TF}}(undef, nsurf)
+    c = Vector{Vector{TF}}(undef, nsurf)
+    for isurf = 1:nsurf
+        ns = size(grids[isurf], 3) - 1
+        r[isurf] = Matrix{TF}(undef, 3, ns+1)
+        c[isurf] = Vector{TF}(undef, ns+1)
     end
+    return lifting_line_geometry!(r, c, grids, args...)
+end
 
-    return surface
+"""
+    lifting_line_geometry!(r, c, grids, xc=0.25)
+
+In-place version of [`lifting_line_geometry`](@ref)
+"""
+function lifting_line_geometry!(r, c, grids, xc)
+    nsurf = length(grids)
+    # iterate through each lifting surface
+    for isurf = 1:nsurf
+        # extract current grid
+        grid = grids[isurf]
+        # dimensions of this grid
+        nc = size(grid, 2)
+        ns = size(grid, 3)
+        # loop through each spanwise section
+        for j = 1:ns
+            # get leading and trailing edges
+            le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
+            te = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
+            # get quarter-chord
+            r[isurf][:,j] = linearinterp(xc, le, te)
+            # get chord length
+            c[isurf][j] = norm(le - te)
+        end
+    end
+    return r, c
 end
 
 """
@@ -873,50 +809,6 @@ function rotate!(grid, R, r = (@SVector zeros(3)))
     grid .+= r
 
     return grid
-end
-
-"""
-    trailing_edge_points(surface[s])
-
-Return points on the trailing edge of each surface.
-"""
-trailing_edge_points(surfaces) = [bottom_left.(surfaces[end, :])..., bottom_right(surfaces[end, end])]
-
-"""
-    repeated_trailing_edge_points(surface[s])
-
-Generates a dictionary of the form `Dict((isurf, i) => [(jsurf1, j1), (jsurf2, j2)...]` which
-defines repeated trailing edge points.  Trailing edge point `i` on surface
-`isurf` is repeated on surface `jsurf1` at point `j1`, `jsurf2` at point `j2`,
-and so forth.
-"""
-repeated_trailing_edge_points
-
-repeated_trailing_edge_points(surface::AbstractMatrix) = repeated_trailing_edge_points([surface])
-
-function repeated_trailing_edge_points(surfaces::AbstractVector{<:AbstractMatrix})
-
-    nsurf = length(surfaces)
-    points = trailing_edge_points.(surfaces)
-    repeated_points = Dict{NTuple{2, Int}, Vector{NTuple{2, Int}}}()
-
-    # loop through all points
-    for isurf = 1:nsurf, i = 1:length(points[isurf])
-        # start with empty vector
-        repeats = NTuple{2, Int}[]
-        # add all repeated points to the vector
-        for jsurf = 1:nsurf, j = 1:length(points[jsurf])
-            if (isurf, i) != (jsurf, j) && isapprox(points[isurf][i], points[jsurf][j])
-                push!(repeats, (jsurf, j))
-            end
-        end
-        # only store vector if nonempty
-        if !isempty(repeats)
-            repeated_points[(isurf, i)] = repeats
-        end
-    end
-
-    return repeated_points
 end
 
 """
