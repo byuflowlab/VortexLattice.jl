@@ -11,7 +11,6 @@ makedocs(;
     ],
     sitename = "VortexLattice.jl",
     authors = "Taylor McDonnell <taylormcd@byu.edu> and Andrew Ning <aning@byu.edu>",
-    devbranch = "main",
 )
 
 deploydocs(
