@@ -13,7 +13,7 @@ grids in `surfaces`.
     preserved from the previous set of panels. Defaults to `true`. Only used if
     keyword argument `surfaces` is provided.
 """
-function update_surface_panels!(system::AbstractSystem, surfaces; kwargs...)
+function update_surface_panels!(system::System, surfaces; kwargs...)
     return update_surface_panels!(system.surfaces, surfaces; kwargs...)
 end
 
@@ -22,7 +22,7 @@ end
 
 Initialize the undefined wake panels in `wake_panels`.
 """
-function initialize_wake_panels!(system::AbstractSystem;
+function initialize_wake_panels!(system::System;
     wake_shedding_locations = system.wake_shedding_locations,
     iwake = system.iwake)
     return initialize_wake_panels!(system.wakes, wake_shedding_locations; iwake)
@@ -39,7 +39,7 @@ in `wakes`.
     Helmholtz' fourth vortex theorem. (The strength of a vortex tube is constant).
     Defaults to `true`
 """
-function update_wake_panels!(system::AbstractSystem, wakes; kwargs...)
+function update_wake_panels!(system::System, wakes; kwargs...)
     return update_wake_panels!(system.wakes, wakes; kwargs...)
 end
 
@@ -49,7 +49,7 @@ end
 Initialize the wake shedding locations for one or more surfaces based on the
 provided surfaces.
 """
-function initialize_wake_shedding_locations!(system::AbstractSystem, surfaces)
+function initialize_wake_shedding_locations!(system::System, surfaces)
     return initialize_wake_shedding_locations!(system.wake_shedding_locations, surfaces)
 end
 
@@ -59,7 +59,7 @@ end
 Update the wake shedding locations for one or more surfaces based on the
 provided wakes.
 """
-function set_wake_shedding_locations!(system::AbstractSystem, wakes)
+function set_wake_shedding_locations!(system::System, wakes)
     return get_wake_shedding_locations!(system.wake_shedding_locations, wakes)
 end
 
@@ -70,34 +70,24 @@ Update the influence coefficients for `system`.
 
 Store the result in `AIC` if provided, otherwise store in `system`.
 """
-# steady/unsteady, system input and output
-function update_influence_coefficients!(system::AbstractSystem)
-    return update_influence_coefficients!(system.AIC, system)
+function update_influence_coefficients!(system::System; kwargs...)
+    return update_influence_coefficients!(system.AIC, system; kwargs...)
 end
 
-# steady, default inputs from system
-function update_influence_coefficients!(AIC, system::SteadySystem;
-    surfaces = system.surfaces,
-    symmetric = system.symmetric,
-    surface_id = system.surface_id,
-    trailing_vortices = system.trailing_vortices,
-    xhat = system.xhat)
-
-    return influence_coefficients!(AIC, surfaces; symmetric, surface_id,
-        trailing_vortices, xhat)
-end
-
-# unsteady, default inputs from system
-function update_influence_coefficients!(AIC, system::UnsteadySystem;
+function update_influence_coefficients!(AIC, system::System;
     surfaces = system.surfaces,
     symmetric = system.symmetric,
     surface_id = system.surface_id,
     wake_shedding_locations = system.wake_shedding_locations,
+    wakes = system.wakes,
+    wake_finite_core = system.wake_finite_core,
+    iwake = system.iwake,
     trailing_vortices = system.trailing_vortices,
     xhat = system.xhat)
 
     return influence_coefficients!(AIC, surfaces; symmetric, surface_id,
-        wake_shedding_locations, trailing_vortices, xhat)
+        wake_shedding_locations, wakes, wake_finite_core, iwake,
+        trailing_vortices, xhat)
 end
 
 """
@@ -109,25 +99,13 @@ Store the result in `AIC` if provided, otherwise store in `system`.
 """
 update_trailing_edge_coefficients!
 
-# steady/unsteady, system input and output
-function update_trailing_edge_coefficients!(system::AbstractSystem)
-    return update_trailing_edge_coefficients!(system.AIC, system)
+# system input and output
+function update_trailing_edge_coefficients!(system::System; kwargs...)
+    return update_trailing_edge_coefficients!(system.AIC, system; kwargs...)
 end
 
-# steady, default inputs from system
-function update_trailing_edge_coefficients!(AIC, system::SteadySystem;
-    surfaces = system.surfaces,
-    symmetric = system.symmetric,
-    surface_id = system.surface_id,
-    trailing_vortices = system.trailing_vortices,
-    xhat = system.xhat)
-
-    return trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
-        trailing_vortices, xhat)
-end
-
-# unsteady, default inputs from system
-function update_trailing_edge_coefficients!(AIC, system::UnsteadySystem;
+# default inputs from system
+function update_trailing_edge_coefficients!(AIC, system::System; steady,
     surfaces = system.surfaces,
     symmetric = system.symmetric,
     surface_id = system.surface_id,
@@ -135,7 +113,7 @@ function update_trailing_edge_coefficients!(AIC, system::UnsteadySystem;
     trailing_vortices = system.trailing_vortices,
     xhat = system.xhat)
 
-    return trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
+    return trailing_coefficients!(AIC, surfaces; steady, symmetric, surface_id,
         wake_shedding_locations, trailing_vortices, xhat)
 end
 
@@ -146,24 +124,15 @@ Update the normal velocities for `system`.
 
 Store the result in `w` if provided, otherwise store in `system`.
 """
-update_normal_velocities!(system::AbstractSystem)
+update_normal_velocities!
 
-# steady/unsteady, system input and output
-function update_normal_velocities!(system::AbstractSystem)
-    return update_normal_velocities!(system.w, system)
+# system input and output
+function update_normal_velocities!(system::System; steady, kwargs...)
+    return update_normal_velocities!(system.w, system; steady, kwargs...)
 end
 
-# steady, default inputs from system
-function update_normal_velocities!(w, system::SteadySystem;
-    surfaces = system.surfaces,
-    reference = system.reference,
-    freestream = system.freestream)
-
-    return normal_velocities!(w, surfaces, reference, freestream)
-end
-
-# unsteady, default inputs from system
-function update_normal_velocities!(w, system::UnsteadySystem;
+# default inputs from system
+function update_normal_velocities!(w, system::System; steady,
     surfaces = system.surfaces,
     wakes = system.wakes,
     reference = system.reference,
@@ -176,8 +145,8 @@ function update_normal_velocities!(w, system::UnsteadySystem;
     trailing_vortices = system.trailing_vortices,
     xhat = system.xhat)
 
-    return normal_velocities!(w, surfaces, wakes, reference, freestream;
-        Vcp, symmetric, surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
+    return normal_velocities!(w, surfaces, wakes, reference, freestream; Vcp,
+        steady, symmetric, surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
 end
 
 """
@@ -188,24 +157,16 @@ the freestream parameters.
 
 Store the result in `w` and `dw` if provided, otherwise store in `system`.
 """
-update_normal_velocities!
+update_normal_velocities_and_derivatives!
 
-# steady/unsteady, system input and output
-function update_normal_velocities_and_derivatives!(system::AbstractSystem)
-    return update_normal_velocities_and_derivatives!(system.w, system.dw, system)
+# system input and output
+function update_normal_velocities_and_derivatives!(system::System; steady, kwargs...)
+    return update_normal_velocities_and_derivatives!(system.w, system.dw, system;
+        steady, kwargs...)
 end
 
-# steady, system input
-function update_normal_velocities_and_derivatives!(w, dw, system::SteadySystem;
-    surfaces = system.surfaces,
-    reference = system.reference,
-    freestream = system.freestream)
-
-    return normal_velocities_and_derivatives!(w, dw, surfaces, reference, freestream)
-end
-
-# unsteady, system input
-function update_normal_velocities_and_derivatives!(w, dw, system::UnsteadySystem;
+# system input
+function update_normal_velocities_and_derivatives!(w, dw, system::System; steady,
     surfaces = system.surfaces,
     wakes = system.wakes,
     reference = system.reference,
@@ -219,8 +180,8 @@ function update_normal_velocities_and_derivatives!(w, dw, system::UnsteadySystem
     xhat = system.xhat)
 
     return normal_velocities_and_derivatives!(w, dw, surfaces, wakes,
-        ref, fs; Vcp, symmetric, surface_id, wake_finite_core, iwake,
-        trailing_vortices, xhat)
+        reference, freestream; Vcp, steady, symmetric, surface_id,
+            wake_finite_core, iwake, trailing_vortices, xhat)
 end
 
 """
@@ -237,10 +198,11 @@ and [`update_normal_velocities!`](@ref), respectively.
 update_circulation!
 
 # system inputs and outputs
-update_circulation!(system::AbstractSystem) = update_circulation!(system.Gamma, system)
+update_circulation!(system::System, kwargs...) = update_circulation!(system.Gamma,
+    system; kwargs...)
 
 # system inputs
-function update_circulation!(Γ, system::AbstractSystem;
+function update_circulation!(Γ, system::System;
     AIC = system.AIC,
     w = system.w)
 
@@ -263,14 +225,14 @@ respectively.
 update_circulation_and_derivatives!
 
 # system inputs and outputs
-function update_circulation_and_derivatives!(system::AbstractSystem)
+function update_circulation_and_derivatives!(system::System)
     Γ = system.Gamma
     dΓ = system.dGamma
     return update_circulation_and_derivatives!(Γ, dΓ, system)
 end
 
 # system inputs
-function update_circulation_and_derivatives!(Γ, dΓ, system::AbstractSystem;
+function update_circulation_and_derivatives!(Γ, dΓ, system::System;
     AIC = system.AIC,
     w = system.w,
     dw = system.dw)
@@ -290,12 +252,12 @@ the corresponding fields in `system`
 update_surface_velocities!
 
 # multiple surfaces, surface panels in `system`
-function update_surface_velocities!(system::AbstractSystem, surface_velocities)
+function update_surface_velocities!(system::System, surface_velocities)
     return update_surface_velocities!(system.Vcp, system.Vh, system.Vv, system.Vte, system, surface_velocities)
 end
 
 # multiple surfaces, provided surface panels
-function update_surface_velocities!(Vcp, Vh, Vv, Vte, system::AbstractSystem, surface_velocities)
+function update_surface_velocities!(Vcp, Vh, Vv, Vte, system::System, surface_velocities)
     return surface_velocities!(Vcp[isurf], Vh[isurf], Vv[isurf], Vte[isurf], surface_velocities[isurf])
 end
 
@@ -311,28 +273,11 @@ already been computed (and stored in `system`) using [`update_circulation!`](@re
 """
 update_near_field_properties!
 
-# steady/unsteady, system input and output
-function update_near_field_properties!(system::AbstractSystem; kwargs...)
+function update_near_field_properties!(system::System; kwargs...)
     return update_near_field_properties!(system.properties, system; kwargs...)
 end
 
-# steady, system input
-function update_near_field_properties!(properties, system::SteadySystem;
-    surfaces = system.surfaces,
-    reference = system.reference,
-    freestream = system.freestream,
-    Gamma = system.Gamma,
-    symmetric = system.symmetric,
-    surface_id = system.surface_id,
-    trailing_vortices = system.trailing_vortices,
-    xhat = system.xhat)
-
-    return near_field_properties!(properties, surfaces, reference,
-        freestream, Gamma; symmetric, surface_id, trailing_vortices, xhat)
-end
-
-# unsteady, system input
-function update_near_field_properties!(properties, system::UnsteadySystem;
+function update_near_field_properties!(properties, system::System;
     surfaces = system.surfaces,
     wakes = system.wakes,
     reference = system.reference,
@@ -344,10 +289,12 @@ function update_near_field_properties!(properties, system::UnsteadySystem;
     Vv = system.Vv,
     symmetric = system.symmetric,
     surface_id = system.surface_id,
+    wake_finite_core = system.wake_finite_core,
+    iwake = system.iwake,
     trailing_vortices = system.trailing_vortices,
     xhat = system.xhat)
 
-    return near_field_properties!(properties, surfaces, wakes, ref, fs,
+    return near_field_properties!(properties, surfaces, wakes, reference, freestream,
         Gamma, Gammadot; wake_shedding_locations, Vh, Vv, symmetric, surface_id,
         wake_finite_core, iwake, trailing_vortices, xhat)
 end
@@ -356,7 +303,7 @@ end
     update_near_field_properties_and_derivatives!([properties, dproperties,]
         system)
     update_near_field_properties_and_derivatives!([properties, dproperties,]
-        system::UnsteadySystem)
+        system::System)
 
 Update the near field properties for `system` and their derivatives with respect
 to the freestream variables.
@@ -370,30 +317,11 @@ calculated (and stored in `system`) using [`update_circulation_and_derivatives!`
 """
 update_near_field_properties_and_derivatives!
 
-# steady/unsteady, system input and output
-function update_near_field_properties_and_derivatives!(system::AbstractSystem; kwargs...)
+function update_near_field_properties_and_derivatives!(system::System; kwargs...)
     return update_near_field_properties_and_derivatives!(system.properties, system.dproperties, system; kwargs...)
 end
 
-# steady, system input
-function update_near_field_properties_and_derivatives!(properties, dproperties, system::SteadySystem;
-    surfaces = system.surfaces,
-    reference = system.reference,
-    freestream = system.freestream,
-    Gamma = system.Gamma,
-    dGamma = system.dGamma,
-    symmetric = system.symmetric,
-    surface_id = system.surface_id,
-    trailing_vortices = system.trailing_vortices,
-    xhat = system.xhat)
-
-    return near_field_properties_and_derivatives!(properties, dproperties,
-        surfaces, reference, freestream, Gamma, dGamma; symmetric, surface_id,
-        trailing_vortices, xhat)
-end
-
-# unsteady, system input
-function update_near_field_properties_and_derivatives!(properties, dproperties, system::UnsteadySystem;
+function update_near_field_properties_and_derivatives!(properties, dproperties, system::System;
     surfaces = system.surfaces,
     wakes = system.wakes,
     reference = system.reference,
@@ -406,17 +334,19 @@ function update_near_field_properties_and_derivatives!(properties, dproperties, 
     Vv = system.Vv,
     symmetric = system.symmetric,
     surface_id = system.surface_id,
+    wake_finite_core = system.wake_finite_core,
+    iwake = system.iwake,
     trailing_vortices = system.trailing_vortices,
     xhat = system.xhat)
 
     return near_field_properties_and_derivatives!(properties, dproperties,
-        surfaces, wakes, ref, fs, Gamma, dGamma, Gammadot;
+        surfaces, wakes, reference, freestream, Gamma, dGamma, Gammadot;
         wake_shedding_locations, Vh, Vv, symmetric, surface_id,
         wake_finite_core, iwake, trailing_vortices, xhat)
 end
 
 """
-    body_forces(system::AbstractSystem; frame=Body())
+    body_forces(system::System; frame=Body())
 
 Return the body force coefficients `CF` and `CM` in the frame specified by the
 keyword argument `frame`.
@@ -442,7 +372,7 @@ function body_forces(system;
 end
 
 """
-    body_forces_derivatives(system::AbstractSystem)
+    body_forces_derivatives(system::System)
 
 Return the body force coefficients `CF` and `CM` and their derivatives with
 respect to the freestream variables in the body frame.
@@ -453,7 +383,7 @@ parameter derivatives (and has been stored in `system`), either by setting the
 using [`steady_analysis`](@ref) or [`unsteady_analysis`](@ref) or by using the
 [`update_near_field_properties_and_derivatives`](@ref) function.
 """
-function body_forces_derivatives(system::AbstractSystem;
+function body_forces_derivatives(system::System;
     surfaces = system.surfaces,
     properties = system.properties,
     dproperties = system.dproperties,
@@ -471,7 +401,7 @@ end
 Return the body force coefficients `CF`, `CM` at each time step in `property_history`.
 
 # Arguments:
- - `system`: Object of type [`SteadySystem`](@ref) which holds system properties
+ - `system`: Object of type [`System`](@ref) which holds system properties
  - `surface_history`: Vector of surfaces at each time step, where each surface is
     represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
@@ -485,7 +415,7 @@ Return the body force coefficients `CF`, `CM` at each time step in `property_his
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
    [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
-function body_forces_history(system::AbstractSystem, surface_history, property_history;
+function body_forces_history(system::System, surface_history, property_history;
     symmetric = system.symmetric,
     reference = system.reference,
     freestream = system.freestream,
@@ -502,7 +432,7 @@ Return the force and moment coefficients (per unit span) for each spanwise segme
 of a lifting line representation of the geometry.
 
 # Arguments
- - `system`: Object of type [`SteadySystem`](@ref) that holds precalculated
+ - `system`: Object of type [`System`](@ref) that holds precalculated
     system properties.
  - `r`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
@@ -620,6 +550,53 @@ function stability_derivatives(system;
 end
 
 """
+    update_free_wake_vertices(system, dt)
+
+Update the wake vertices in `system` to correspond to force-free wakes assuming
+steady state operating conditions.
+"""
+function update_free_wake_vertices(system, dt;
+    wakes = system.wakes,
+    surfaces = system.surfaces,
+    repeated_points = system.repeated_points,
+    wake_shedding_locations = system.wake_shedding_locations,
+    ref = system.ref,
+    fs = system.fs,
+    AIC = system.AIC,
+    w = system.w,
+    Gamma = system.Gamma,
+    symmetric = system.symmetric,
+    surface_id = system.surface_id,
+    wake_finite_core = system.wake_finite_core,
+    iwake = system.iwake,
+    trailing_vortices = system.trailing_vortices,
+    xhat = system.xhat)
+
+    return free_wake_vertices!(wakes, surfaces, repeated_points,
+        wake_shedding_locations, ref, fs, AIC, w, Gamma; symmetric, surface_id,
+        wake_finite_core, iwake, trailing_vortices, xhat, dt)
+end
+
+"""
+    update_steady_wake_circulation!([wakes,] system)
+
+Set the circulation strength of the wake panels in `system` to the circulations
+strengths of the trailing edge surface panels in `system`
+"""
+update_steady_wake_circulation!
+
+update_steady_wake_circulation!(system::System; kwargs...) =
+    update_steady_wake_circulation!(system.wakes, system; kwargs...)
+
+function update_steady_wake_circulation!(wakes, system;
+    surfaces = system.surfaces,
+    Gamma = system.Gamma,
+    iwake = system.iwake)
+
+    return set_steady_circulation!(wakes, surfaces, Gamma; iwake)
+end
+
+"""
     update_wake_velocities!([wake_velocities,] system)
 
 Update the wake velocities for `system`.
@@ -629,7 +606,7 @@ Store the result in `wake_velocities` if provided, otherwise store in `system`.
 update_wake_velocities!
 
 # unsteady, system input and output
-update_wake_velocities!(system::AbstractSystem) = update_wake_velocities!(system.Vw, system)
+update_wake_velocities!(system::System) = update_wake_velocities!(system.Vw, system)
 
 # unsteady, system input
 function update_wake_velocities!(Vw, system;
@@ -653,3 +630,31 @@ function update_wake_velocities!(Vw, system;
         wake_shedding_locations, wakes, reference, freestream, Gamma; Vte,
         symmetric, surface_id, wake_finite_core, iwake, trailing_vortices, xhat)
 end
+
+get_surface_circulation(system::System) = system.Gamma
+get_surface_circulation_rate(system::System) = system.Gammadot
+get_wake_circulation(system::System) = get_circulation(system.wakes)
+get_wake_circulation!(Γw, system::System) = get_circulation!(Γw, system.wakes)
+get_wake_shedding_locations(system::System) = system.wake_shedding_locations
+get_wake_filament_length(system::System) = vortex_filament_length(system.wakes)
+get_wake_filament_length!(l, system::System) = vortex_filament_length(l, system.wakes)
+get_wake_vertices(system::System; iwake=size.(system.wakes, 1)) = get_vertices(system.wake_shedding_locations, system.wakes; iwake)
+get_wake_vertices!(ζw, system::System; iwake=size.(system.wakes, 1)) = get_vertices!(ζw, system.wake_shedding_locations, system.wakes; iwake)
+get_wake_velocities(system::System) = system.Vw
+
+set_surface_circulation!(system::System, Γ) = system.Gamma .= Γ
+set_surface_circulation_rate!(system::System, Γdot) = system.Gammadot .= Γdot
+set_wake_circulation!(system::System, Γw) = set_circulation!(system.wakes, Γw)
+set_wake_vertices!(system::System, ζw) = update_wake_panels!(system.wakes, ζw; helmholtz=false)
+
+# TODO: Move this function somewhere else
+set_wake_vertices!(wakes, ζw) = update_wake_panels!(wakes, ζw; helmholtz=false)
+
+"""
+    get_surface_properties(system::System)
+
+Return a vector of surface panel properties for each surface, stored as matrices
+of panel properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc`
+is the number of chordwise panels and `ns` is the number of spanwise panels
+"""
+get_surface_properties(system::System) = system.properties

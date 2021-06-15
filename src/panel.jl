@@ -637,6 +637,38 @@ function set_circulation!(wakes, Γw; iwake = size.(wakes, 1))
     return wakes
 end
 
+"""
+    set_steady_circulation!(wakes, surfaces, Γs)
+
+Set the circulation strength of the panels in `wakes` to the circulations strengths
+of the trailing edge panels in `surfaces`
+"""
+set_steady_circulation!
+
+# single surface
+function set_steady_circulation!(wake::AbstractMatrix{<:WakePanel}, surface, Γs; iwake = size(wakes, 1))
+    nc, ns = size(surface)
+    vΓs = reshape(Γs, nc, ns)
+    for i = 1:iwake
+        for j = 1:ns
+            wake[i,j] = set_circulation(wake[i,j], vΓs[end,j])
+        end
+    end
+    return wake
+end
+
+# multiple surfaces
+function set_steady_circulation!(wakes, surfaces, Γs; iwake = size.(wakes, 1))
+    iΓ = 0
+    for isurf = 1:length(wakes)
+        N = length(surfaces[isurf])
+        vΓs = view(Γs, iΓ+1:iΓ+N)
+        set_steady_circulation!(wakes[isurf], surfaces[isurf], vΓs; iwake = iwake[isurf])
+        iΓ += N
+    end
+    return wakes
+end
+
 @inline function translate(panel::WakePanel, r)
 
     rtl = panel.rtl + r
@@ -1031,7 +1063,6 @@ function update_surface_panels!(surface_panels, surface::AbstractArray{<:Number,
     return surface_panels
 end
 
-
 """
     initialize_wake_panels!(wake_panels, wake_shedding_locations; kwargs...)
 
@@ -1290,6 +1321,44 @@ function update_wake_panels!(wake_panels, wake::AbstractArray{<:Number, 3};
         end
         # update wake panel
         wake_panels[i,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+    end
+
+    return wake_panels
+end
+
+# multiple wakes, shedding location input
+@inline function update_wake_panels!(wake_panels, wake_shedding_locations::AbstractVector{<:AbstractVector{<:SVector}}, iwake)
+
+    for isurf = 1:length(wake_panels)
+        update_wake_panels!(wake_panels[isurf], wake_shedding_locations[isurf], iwake[isurf])
+    end
+
+    return wake_panels
+end
+
+# single wake, shedding location input
+@inline function update_wake_panels!(wake_panels, wake_shedding_locations::AbstractVector{<:SVector}, iwake)
+
+    # nothing to be done if there are no wake panels
+    if iwake > 0
+        # loop through first row of wake panels
+        for j = 1:size(wake_panels, 2)
+            # set new wake panel coordinates
+            rtl = wake_shedding_locations[j]
+            rtr = wake_shedding_locations[j+1]
+            rbl = bottom_left(wake_panels[1,j])
+            rbr = bottom_right(wake_panels[1,j])
+            # calculate old vortex filament length
+            l = vortex_filament_length(wake_panels[1,j])
+            # calculate new vortex filament length
+            new_l = vortex_filament_length(rtl, rtr, rbl, rbr)
+            # set new core size equal to old core size
+            core_size = get_core_size(wake_panels[1,j])
+            # calculate vortex filament strength
+            gamma = get_circulation(wake_panels[1,j]) * l / new_l
+            # update the wake panel
+            wake_panels[1,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+        end
     end
 
     return wake_panels

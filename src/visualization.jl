@@ -98,12 +98,13 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
 end
 
 """
-    write_vtk(name, surface_history, property_history, wake_history; kwargs...)
+    write_vtk(name, time_history, surface_history, property_history, wake_history; kwargs...)
 
 Writes unsteady simulation geometry to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
+ - `time_history`: Times at which surface, property, and wake histories are specified
  - `surface_history`: Vector of surfaces at each time step, where each surface is
     represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
@@ -116,7 +117,6 @@ Writes unsteady simulation geometry to Paraview files for visualization.
     where each wake is represented by a matrix of wake panels (see [`WakePanel`](@ref))
     of shape (nw, ns) where `nw` is the number of chordwise wake panels and
     `ns` is the number of spanwise panels.
- - `dt`: Time step vector
 
 # Keyword Arguments:
  - `symmetric`: (required if `properties` is provided) Flags indicating whether a
@@ -125,9 +125,9 @@ Writes unsteady simulation geometry to Paraview files for visualization.
  - `wake_length`: Distance to extend trailing vortices. Defaults to 10
  - `metadata`: Dictionary of metadata to include in generated files
 """
-function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
+function write_vtk(name, time_history, surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
     property_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
-    wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}}, dt;
+    wake_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}};
     symmetric = fill(nothing, length(surface_history[1])), kwargs...)
 
     symmetric = isa(symmetric, Number) ? fill(symmetric, length(surface_history[1])) : symmetric
@@ -135,11 +135,8 @@ function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:Abst
     # create paraview collection file
     paraview_collection(name) do pvdfile
 
-        # construct time vector
-        time = cumsum(dt)
-
         # loop through each time step
-        for it = 1:length(time)
+        for it = 1:length(time_history)
 
             # construct multiblock file for each time step
             vtk_multiblock(name*"-step$it") do vtmfile
@@ -173,7 +170,7 @@ function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:Abst
                 end
 
                 # add multiblock file to the paraview collection file
-                pvdfile[time[it]] = vtmfile
+                pvdfile[time_history[it]] = vtmfile
             end
         end
     end

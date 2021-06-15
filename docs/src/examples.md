@@ -794,9 +794,10 @@ This example shows how to predict the transient forces and moments on a rectangu
 
 using VortexLattice
 
-AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
+AR = 4#[4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
 
 system = Vector{Any}(undef, length(AR))
+time_history = Vector{Any}(undef, length(AR))
 surface_history = Vector{Any}(undef, length(AR))
 property_history = Vector{Any}(undef, length(AR))
 wake_history = Vector{Any}(undef, length(AR))
@@ -809,10 +810,8 @@ t = range(0.0, 10.0, step=1/16)
 # chord length
 c = 1
 
-# time step
-dt = [t[i+1]-t[i] for i = 1:length(t)-1]
-
-for i = 1:length(AR)
+#for i = 1:length(AR)
+i = 1
 
     # span length
     b = AR[i]*c
@@ -828,7 +827,7 @@ for i = 1:length(AR)
     theta = [0.0, 0.0]
     phi = [0.0, 0.0]
     fc = fill((xc) -> 0, 2) # camberline function for each section
-    ns = 13
+    ns = 1#13
     nc = 4
     spacing_s = Uniform()
     spacing_c = Uniform()
@@ -857,22 +856,22 @@ for i = 1:length(AR)
     surfaces = [surface]
 
     # run analysis
-    system[i], surface_history[i], property_history[i], wake_history[i] =
-        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+    system[i], time_history[i], surface_history[i], property_history[i], wake_history[i] =
+        unsteady_analysis(surfaces, ref, fs, t; symmetric, wake_finite_core = false)
 
     # extract forces at each time step
     CF[i], CM[i] = body_forces_history(system[i], surface_history[i],
         property_history[i]; frame=Wind())
 
-end
+# end
 
 nothing # hide
 ```
 
 We can visualize the solution using the `write_vtk` function.
 ```julia
-write_vtk("acceleration-AR4", surface_history[1], property_history[1],
-    wake_history[1], dt; symmetric=false)
+write_vtk("acceleration-AR4", time_history[1], surface_history[1], property_history[1],
+    wake_history[1]; symmetric=false)
 ```
 
 ![](acceleration-AR4.gif)

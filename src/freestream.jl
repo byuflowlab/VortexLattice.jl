@@ -1,5 +1,5 @@
 """
-    Freestream(Vinf, alpha, beta, Omega, additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0))
+    Freestream(Vinf, alpha, beta, Omega)
 
 Defines the freestream and rotational velocity properties.
 
@@ -8,27 +8,21 @@ Defines the freestream and rotational velocity properties.
 - `alpha`: Angle of attack (rad)
 - `beta`: Sideslip angle (rad)
 - `Omega`: Rotation vector (p, q, r) of the body frame about the reference center
-- `additional_velocity`: Function of the form `Vx, Vy, Vz = f(x, y, z)` which defines
-    additional velocity as a function of location in the global coordinate frame.
-    By default, no additional velocity field is assumed.
 """
-struct Freestream{TF}
+mutable struct Freestream{TF}
     Vinf::TF
     alpha::TF
     beta::TF
     Omega::SVector{3, TF}
-    additional_velocity
 end
 
-function Freestream{TF}(Vinf, alpha, beta, Omega) where TF
-    additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0)
-    return Freestream{TF}(Vinf, alpha, beta, Omega, additional_velocity)
-end
-
-function Freestream(Vinf, alpha, beta, Omega, additional_velocity = (x, y, z) -> (0.0, 0.0, 0.0))
+function Freestream(Vinf, alpha, beta, Omega)
     TF = promote_type(typeof(Vinf), typeof(alpha), typeof(beta), eltype(Omega))
-    return Freestream{TF}(Vinf, alpha, beta, Omega, additional_velocity)
+    return Freestream{TF}(Vinf, alpha, beta, Omega)
 end
+
+Freestream{TF}(fs::Freestream) where TF = Freestream{TF}(fs.Vinf, fs.alpha, fs.beta, fs.Omega)
+Base.convert(::Type{Freestream{TF}}, fs::Freestream) where TF = Freestream{TF}(fs)
 
 Base.eltype(::Type{Freestream{TF}}) where {TF} = TF
 Base.eltype(::Freestream{TF}) where {TF} = TF

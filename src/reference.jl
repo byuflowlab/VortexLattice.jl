@@ -23,6 +23,9 @@ function Reference(S, c, b, r, V)
     return Reference{TF}(S, c, b, r, V)
 end
 
+Reference{TF}(ref::Reference) where TF = Reference{TF}(ref.S, ref.c, ref.b, ref.r, ref.V)
+Base.convert(::Type{Reference{TF}}, ref::Reference) where TF = Reference{TF}(ref)
+
 Base.eltype(::Type{Reference{TF}}) where TF = TF
 Base.eltype(::Reference{TF}) where TF = TF
 

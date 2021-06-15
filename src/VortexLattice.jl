@@ -43,7 +43,7 @@ include("visualization.jl")
 export write_vtk
 
 include("system.jl")
-export SteadySystem, UnsteadySystem
+export System
 export get_surface_properties
 
 include("interface.jl")
@@ -56,7 +56,7 @@ include("analyses.jl")
 export steady_analysis, steady_analysis!
 export unsteady_analysis, unsteady_analysis!
 
-# DifferentialEquations.jl interface
-include("interfaces/diffeq.jl")
+# # DifferentialEquations.jl interface
+# include("interfaces/diffeq.jl")
 
 end # module

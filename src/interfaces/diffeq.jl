@@ -62,13 +62,13 @@ function DifferentialEquations.ODEProblem(surfaces, reference::Reference, freest
     # number of steps
     nstep = length(tshed)
     # pre-allocate system storage
-    system = UnsteadySystem(surfaces, reference, freestream, nstep; nwake)
+    system = System(surfaces, reference, freestream, nstep; nwake)
     # create the ODE Problem
     return DifferentialEquations.ODEProblem(system, tshed, tspan; nwake, kwargs...)
 end
 
 """
-    ODEProblem(system::UnsteadySystem, tshed, tspan; kwargs...)
+    ODEProblem(system::System, tshed, tspan; kwargs...)
 
 Models the unsteady vortex lattice method as an ODE problem (with a singular mass
 matrix) that can be solved using the DifferentialEquations package.
@@ -131,8 +131,11 @@ of the vortex lattice system prior to performing the unsteady analysis.
     surfaces/wakes with the same surface ID.
  - `nwake`: Maximum number of wake panels in the chordwise direction for each
     surface.
+ - `trailing_vortices`: Flags indicating whether trailing vortices are shed from
+    each surface.
+ - `xhat`: Direction in which trailing vortices are shed.
 """
-function DifferentialEquations.ODEProblem(system::UnsteadySystem{TF}, tshed, tspan;
+function DifferentialEquations.ODEProblem(system::System{TF}, tshed, tspan;
     surface_geometry_history = nothing,
     surface_geometry_prototype = nothing,
     surface_velocity_history = nothing,
@@ -417,7 +420,7 @@ function uvlm_ode!(du, u, p, t)
         influence_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     else
-        trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
+        trailing_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     end
 
@@ -580,7 +583,7 @@ function uvlm_shed!(integrator)
         influence_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     else
-        trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
+        trailing_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     end
 
@@ -778,7 +781,7 @@ function uvlm_circulation(u, p, t)
         influence_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     else
-        trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
+        trailing_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     end
 
@@ -915,7 +918,7 @@ function uvlm_save(u, t, integrator)
         influence_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     else
-        trailing_edge_coefficients!(AIC, surfaces; symmetric, surface_id,
+        trailing_coefficients!(AIC, surfaces; symmetric, surface_id,
             wake_shedding_locations, trailing_vortices, xhat)
     end
 
@@ -1157,23 +1160,3 @@ end
 offset_separate!(x::Tuple{}, v, vo) = vo, ()
 
 # ----------------------------------------- #
-
-"""
-    rowshift!(A)
-
-Circularly shifts the rows of a matrix down one row.
-"""
-function rowshift!(A)
-
-    ni, nj = size(A)
-
-    for j = 1:nj
-        tmp = A[ni,j]
-        for i = ni:-1:2
-            A[i,j] = A[i-1,j]
-        end
-        A[1,j] = tmp
-    end
-
-    return A
-end

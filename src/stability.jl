@@ -9,7 +9,7 @@ The derivatives are returned as two named tuples: `dCF, dCM`
 """
 function body_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
-    CF, CM, dCF, dCM = body_forces_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
+    CF, CM, dCF, dCM = body_forces_and_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
     # unpack derivatives
     (CF_a, CF_b, CF_p, CF_q, CF_r) = dCF
@@ -51,7 +51,7 @@ The derivatives are returned as two named tuples: `dCF, dCM`
 """
 function stability_derivatives(surfaces, properties, dproperties, ref, fs, symmetric)
 
-    CFb, CMb, dCFb, dCMb = body_forces_derivatives(surfaces, properties,
+    CFb, CMb, dCFb, dCMb = body_forces_and_derivatives(surfaces, properties,
         dproperties, ref, fs, symmetric)
 
     # unpack derivatives
