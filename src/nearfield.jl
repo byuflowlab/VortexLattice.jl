@@ -859,7 +859,7 @@ function body_forces_history(system, surface_history::AbstractVector{<:AbstractV
 end
 
 """
-    lifting_line_coefficients(system, r, c)
+    lifting_line_coefficients(system, r, c; frame=Body())
 
 Return the force and moment coefficients (per unit span) for each spanwise segment
 of a lifting line representation of the geometry.
@@ -877,6 +877,10 @@ to obtain panel forces.
     being a vector of length `ns+1` which contains the chord lengths at each
     lifting line coordinate.
 
+# Keyword Arguments
+ - `frame`: frame in which to return `cf` and `cm`, possible options are
+    [`Body()`](@ref) (default), [`Stability()`](@ref), and [`Wind()`](@ref)`
+
 # Return Arguments:
  - `cf`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns) which contains the x, y, and z direction
@@ -885,7 +889,7 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, r, c)
+function lifting_line_coefficients(system, r, c; frame=Body())
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -895,15 +899,15 @@ function lifting_line_coefficients(system, r, c)
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c)
+    return lifting_line_coefficients!(cf, cm, system, r, c; frame)
 end
 
 """
-    lifting_line_coefficients!(cf, cm, system, r, c)
+    lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
 
 In-place version of [`lifting_line_coefficients`](@ref)
 """
-function lifting_line_coefficients!(cf, cm, system, r, c)
+function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
 
     # number of surfaces
     nsurf = length(system.surfaces)
@@ -913,6 +917,7 @@ function lifting_line_coefficients!(cf, cm, system, r, c)
 
     # extract reference properties
     ref = system.reference[]
+    fs = system.freestream[]
 
     # iterate through each lifting surface
     for isurf = 1:nsurf
@@ -931,28 +936,33 @@ function lifting_line_coefficients!(cf, cm, system, r, c)
             # calculate reference chord
             cs = (c[isurf][j] + c[isurf][j+1])/2
             # calculate section force and moment coefficients
-            cf[isurf][:,j] .= 0.0
-            cm[isurf][:,j] .= 0.0
+            cfj = @SVector zeros(eltype(cf[isurf]), 3)
+            cmj = @SVector zeros(eltype(cm[isurf]), 3)
             for i = 1:nc
                 # add influence of bound vortex
                 rb = top_center(panels[i,j])
                 cfb = properties[i,j].cfb
-                cf[isurf][:,j] .+= cfb
-                cm[isurf][:,j] .+= cross(rb - rs, cfb)
+                cfj += cfb
+                cmj += cross(rb - rs, cfb)
                 # add influence of left vortex leg
                 rl = left_center(panels[i,j])
                 cfl = properties[i,j].cfl
-                cf[isurf][:,j] .+= cfl
-                cm[isurf][:,j] .+= cross(rl - rs, cfl)
+                cfj += cfl
+                cmj += cross(rl - rs, cfl)
                 # add influence of right vortex leg
                 rr = right_center(panels[i,j])
                 cfr = properties[i,j].cfr
-                cf[isurf][:,j] .+= cfr
-                cm[isurf][:,j] .+= cross(rr - rs, cfr)
+                cfj += cfr
+                cmj += cross(rr - rs, cfr)
             end
             # update normalization
-            cf[isurf][:,j] .*= ref.S/(ds*cs)
-            cm[isurf][:,j] .*= ref.S/(ds*cs^2)
+            cfj *= ref.S/(ds*cs)
+            cmj *= ref.S/(ds*cs^2)
+            # change coordinate frame
+            cfj, cmj = body_to_frame(cfj, cmj, ref, fs, frame)
+            # save coefficients
+            cf[isurf][:,j] = cfj
+            cm[isurf][:,j] = cmj
         end
     end
 
