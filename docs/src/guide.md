@@ -117,7 +117,6 @@ nothing #hide
 ```
 
 Sectional coefficients may be calculated using the `lifting_line_properties` function.
-
 ```@example guide
 # combine all grid representations of surfaces into a single vector
 grids = [grid]
@@ -126,11 +125,12 @@ grids = [grid]
 r, c = lifting_line_geometry(grids)
 
 # calculate lifting line coefficients
-cf, cm = lifting_line_coefficients(system, r, c)
+cf, cm = lifting_line_coefficients(system, r, c; frame=Body())
 nothing #hide
 ```
-
-The force and moment coefficients computed by this function are provided in the global (body) frame.  The reference length for these coefficients correspond to the chord length of the respective spanwise segment of the lifting line representation.  Note that further manipulations upon these outputs may be required to calculate section aerodynamic coefficients since 1) the local frame of reference is not always equivalent to the global frame of reference and 2) standard normalization conventions for a given coefficient may vary from that used in this package.
+These coefficients are defined as ``c_f = \frac{F'}{q_\infty c}`` and ``c_m = \frac{M'}{q_\infty c^2}``, respectively, where ``F'`` is the force per unit length
+along the lifting line, ``M'`` is the moment per unit length along the lifting line, ``q_\infty`` is the freestream dynamic pressure, and ``c`` is the local chord length.  
+By default, these coefficients are defined in the body frame, but may be returned in the stability or wind frame by using the `frame` keyword argument.  Note that further manipulations upon these coefficients may be required to calculate local aerodynamic coefficients since 1) the local frame of reference is not necessarily equivalent to the global frame of reference and 2) the quantities used to normalize a given local aerodynamic coefficient may vary from those used in this package.
 
 We can also extract the body and/or stability derivatives for the aircraft easily using the functions `body_derivatives` and/or `stability_derivatives`.  
 
