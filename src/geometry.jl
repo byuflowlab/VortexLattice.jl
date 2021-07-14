@@ -862,7 +862,7 @@ function lifting_line_geometry(grids, xc=0.25)
         r[isurf] = Matrix{TF}(undef, 3, ns+1)
         c[isurf] = Vector{TF}(undef, ns+1)
     end
-    return lifting_line_geometry!(r, c, grids, xc=0.25)
+    return lifting_line_geometry!(r, c, grids, xc)
 end
 
 """
