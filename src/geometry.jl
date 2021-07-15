@@ -833,18 +833,17 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
 end
 
 """
-    lifting_line_geometry(grids)
-
-Construct a lifting line representation of the surfaces in `grids` at
-the quarter-chord of each surface.  Return the quarter-chord coordinates and
-chord lengths.
-
+    lifting_line_geometry(grids, xc=0.25)
+Construct a lifting line representation of the surfaces in `grids` at the
+normalized chordwise location `xc`.  Return the lifting line coordinates
+and chord lengths.
 # Arguments
  - `grids`: Vector with length equal to the number of surfaces.  Each element of
     the vector is a grid with shape (3, nc, ns) which defines the discretization
     of a surface into panels. `nc` is the number of chordwise panels and `ns` is
     the number of spanwise panels.
-
+ - `xc`: Normalized chordwise location of the lifting line from the leading edge.
+    Defaults to the quarter chord
 # Return Arguments:
  - `r`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
@@ -853,7 +852,7 @@ chord lengths.
     being a vector of length `ns+1` which contains the chord lengths at each
     lifting line coordinate.
 """
-function lifting_line_geometry(grids)
+function lifting_line_geometry(grids, xc=0.25)
     TF = eltype(eltype(grids))
     nsurf = length(grids)
     r = Vector{Matrix{TF}}(undef, nsurf)
@@ -863,15 +862,14 @@ function lifting_line_geometry(grids)
         r[isurf] = Matrix{TF}(undef, 3, ns+1)
         c[isurf] = Vector{TF}(undef, ns+1)
     end
-    return lifting_line_geometry!(r, c, grids)
+    return lifting_line_geometry!(r, c, grids, xc)
 end
 
 """
-    lifting_line_geometry!(r, c, grids)
-
+    lifting_line_geometry!(r, c, grids, xc=0.25)
 In-place version of [`lifting_line_geometry`](@ref)
 """
-function lifting_line_geometry!(r, c, grids)
+function lifting_line_geometry!(r, c, grids, xc=0.25)
     nsurf = length(grids)
     # iterate through each lifting surface
     for isurf = 1:nsurf
@@ -886,7 +884,7 @@ function lifting_line_geometry!(r, c, grids)
             le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
             te = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
             # get quarter-chord
-            r[isurf][:,j] = linearinterp(0.25, le, te)
+            r[isurf][:,j] = linearinterp(xc, le, te)
             # get chord length
             c[isurf][j] = norm(le - te)
         end

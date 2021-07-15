@@ -818,6 +818,62 @@ end
     @test isapprox(Cnr, -0.000898, rtol=0.01)
 end
 
+@testset "Lifting Line Coefficients" begin
+    # Simple Wing with Uniform Spacing
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # vortex rings with symmetry
+    mirror = false
+    symmetric = true
+
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    grids = [grid]
+    surfaces = [surface]
+
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+    r_ll, c_ll = lifting_line_geometry(grids)
+
+    cf, cm = lifting_line_coefficients(system, r_ll, c_ll; frame=Stability())
+
+    cl_avl = [0.2618, 0.2646, 0.2661, 0.2664, 0.2654, 0.2628, 0.2584, 0.2513,
+        0.2404, 0.2233, 0.1952, 0.1434]
+    cd_avl = [0.0029, 0.0024, 0.0023, 0.0023, 0.0023, 0.0023, 0.0024, 0.0024,
+        0.0025, 0.0026, 0.0026, 0.0022]
+    cm_avl = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    @test isapprox(cf[1][3,:], cl_avl, atol=1e-3, norm=(x)->norm(x, Inf))
+    @test isapprox(cf[1][1,:], cd_avl, atol=1e-4, norm=(x)->norm(x, Inf))
+    @test isapprox(cm[1][2,:], cm_avl, atol=1e-4, norm=(x)->norm(x, Inf))
+end
+
 @testset "Geometry Generation" begin
 
     # Tests of the geometry generation functions
