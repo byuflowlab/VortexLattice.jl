@@ -859,6 +859,26 @@ function body_forces_history(system, surface_history::AbstractVector{<:AbstractV
 end
 
 """
+    lifting_line_coefficients(cfs, cms, fs, frame)
+
+Dispatch of [`lifting_line_coefficients`](@ref) with the choice of reference frame.
+"""
+function lifting_line_coefficients(system, r, c, fs::Freestream, frame)
+    cfs, cms = lifting_line_coefficients(system, r, c)
+
+    return body_to_frame(cfs, cms, fs, frame)
+end
+
+"""
+    lifting_line_coefficients!(cfs, cms, fs, frame)
+
+In-place version of [`lifting_line_coefficients`](@ref) with the choice of reference frame.
+"""
+function lifting_line_coefficients!(cfs, cms, fs::Freestream, frame)
+    return body_to_frame(cfs, cms, fs, frame)
+end
+
+"""
     lifting_line_coefficients(system, r, c)
 
 Return the force and moment coefficients (per unit span) for each spanwise segment
@@ -988,4 +1008,28 @@ end
     CM = CM ./ reflen
 
     return CF, CM
+end
+
+@inline body_to_frame(cfs, cms, fs, ::Body) = cfs, cms
+
+@inline function body_to_frame(cfs, cms, fs, ::Stability)
+    # rotate
+    R = body_to_stability(fs)
+    for isurf in 1:length(cfs)
+        cfs[isurf] = R*cfs[isurf]
+        cms[isurf] = R*cms[isurf]
+    end
+
+    return cfs, cms
+end
+
+@inline function body_to_frame(cfs, cms, fs, ::Wind)
+    # rotate
+    R = body_to_wind(fs)
+    for isurf in 1:length(cfs)
+        cfs[isurf] = R*cfs[isurf]
+        cms[isurf] = R*cms[isurf]
+    end
+
+    return cfs, cms
 end
