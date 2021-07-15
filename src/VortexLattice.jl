@@ -18,6 +18,7 @@ export Wake
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_surface_panels, wing_to_surface_panels
+export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
 
 include("reference.jl")
@@ -38,10 +39,12 @@ export PanelProperties, get_surface_properties
 include("analyses.jl")
 export steady_analysis, steady_analysis!
 export unsteady_analysis, unsteady_analysis!
+export spanwise_force_coefficients
 
 include("nearfield.jl")
 export body_forces
 export body_forces_history
+export lifting_line_coefficients, lifting_line_coefficients!
 
 include("farfield.jl")
 export far_field_drag

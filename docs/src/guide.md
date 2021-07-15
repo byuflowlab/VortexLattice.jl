@@ -35,9 +35,7 @@ spacing_c = Uniform() # chordwise discretization scheme
 nothing #hide
 ```
 
-We generate our lifting surface using `wing_to_surface_panels`.  We use the keyword argument `mirror` to mirror our geometry across the X-Y plane.  A grid with the
-panel corners and a matrix of vortex lattice panels representing the surface
-of the wing is returned from this function.  Only the latter is needed for the analysis. The former is provided simply for the user's convenience.
+We generate our lifting surface using `wing_to_surface_panels`.  We use the keyword argument `mirror` to mirror our geometry across the X-Y plane.  A grid with the panel corners and a matrix of vortex lattice panels representing the surface of the wing is returned from this function.  Only the latter is needed for the analysis. The former is provided primarily for the user's convenience, but may also used to find lifting line properties (as will be shown later in this guide).
 
 ```@example guide
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -117,6 +115,22 @@ Numerical noise often corrupts drag estimates from near-field analyses, therefor
 CDiff = far_field_drag(system)
 nothing #hide
 ```
+
+Sectional coefficients may be calculated using the `lifting_line_properties` function.
+```@example guide
+# combine all grid representations of surfaces into a single vector
+grids = [grid]
+
+# calculate lifting line geometry
+r, c = lifting_line_geometry(grids)
+
+# calculate lifting line coefficients
+cf, cm = lifting_line_coefficients(system, r, c; frame=Body())
+nothing #hide
+```
+These coefficients are defined as ``c_f = \frac{F'}{q_\infty c}`` and ``c_m = \frac{M'}{q_\infty c^2}``, respectively, where ``F'`` is the force per unit length
+along the lifting line, ``M'`` is the moment per unit length along the lifting line, ``q_\infty`` is the freestream dynamic pressure, and ``c`` is the local chord length.  
+By default, these coefficients are defined in the body frame, but may be returned in the stability or wind frame by using the `frame` keyword argument.  Note that further manipulations upon these coefficients may be required to calculate local aerodynamic coefficients since 1) the local frame of reference is not necessarily equivalent to the global frame of reference and 2) the quantities used to normalize a given local aerodynamic coefficient may vary from those used in this package.
 
 We can also extract the body and/or stability derivatives for the aircraft easily using the functions `body_derivatives` and/or `stability_derivatives`.  
 

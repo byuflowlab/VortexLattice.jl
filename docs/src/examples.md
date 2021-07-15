@@ -1,6 +1,6 @@
 # Examples
 
-These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.  Many of these examples also provide a verification for the implementation of the vortex lattice method in this package.  
+These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.  Many of these examples also provide a verification for the implementation of the vortex lattice method in this package.
 
 ```@contents
 Pages = ["examples.md"]
@@ -643,7 +643,7 @@ str = pretty_table(String, table, header; # hide
 Markdown.parse(str) # hide
 ```
 
-To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.  
+To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.
 
 ```@example wing-tail
 using VortexLattice
