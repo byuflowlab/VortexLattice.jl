@@ -38,7 +38,7 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
-    properties=nothing; symmetric=fill(nothing, length(surfaces)), kwargs...) where T
+    properties=fill(nothing, length(surfaces)); symmetric=fill(nothing, length(surfaces)), kwargs...) where T
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile
