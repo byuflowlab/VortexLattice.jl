@@ -69,10 +69,19 @@ function stability_derivatives(system)
 
     fs = system.freestream[]
     ref = system.reference[]
+    reference_length = SVector(ref.b, ref.c, ref.b)
 
     # unpack derivatives
     (CFb_a, CFb_b, CFb_pb, CFb_qb, CFb_rb) = dCFb
     (CMb_a, CMb_b, CMb_pb, CMb_qb, CMb_rb) = dCMb
+
+    # unscale
+    CMb = CMb .* reference_length
+    CMb_a = CMb_a .* reference_length
+    CMb_b = CMb_b .* reference_length
+    CMb_pb = CMb_pb .* reference_length
+    CMb_qb = CMb_qb .* reference_length
+    CMb_rb = CMb_rb .* reference_length
 
     # rotate forces/moments into the stability frame
     R, R_a = body_to_stability_alpha(fs)
@@ -87,7 +96,7 @@ function stability_derivatives(system)
     CMs = R * CMb
     CMs_a = R * CMb_a + R_a * CMb
     CMs_b = R * CMb_b
-    CMs_pb = R * CMb_pb
+    CMs_pb = R * CMb_pb 
     CMs_qb = R * CMb_qb
     CMs_rb = R * CMb_rb
 
@@ -109,17 +118,18 @@ function stability_derivatives(system)
     CMs_rs = CMs_pb*pb_rs + CMs_qb*qb_rs + CMs_rb*rb_rs
 
     # assign outputs, and apply stability derivative normalizations
-    CF_a = CFs_a
+    pb_a, qb_a, rb_a = R_a' * Ωs
+    CF_a = CFs_a + (CFs_pb * pb_a + CFs_qb * qb_a + CFs_rb * rb_a)
     CF_b = CFs_b
     CF_p = CFs_ps*2*ref.V/ref.b
     CF_q = CFs_qs*2*ref.V/ref.c
     CF_r = CFs_rs*2*ref.V/ref.b
 
-    CM_a = CMs_a
-    CM_b = CMs_b
-    CM_p = CMs_ps*2*ref.V/ref.b
-    CM_q = CMs_qs*2*ref.V/ref.c
-    CM_r = CMs_rs*2*ref.V/ref.b
+    CM_a = (CMs_a + (CMs_pb * pb_a + CMs_qb * qb_a + CMs_rb * rb_a)) ./ reference_length
+    CM_b = (CMs_b) ./ reference_length
+    CM_p = (CMs_ps*2*ref.V/ref.b) ./ reference_length
+    CM_q = (CMs_qs*2*ref.V/ref.c) ./ reference_length
+    CM_r = (CMs_rs*2*ref.V/ref.b) ./ reference_length
 
     # pack up derivatives as named tuples
     dCF = (alpha=CF_a, beta=CF_b, p=CF_p, q=CF_q, r=CF_r)
