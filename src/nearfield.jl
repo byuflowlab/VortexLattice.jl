@@ -970,6 +970,108 @@ function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
 end
 
 """
+    Convenience function for strip_theory_drag!()
+"""
+function strip_theory_drag(system, cl_2_cd, re, r, c)
+    @assert system.near_field_analysis[] "Near field analysis required"
+    TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
+    nsurf = length(system.surfaces)
+    cf = Vector{Matrix{TF}}(undef, nsurf)
+    cm = Vector{Matrix{TF}}(undef, nsurf)
+    return strip_theory_drag!(cf, cm, system, r, c, cl_2_cd, re)
+end
+
+"""
+    strip_theory_drag!(cf, cm, system, r, c, cl_to_cd)
+
+Return the updated force coefficients per unit span for each spanwise segment using 
+strip theory to account for viscous affects
+
+This function requires that a near-field analysis has been performed on `system`
+to obtain panel forces.
+
+# Arguments
+ - `cf`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z components of 
+    force coefficients (per unit span) for each spanwise segment.
+ - `cm`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z components of
+    moment coefficients (per unit span) for each spanwise segment.
+ - `r`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
+    of the resulting lifting line coordinates
+ - `c`: Vector with length equal to the number of surfaces, with each element
+    being a vector of length `ns+1` which contains the chord lengths at each
+    lifting line coordinate.
+ - `cl_2_cd`: A function accepting lift coefficient and reynolds number, and returning
+    viscous drag coefficent.
+
+# Return Arguments:
+ - `cf`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z direction
+    force coefficients (per unit span) in the wind frame for each spanwise segment.  
+    The x element of these matrices includes a viscous drag correction.
+"""
+function strip_theory_drag!(cf, cm, system, r, c, cl_2_cd, re)
+    @assert system.near_field_analysis[] "Near field analysis required"
+    lifting_line_coefficients!(cf, cm, system, r, c; frame = Wind())
+    for i in 1:length(c[1])-1
+        cf[1][1,i] = cl_2_cd(cf[1][3,i], re) + cf[1][1,i]
+    end
+    return cf
+end
+
+""" 
+    generate_cl_2_cd(cl_polar, cd_polar, res)
+
+A function that generates the template cl_2_cd function for use in strip_theory_drag!
+
+This function requires that lift and drag polars have already been generated.
+
+# Arguments
+ - `cl_polar`: Array of size(n, res) where n is the number of discrete angles
+    of attack used to generate the lift and drag polars.  This array contains local 
+    cl data for each reynolds number and angle of attack
+ - `cd_polar`: Array of size(n, res) where n is the number of discrete angles
+    of attack used to generate the lift and drag polars.  This array contains local 
+    cd data for each reynolds number and angle of attack
+ - `res`: Vector containing all reynolds numbers used to genrate lift and drag polars
+
+# Return Arguments:
+ - `cl_2_cd`: A function accepting lift coefficient and reynolds number, and returning
+    viscous drag coefficent.
+"""
+function generate_cl_2_cd(cl_polar, cd_polar, res)
+
+    #=
+    cl_2_cd(cl, re)
+
+    A template function to return local viscous drag coefficients given local lift coefficients
+
+    This function requires that lift and drag polars have already been generated as it 
+    simply interpolates from existing data.
+
+    # Arguments
+    - `cl`: Scalar value containing the input lift coefficient
+    - `re`: Scalar value containing the local reynolds number at the desired spanwise location
+    
+    # Return Arguments:
+    - `cd`: Scalar containing the updated drag coefficient
+    =#
+    function cl_2_cd(cl, re)
+        newcls = zeros(length(cl_polar[:,1]))
+        newcds = zeros(length(cd_polar[:,1]))
+        for i in 1:length(cl_polar[:,1])
+            newcls[i] = linear(res, cl_polar[i,:], re)
+            newcds[i] = linear(res, cd_polar[i,:], re)
+        end
+        cd = linear(newcls,newcds,cl)
+        return cd
+    end
+    return(cl_2_cd)
+end
+
+"""
     body_to_frame(CF, CM, reference, freestream, frame)
 
 Transform the coefficients `CF` and `CM` from the body frame to the frame

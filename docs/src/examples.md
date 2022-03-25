@@ -782,6 +782,100 @@ write_vtk("wing-tail", surfaces, properties; symmetric)
 
 ![](wing-tail.png)
 
+## Viscous Drag Correction
+
+This example shows how to make corerections to account for Viscous Drag
+
+```@example viscous-drag
+#geometry of right half of wing
+xle = [0.0, 0.4]
+yle = [0.0, 7.5]
+zle = [0.0, 0.0]
+chords = [2.2, 1.8]
+theta = [0.0*pi/180, 0.0*pi/180]
+phi = [0.0, 0.0]
+fc = fill((xc) -> 0, 2) # camberline function for each section
+
+# discretization parameters
+ns = 12
+nc = 1
+spacing_s = Uniform()
+spacing_c = Uniform()
+
+# reference parameters
+Sref = 30.0
+cref = 2.0
+bref = 15.0
+rref = [0.50, 0.0, 0.0]
+rho = 1.225
+mu = 1.81e-5
+Vinf = 1
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+# freestream parameters
+alpha = 0.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# construct surface
+grid, surface = wing_to_surface_panels(xle, yle, zle, chords, theta, phi, ns, nc;
+    fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# combine all grid representations of surfaces into a single vector
+grids = [grid]
+
+# calculate lifting line geometry
+r, c = lifting_line_geometry(grids)
+
+```
+We need to construct the grid in order to obtain the chord length c and the position r of each section of the wing. 
+We will now read in the airfoil data, provide the reynolds number, and perform a sweep of the angle of attack.
+
+```@example viscous-drag
+
+#read in xfoil data
+cls = readdlm("cl_data.txt")
+cds = readdlm("cd_data.txt")
+
+#generate cl to cd function (this is generating the template funciton provided)
+cl_2_cd = VortexLattice.generate_cl_2_cd(cls,cds,res)
+
+
+#select operating reynolds number and set freestream
+re = 1000000
+Vinf = re*mu/(c[1][1]*rho)
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+#calculate the width of each panel (this works only for uniform spacing)
+w = (yle[2] - yle[1])/ns
+
+#initialization for alpha sweep  
+alphas = -10:.5:20                              #discrete angles of attack
+viscous = zeros(n_alphas)                       #Cd_total for each value of alpha
+inviscid = zeros(n_alphas)                      #Cd_induced for each value of alpha
+local_viscous = zeros(3,ns,n_alphas)            #cfs_local_total for each spanwise location
+local_inviscid =  zeros(3,ns,n_alphas)          #cfs_local_induced for each spanwise location
+n_alphas = length(cls[:,1])                     #number of discrete angles of attack
+
+
+#sweep of angle of attack
+for j in 1:n_alphas   
+    local_freestream = Freestream(Vinf, alphas[j]*pi/180, beta, Omega);
+    system_local = steady_analysis!(system, surfaces, ref, local_freestream; symmetric);
+    cfs, cms = lifting_line_coefficients(system_local, r, c; frame=Wind());
+    local_inviscid[:,:,j] = cfs[1]
+    inviscid[j] = body_forces(system_local; frame=Wind())[1][1]
+    local_viscous[:,:,j] = VortexLattice.strip_theory_drag!(cfs, cms, system_local, r, c, cl_2_cd, re)[1]
+    viscous[j] = sum((local_viscous[1,:,j]) .*c_local)*w*2/Sref
+end
+
+```
+
+We can see that the results match those from Xflr5 identically.
+
+![](strip-theory-verification.png)
+
 ## Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight
 
 This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.

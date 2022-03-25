@@ -3,6 +3,7 @@ module VortexLattice
 using LinearAlgebra
 using StaticArrays
 using Interpolations
+using FLOWMath
 using WriteVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms
