@@ -972,13 +972,13 @@ end
 """
     Convenience function for strip_theory_drag!()
 """
-function strip_theory_drag(system, cl_2_cd, re, r, c)
+function strip_theory_drag(cf, afs, Res)
     @assert system.near_field_analysis[] "Near field analysis required"
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
     cm = Vector{Matrix{TF}}(undef, nsurf)
-    return strip_theory_drag!(cf, cm, system, r, c, cl_2_cd, re)
+    return strip_theory_drag!(cf, afs, Res)
 end
 
 """
@@ -1012,64 +1012,80 @@ to obtain panel forces.
     force coefficients (per unit span) in the wind frame for each spanwise segment.  
     The x element of these matrices includes a viscous drag correction.
 """
-function strip_theory_drag!(cf, cm, system, r, c, cl_2_cd, re)
-    @assert system.near_field_analysis[] "Near field analysis required"
-    lifting_line_coefficients!(cf, cm, system, r, c; frame = Wind())
-    for i in 1:length(c[1])-1
-        cf[1][1,i] = cl_2_cd(cf[1][3,i], re) + cf[1][1,i]
-    end
-    return cf
-end
-
-""" 
-    generate_cl_2_cd(cl_polar, cd_polar, res)
-
-A function that generates the template cl_2_cd function for use in strip_theory_drag!
-
-This function requires that lift and drag polars have already been generated.
-
-# Arguments
- - `cl_polar`: Array of size(n, res) where n is the number of discrete angles
-    of attack used to generate the lift and drag polars.  This array contains local 
-    cl data for each reynolds number and angle of attack
- - `cd_polar`: Array of size(n, res) where n is the number of discrete angles
-    of attack used to generate the lift and drag polars.  This array contains local 
-    cd data for each reynolds number and angle of attack
- - `res`: Vector containing all reynolds numbers used to genrate lift and drag polars
-
-# Return Arguments:
- - `cl_2_cd`: A function accepting lift coefficient and reynolds number, and returning
-    viscous drag coefficent.
-"""
-function generate_cl_2_cd(cl_polar, cd_polar, res)
-
-    #=
-    cl_2_cd(cl, re)
-
-    A template function to return local viscous drag coefficients given local lift coefficients
-
-    This function requires that lift and drag polars have already been generated as it 
-    simply interpolates from existing data.
-
-    # Arguments
-    - `cl`: Scalar value containing the input lift coefficient
-    - `re`: Scalar value containing the local reynolds number at the desired spanwise location
+function strip_theory_drag!(cf, Res)  # TODO: attach airfoils to surface
+    # iterate over each surface
+    nsurf = length(cf)
+    CDv = 0.0
+    CM = 0.0
     
-    # Return Arguments:
-    - `cd`: Scalar containing the updated drag coefficient
-    =#
-    function cl_2_cd(cl, re)
-        newcls = zeros(length(cl_polar[:,1]))
-        newcds = zeros(length(cd_polar[:,1]))
-        for i in 1:length(cl_polar[:,1])
-            newcls[i] = linear(res, cl_polar[i,:], re)
-            newcds[i] = linear(res, cd_polar[i,:], re)
-        end
-        cd = linear(newcls,newcds,cl)
-        return cd
+    for i = 1:nsurf
+        # extract for this surface
+        forces = cf[i]
+        af1 = surface.  # TODO
+        af2 = surface.
+        Re = Res[i]
+        y = surface. # TODO
+        
+        # broadcast across each airfoil, cl, Re
+        viscous = cl_2_cd.(Ref(af1), Ref(af2), forces[3, :], Re, y)
+        cd = getindex.(viscous, 1)
+        cm = getindex.(viscous, 1)
+
+        forces[1, :] .+= cd
+        forces[2, :] .+= cm
+
+        multiplier = symmetric[i] ? 2.0 : 1.0
+        CDv += multiplier * cd * c * panel_width / ref.S
+        # TODO: add cm
     end
-    return(cl_2_cd)
+
+    return cf, CDv
 end
+
+struct AirfoilData{TM, TV, TI}
+    cl::TM
+    cd::TM
+    cm::TM
+    Re::TV
+    clcache::TV
+    cdcache::TV
+    cmcache::TV
+    nalpha::TI
+end
+
+function AirfoilData(cl, cd, cm, Re)
+    nalpha = length(cl[:, 1])
+    clcache = zeros(nalpha)
+    cdcache = zeros(nalpha)
+    cmcache = zeros(nalpha)
+
+    return AirfoilData(cl, cd, cm, Re, clcache, cdcache, cmcache, nalpha)
+end
+
+
+function cl_2_cd(af1, af2, cl, Re, eta)
+
+    cd1, cm1 = cl_2_cd(af1, cl, Re)
+    cd2, cm2 = cl_2_cd(af2, cl, Re)
+    cd = cd1 + eta*(cd2 - cd1)
+    cm = cm1 + eta*(cm2 - cm1)
+
+    return cd, cm
+end
+
+function cl_2_cd(af, cl, Re)
+
+    for i in 1:af.nalpha
+        af.clcache[i] = linear(af.Res, view(af.cl, i, :), Re)
+        af.cdcache[i] = linear(af.Res, view(af.cd, i, :), Re)
+        af.cmcache[i] = linear(af.Res, view(af.cm, i, :), Re)
+    end
+    cd = linear(af.clcache, af.cdcache, cl)
+    cm = linear(af.clcache, af.cmcache, cl)
+    
+    return cd, cm
+end
+
 
 """
     body_to_frame(CF, CM, reference, freestream, frame)
