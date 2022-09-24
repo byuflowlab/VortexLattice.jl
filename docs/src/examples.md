@@ -834,6 +834,7 @@ We will now read in the airfoil data, provide the reynolds number, and perform a
 ```@example viscous-drag
 
 #read in xfoil data
+res = [150000   320000  490000  660000  830000  1000000]
 cls = [
     -0.647901   -0.865237   -0.897876   -0.921655   -0.924562   -0.912016
     -0.688353   -0.839616   -0.868863   -0.886064   -0.865452   -0.848249
@@ -933,7 +934,6 @@ cds = [
 
 #generate cl to cd function (this is generating the template funciton provided)
 cl_2_cd = VortexLattice.generate_cl_2_cd(cls,cds,res)
-
 
 #select operating reynolds number and set freestream
 re = 1000000
