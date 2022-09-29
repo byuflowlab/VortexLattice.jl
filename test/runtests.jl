@@ -743,8 +743,8 @@ end
     @test isapprox(CDiff, 0.0022852, atol=1e-5)
     @test isapprox(Cm, -0.02101, atol=1e-4)
     @test isapprox(CY, 0.0, atol=1e-5)
-    @test isapprox(Cl, 0.00644, atol=1e-4)
-    @test isapprox(Cn, -0.00012, atol=2e-4)
+    @test isapprox(Cl, -0.00644, atol=1e-4)
+    @test isapprox(Cn, 0.00012, atol=2e-4)
 end
 
 @testset "AVL - Run 11 - Wing Stability Derivatives" begin
@@ -802,11 +802,11 @@ end
     @test isapprox(CYa, 0.0, atol=ztol)
     @test isapprox(CYb, -0.000007, atol=1e-4)
     @test isapprox(Cla, 0.0, atol=ztol)
-    @test isapprox(Clb, 0.025749, rtol=0.015)
+    @test isapprox(Clb, -0.025749, atol=0.001)
     @test isapprox(Cma, -0.429247, rtol=0.01)
     @test isapprox(Cmb, 0.0, atol=ztol)
     @test isapprox(Cna, 0.0, atol=ztol)
-    # @test isapprox(Cnb, -0.000466, atol=1e-4)
+    @test isapprox(Cnb, 0.000466, atol=1e-3)
     @test isapprox(Clp, -0.518725, rtol=0.01)
     @test isapprox(Clq, 0.0, atol=ztol)
     @test isapprox(Clr, 0.064243, rtol=0.01)

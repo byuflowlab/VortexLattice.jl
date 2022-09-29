@@ -600,6 +600,10 @@ function body_forces(surfaces, properties, ref, fs, symmetric, frame)
     reference_length = SVector(ref.b, ref.c, ref.b)
     CM = CM ./ reference_length
 
+    # positive Mx corresponds to negative roll, and positive Mz corresponds to negative yaw
+    convention_change = [-1.0, 1.0, -1.0]
+    CM = CM .* convention_change
+
     # switch to specified frame
     CF, CM = body_to_frame(CF, CM, ref, fs, frame)
 
@@ -798,6 +802,14 @@ performed to obtain the panel forces.
     CM_p = CM_p ./ reference_length
     CM_q = CM_q ./ reference_length
     CM_r = CM_r ./ reference_length
+
+    # positive Mx corresponds to negative roll, and positive Mz corresponds to negative yaw
+    convention_change = [-1.0, 1.0, -1.0]
+    CM_a = CM_a .* convention_change
+    CM_b = CM_b .* convention_change
+    CM_p = CM_p .* convention_change
+    CM_q = CM_q .* convention_change
+    CM_r = CM_r .* convention_change
 
     # pack up derivatives
     dCF = (CF_a, CF_b, CF_p, CF_q, CF_r)
