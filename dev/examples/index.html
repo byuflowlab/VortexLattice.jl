@@ -50,29 +50,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><p>The aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.00247 # hide
-CL_avl = 0.24454 # hide
-Cm_avl = -0.02091 # hide
-CDiff_avl = 0.00248 # hide
-
-table = [  # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl;  # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl;  # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl;  # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl  # hide
-]  # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;]  # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>We can also generate files to visualize the results in Paraview using the function <code>write_vtk</code>.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+Cl, Cm, Cn = CM</code></pre><p>The aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24437</td><td align="right">0.24454</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">-3.4e-06</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00248</td><td align="right">0.00248</td><td align="right">-3.9e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02085</td><td align="right">-0.02091</td><td align="right">6.3e-05</td></tr></table>
+</div><p>We can also generate files to visualize the results in Paraview using the function <code>write_vtk</code>.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
 
 write_vtk(&quot;symmetric-planar-wing&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../symmetric-planar-wing.png" alt/></p><p>For asymmetric flow conditions and/or to obtain accurate asymmetric stability derivatives we can use the keyword argument <code>mirror</code> when constructing the geometry to reflect the geometry across the X-Z plane prior to the analysis.  We also set the <code>symmetric</code> flag to <code>false</code> since we are no longer using symmetry in the analysis.</p><pre><code class="language-julia hljs"># construct geometry with mirror image
 grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -94,29 +73,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><p>Once again, the aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.00247 # hide
-CL_avl = 0.24454 # hide
-Cm_avl = -0.02091 # hide
-CDiff_avl = 0.00248 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>The stability derivatives are also very close to those predicted by AVL.</p><pre><code class="language-julia hljs">dCF, dCM = stability_derivatives(system)
+Cl, Cm, Cn = CM</code></pre><p>Once again, the aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24437</td><td align="right">0.24454</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">-3.4e-06</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00248</td><td align="right">0.00248</td><td align="right">-3.9e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02085</td><td align="right">-0.02091</td><td align="right">6.3e-05</td></tr></table>
+</div><p>The stability derivatives are also very close to those predicted by AVL.</p><pre><code class="language-julia hljs">dCF, dCM = stability_derivatives(system)
 
 CDa, CYa, CLa = dCF.alpha
 Cla, Cma, Cna = dCM.alpha
@@ -127,71 +85,8 @@ Clp, Cmp, Cnp = dCM.p
 CDq, CYq, CLq = dCF.q
 Clq, Cmq, Cnq = dCM.q
 CDr, CYr, CLr = dCF.r
-Clr, Cmr, Cnr = dCM.r</code></pre><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CLa_avl =   4.663214 # hide
-CLb_avl =   0.0 # hide
-CYa_avl =   0.0 # hide
-CYb_avl =  -0.000002 # hide
-Cla_avl =   0.0 # hide
-Clb_avl =  -0.025435 # hide
-Cma_avl =  -0.397758 # hide
-Cmb_avl =   0.0 # hide
-Cna_avl =   0.0 # hide
-Cnb_avl =   0.000452 # hide
-CLp_avl =   0.0 # hide
-CLq_avl =   5.649411 # hide
-CLr_avl =   0.0 # hide
-CYp_avl =   0.049063 # hide
-CYq_avl =   0.0 # hide
-CYr_avl =  -0.000828 # hide
-Clp_avl =  -0.524750 # hide
-Clq_avl =   0.0 # hide
-Clr_avl =   0.064456 # hide
-Cmp_avl =   0.0 # hide
-Cmq_avl =  -1.270212 # hide
-Cmr_avl =   0.0 # hide
-Cnp_avl =  -0.019175 # hide
-Cnq_avl =   0.0 # hide
-Cnr_avl =  -0.000931 # hide
-
-table = [ # hide
-&quot;``C_{La}``&quot; CLa CLa_avl CLa-CLa_avl; # hide
-&quot;``C_{Lb}``&quot; CLb CLb_avl CLb-CLb_avl; # hide
-&quot;``C_{Ya}``&quot; CYa CYa_avl CYa-CYa_avl; # hide
-&quot;``C_{Yb}``&quot; CYb CYb_avl CYb-CYb_avl; # hide
-&quot;``C_{la}``&quot; Cla Cla_avl Cla-Cla_avl; # hide
-&quot;``C_{lb}``&quot; Clb Clb_avl Clb-Clb_avl; # hide
-&quot;``C_{ma}``&quot; Cma Cma_avl Cma-Cma_avl; # hide
-&quot;``C_{mb}``&quot; Cmb Cmb_avl Cmb-Cmb_avl; # hide
-&quot;``C_{na}``&quot; Cna Cna_avl Cna-Cna_avl; # hide
-&quot;``C_{nb}``&quot; Cnb Cnb_avl Cnb-Cnb_avl; # hide
-&quot;``C_{Lp}``&quot; CLp CLp_avl CLp-CLp_avl; # hide
-&quot;``C_{Lq}``&quot; CLq CLq_avl CLq-CLq_avl; # hide
-&quot;``C_{Lr}``&quot; CLr CLr_avl CLr-CLr_avl; # hide
-&quot;``C_{Yp}``&quot; CYp CYp_avl CYp-CYp_avl; # hide
-&quot;``C_{Yq}``&quot; CYq CYq_avl CYq-CYq_avl; # hide
-&quot;``C_{Yr}``&quot; CYr CYr_avl CYr-CYr_avl; # hide
-&quot;``C_{lp}``&quot; Clp Clp_avl Clp-Clp_avl; # hide
-&quot;``C_{lq}``&quot; Clq Clq_avl Clq-Clq_avl; # hide
-&quot;``C_{lr}``&quot; Clr Clr_avl Clr-Clr_avl; # hide
-&quot;``C_{mp}``&quot; Cmp Cmp_avl Cmp-Cmp_avl; # hide
-&quot;``C_{mq}``&quot; Cmq Cmq_avl Cmq-Cmq_avl; # hide
-&quot;``C_{mr}``&quot; Cmr Cmr_avl Cmr-Cmr_avl; # hide
-&quot;``C_{np}``&quot; Cnp Cnp_avl Cnp-Cnp_avl; # hide
-&quot;``C_{nq}``&quot; Cnq Cnq_avl Cnq-Cnq_avl; # hide
-&quot;``C_{nr}``&quot; Cnr Cnr_avl Cnr-Cnr_avl; # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>Visualizing the geometry now shows the circulation distribution across the entire wing.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+Clr, Cmr, Cnr = dCM.r</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_&#123;La&#125;&#36;</td><td align="right">4.65884</td><td align="right">4.66321</td><td align="right">-4.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Lb&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.3e-18</td></tr><tr><td align="right">&#36;C_&#123;Ya&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">0.0e&#43;00</td></tr><tr><td align="right">&#36;C_&#123;Yb&#125;&#36;</td><td align="right">-0.00002</td><td align="right">-0.00000</td><td align="right">-1.4e-05</td></tr><tr><td align="right">&#36;C_&#123;la&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.5e-16</td></tr><tr><td align="right">&#36;C_&#123;lb&#125;&#36;</td><td align="right">-0.02648</td><td align="right">-0.02543</td><td align="right">-1.0e-03</td></tr><tr><td align="right">&#36;C_&#123;ma&#125;&#36;</td><td align="right">-0.39567</td><td align="right">-0.39776</td><td align="right">2.1e-03</td></tr><tr><td align="right">&#36;C_&#123;mb&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-8.7e-19</td></tr><tr><td align="right">&#36;C_&#123;na&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">9.1e-18</td></tr><tr><td align="right">&#36;C_&#123;nb&#125;&#36;</td><td align="right">0.00125</td><td align="right">0.00045</td><td align="right">8.0e-04</td></tr><tr><td align="right">&#36;C_&#123;Lp&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">3.3e-16</td></tr><tr><td align="right">&#36;C_&#123;Lq&#125;&#36;</td><td align="right">5.65083</td><td align="right">5.64941</td><td align="right">1.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Lr&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">2.8e-17</td></tr><tr><td align="right">&#36;C_&#123;Yp&#125;&#36;</td><td align="right">0.04569</td><td align="right">0.04906</td><td align="right">-3.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Yq&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.8e-17</td></tr><tr><td align="right">&#36;C_&#123;Yr&#125;&#36;</td><td align="right">-0.00219</td><td align="right">-0.00083</td><td align="right">-1.4e-03</td></tr><tr><td align="right">&#36;C_&#123;lp&#125;&#36;</td><td align="right">-0.52393</td><td align="right">-0.52475</td><td align="right">8.2e-04</td></tr><tr><td align="right">&#36;C_&#123;lq&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.0e-16</td></tr><tr><td align="right">&#36;C_&#123;lr&#125;&#36;</td><td align="right">0.06460</td><td align="right">0.06446</td><td align="right">1.5e-04</td></tr><tr><td align="right">&#36;C_&#123;mp&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.1e-17</td></tr><tr><td align="right">&#36;C_&#123;mq&#125;&#36;</td><td align="right">-1.24779</td><td align="right">-1.27021</td><td align="right">2.2e-02</td></tr><tr><td align="right">&#36;C_&#123;mr&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">1.5e-18</td></tr><tr><td align="right">&#36;C_&#123;np&#125;&#36;</td><td align="right">-0.01918</td><td align="right">-0.01918</td><td align="right">-3.3e-06</td></tr><tr><td align="right">&#36;C_&#123;nq&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-4.5e-20</td></tr><tr><td align="right">&#36;C_&#123;nr&#125;&#36;</td><td align="right">-0.00094</td><td align="right">-0.00093</td><td align="right">-5.2e-06</td></tr></table>
+</div><p>Visualizing the geometry now shows the circulation distribution across the entire wing.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
 
 write_vtk(&quot;mirrored-planar-wing&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../mirrored-planar-wing.png" alt/></p><h2 id="Steady-State-Analysis-of-a-Wing-with-Dihedral"><a class="docs-heading-anchor" href="#Steady-State-Analysis-of-a-Wing-with-Dihedral">Steady State Analysis of a Wing with Dihedral</a><a id="Steady-State-Analysis-of-a-Wing-with-Dihedral-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-State-Analysis-of-a-Wing-with-Dihedral" title="Permalink"></a></h2><p>This example shows how to calculate aerodynamic coefficients and stability derivatives for a simple wing with dihedral.</p><pre><code class="language-julia hljs">using VortexLattice
 
@@ -242,29 +137,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL, with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.00248 # hide
-CL_avl = 0.24808 # hide
-Cm_avl = -0.02250 # hide
-CDiff_avl = 0.0024671 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are even closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
+Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL, with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.23592</td><td align="right">0.24808</td><td align="right">-1.2e-02</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00226</td><td align="right">0.00248</td><td align="right">-2.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00223</td><td align="right">0.00247</td><td align="right">-2.4e-04</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02155</td><td align="right">-0.02250</td><td align="right">9.5e-04</td></tr></table>
+</div><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are even closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
 
 # function to construct a normal vector the way AVL does
 #  - `ds` is a line representing the leading edge
@@ -309,29 +183,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.00248 # hide
-CL_avl = 0.24808 # hide
-Cm_avl = -0.02250 # hide
-CDiff_avl = 0.0024671 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+Cl, Cm, Cn = CM</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24820</td><td align="right">0.24808</td><td align="right">1.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00250</td><td align="right">0.00248</td><td align="right">1.6e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">2.3e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02258</td><td align="right">-0.02250</td><td align="right">-7.8e-05</td></tr></table>
+</div><pre><code class="language-julia hljs">properties = get_surface_properties(system)
 
 write_vtk(&quot;wing-with-dihedral&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../wing-with-dihedral.png" alt/></p><h2 id="Steady-State-Analysis-of-a-Wing-and-Tail"><a class="docs-heading-anchor" href="#Steady-State-Analysis-of-a-Wing-and-Tail">Steady State Analysis of a Wing and Tail</a><a id="Steady-State-Analysis-of-a-Wing-and-Tail-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-State-Analysis-of-a-Wing-and-Tail" title="Permalink"></a></h2><p>This example shows how to calculate aerodynamic coefficients and stability derivatives for multiple lifting surfaces.</p><pre><code class="language-julia hljs">using VortexLattice
 
@@ -418,29 +271,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL (with the finite core model disabled in AVL), with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.01060 # hide
-CL_avl = 0.60478 # hide
-Cm_avl = -0.02700 # hide
-CDiff_avl = 0.0104282 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
+Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL (with the finite core model disabled in AVL), with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60113</td><td align="right">0.60478</td><td align="right">-3.7e-03</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01052</td><td align="right">0.01060</td><td align="right">-8.4e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01026</td><td align="right">0.01043</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02691</td><td align="right">-0.02700</td><td align="right">9.1e-05</td></tr></table>
+</div><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
 
 # function to construct a normal vector the way AVL does
 #  - `ds` is a line representing the leading edge
@@ -483,29 +315,8 @@ CF, CM = body_forces(system; frame=Wind())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.01060 # hide
-CL_avl = 0.60478 # hide
-Cm_avl = -0.02700 # hide
-CDiff_avl = 0.0104282 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.</p><pre><code class="language-julia hljs">using VortexLattice
+Cl, Cm, Cn = CM</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60424</td><td align="right">0.60478</td><td align="right">-5.4e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01062</td><td align="right">0.01060</td><td align="right">1.8e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01036</td><td align="right">0.01043</td><td align="right">-7.0e-05</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02575</td><td align="right">-0.02700</td><td align="right">1.3e-03</td></tr></table>
+</div><p>To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.</p><pre><code class="language-julia hljs">using VortexLattice
 
 # wing
 xle = [0.0, 0.2]
@@ -598,29 +409,8 @@ CF, CM = body_forces(system; frame=Stability())
 CDiff = far_field_drag(system)
 
 CD, CY, CL = CF
-Cl, Cm, Cn = CM</code></pre><p>The resulting aerodynamic coefficients now match very closely with AVL.</p><pre><code class="language- hljs">using PrettyTables # hide
-using Markdown # hide
-
-CD_avl = 0.01060 # hide
-CL_avl = 0.60478 # hide
-Cm_avl = -0.02700 # hide
-CDiff_avl = 0.0104282 # hide
-
-table = [ # hide
-&quot;``C_L``&quot; CL CL_avl CL-CL_avl; # hide
-&quot;``C_{Di}`` (nearfield)&quot; CD CD_avl CD-CD_avl; # hide
-&quot;``C_{Di}`` (farfield)&quot; CDiff CDiff_avl CDiff-CDiff_avl; # hide
-&quot;``C_M``&quot; Cm Cm_avl Cm-Cm_avl # hide
-] # hide
-header = [&quot;Coefficient&quot;, &quot;VortexLattice&quot;, &quot;AVL&quot;, &quot;Difference&quot;] # hide
-
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
-    tf = tf_markdown, # hide
-    alignment=[:l, :r, :r, :r], # hide
-    formatters = (ft_printf(&quot;%0.5f&quot;, [2,3]), ft_printf(&quot;%0.1e&quot;, 4))) # hide
-
-Markdown.parse(str) # hide</code></pre><p>By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+Cl, Cm, Cn = CM</code></pre><p>The resulting aerodynamic coefficients now match very closely with AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60466</td><td align="right">0.60478</td><td align="right">-1.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01060</td><td align="right">0.01060</td><td align="right">-7.2e-07</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01037</td><td align="right">0.01043</td><td align="right">-6.2e-05</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02702</td><td align="right">-0.02700</td><td align="right">-1.7e-05</td></tr></table>
+</div><p>By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
 
 write_vtk(&quot;wing-tail&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../wing-tail.png" alt/></p><h2 id="Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight"><a class="docs-heading-anchor" href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight">Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight</a><a id="Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight-1"></a><a class="docs-heading-anchor-permalink" href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight" title="Permalink"></a></h2><p>This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.</p><pre><code class="language-julia hljs"># Katz and Plotkin: Figures 13.34 and 13.35
 # AR = [4, 8, 12, 20, ∞]
@@ -1062,4 +852,4 @@ for i = 1:length(k)
     plot!(ωt, CL, label=&quot;\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$&quot;)
 end
 
-plot!(show=true)</code></pre><p><img src="../heaving-rectangular-wing.svg" alt/></p><p>Visualizing the <code>k=0.5</code> case in ParaView yields the following animation.</p><p><img src="../heaving-rectangular-wing.gif" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../library/">Library »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Thursday 29 September 2022 20:47">Thursday 29 September 2022</span>. Using Julia version 1.6.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot!(show=true)</code></pre><p><img src="../heaving-rectangular-wing.svg" alt/></p><p>Visualizing the <code>k=0.5</code> case in ParaView yields the following animation.</p><p><img src="../heaving-rectangular-wing.gif" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../library/">Library »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Thursday 29 September 2022 21:05">Thursday 29 September 2022</span>. Using Julia version 1.6.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
