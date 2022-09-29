@@ -93,8 +93,9 @@ table = [  # hide
 ]  # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"]  # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; #hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -160,8 +161,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -248,8 +250,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -345,8 +348,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -425,8 +429,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -556,8 +561,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -634,8 +640,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
@@ -763,8 +770,9 @@ table = [ # hide
 ] # hide
 header = ["Coefficient", "VortexLattice", "AVL", "Difference"] # hide
 
-str = pretty_table(String, table, header; # hide
-    backend=:text, # hide
+str = pretty_table(String, table; # hide
+    backend=Val(:text), # hide
+    header=(header,), # hide
     tf = tf_markdown, # hide
     alignment=[:l, :r, :r, :r], # hide
     formatters = (ft_printf("%0.5f", [2,3]), ft_printf("%0.1e", 4))) # hide
