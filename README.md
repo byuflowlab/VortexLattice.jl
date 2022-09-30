@@ -47,7 +47,7 @@ Authors: Taylor McDonnell and Andrew Ning
 Enter the package manager by typing `]` and then run the following:
 
 ```julia
-pkg> add https://github.com/byuflowlab/VortexLattice.jl
+pkg> add VortexLattice
 ```
 
 ## Performance
