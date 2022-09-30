@@ -7,7 +7,8 @@ Defines the freestream and rotational velocity properties.
 - `Vinf`: Freestream velocity
 - `alpha`: angle of attack (rad)
 - `beta`: sideslip angle (rad)
-- `Omega`: rotation vector (p, q, r) of the body frame about the reference center
+- `Omega`: rotation vector (p, q, r) of the body frame about the reference center.
+    Uses standard coordinate system from dynamics (positve p roll right wing down to turn right, positive q is pitch nose up, positive r is yaw nose to the right)
 """
 struct Freestream{TF}
     Vinf::TF
@@ -282,7 +283,10 @@ rotational_velocity
 
 @inline rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
 
-@inline rotational_velocity(r, Ω, rref) = cross(r - rref, Ω)
+@inline function rotational_velocity(r, Omega, rref) 
+    Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
+    return cross(r - rref, Ω)
+end
 
 """
     rotational_velocity_derivatives(r, freestream, reference)
@@ -294,14 +298,15 @@ rotational_velocity_derivatives
 
 @inline rotational_velocity_derivatives(r, fs::Freestream, ref::Reference) = rotational_velocity_derivatives(r, fs.Omega, ref.r)
 
-@inline function rotational_velocity_derivatives(r, Ω, rref)
+@inline function rotational_velocity_derivatives(r, Omega, rref)
 
     tmp = r - rref
+    Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
 
     Vrot = cross(tmp, Ω)
-    Vrot_p = SVector(0, tmp[3], -tmp[2])
+    Vrot_p = -SVector(0, tmp[3], -tmp[2])
     Vrot_q = SVector(-tmp[3], 0, tmp[1])
-    Vrot_r = SVector(tmp[2], -tmp[1], 0)
+    Vrot_r = -SVector(tmp[2], -tmp[1], 0)
 
     dVrot = (Vrot_p, Vrot_q, Vrot_r)
 
@@ -391,7 +396,7 @@ function trajectory_to_freestream(dt;
         Vinf = norm(V)
         α = atan(V[3]/V[1])
         β = -asin(V[2]/norm(V))
-        Ω = SVector(p[it], q[it], r[it])
+        Ω = SVector(-p[it], q[it], -r[it])  # using standard dynamic convention
 
         # assemble freestream parameters
         fs[it] = Freestream(Vinf, α, β, Ω)

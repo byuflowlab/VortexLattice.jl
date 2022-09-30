@@ -818,6 +818,55 @@ end
     @test isapprox(Cnr, -0.000898, rtol=0.01)
 end
 
+@testset "AVL - Run 12 - Rotational Velocity" begin
+
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = true
+    symmetric = false
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [2*Vinf*0.05/bref; 0.0; 0.0]  # nondimensional pbar = 0.05
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # vortex rings
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    surfaces = [surface]
+
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+    CF, CM = body_forces(system; frame=Stability())
+
+    CD, CY, CL = CF
+    Cl, Cm, Cn = CM
+
+    @test isapprox(CL, 0.24323, atol=1e-3)
+    @test isapprox(CD, 0.00069, atol=1e-5)
+    @test isapprox(Cm, -0.02251, atol=1e-4)
+    @test isapprox(CY, 0.00235, atol=2e-4)
+    @test isapprox(Cl, -0.02594, atol=1e-4)
+    @test isapprox(Cn, -0.00099, atol=2e-4)
+
+end
+
 @testset "Lifting Line Coefficients" begin
     # Simple Wing with Uniform Spacing
 

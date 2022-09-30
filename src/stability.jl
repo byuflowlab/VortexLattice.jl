@@ -41,10 +41,6 @@ function body_derivatives(system)
     CM_v = CM_b*b_v
     CM_w = CM_a*a_w
 
-    # p and r are have opposite signs compared to Omega_x, Omega_z
-    CF_p *= -1; CM_p *= -1
-    CF_r *= -1; CM_r *= -1
-
     # pack up derivatives as named tuples
     dCF = (u=CF_u, v=CF_v, w=CF_w, p=CF_p, q=CF_q, r=CF_r)
     dCM = (u=CM_u, v=CM_v, w=CM_w, p=CM_p, q=CM_q, r=CM_r)
@@ -134,10 +130,6 @@ function stability_derivatives(system)
     CM_p = (CMs_ps*2*ref.V/ref.b) ./ reference_length
     CM_q = (CMs_qs*2*ref.V/ref.c) ./ reference_length
     CM_r = (CMs_rs*2*ref.V/ref.b) ./ reference_length
-
-    # p and r are have opposite signs compared to Omega_x, Omega_z
-    CF_p *= -1; CM_p *= -1
-    CF_r *= -1; CM_r *= -1
 
     # pack up derivatives as named tuples
     dCF = (alpha=CF_a, beta=CF_b, p=CF_p, q=CF_q, r=CF_r)

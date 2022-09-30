@@ -1,0 +1,9 @@
+# Run 12: Simple Wing - with rotation
+echo "load simplewing1.avl\noper\na r 0.05\na a 1\nx\nst\n\n\nquit\n" > commands
+cat commands | ./avl > output
+grep -o "CLtot.*" output
+grep -o "CDtot.*" output
+grep -o "Cmtot.*" output
+grep -o "CYtot.*" output
+grep -o "Cl'tot.*" output
+grep -o "Cn'tot.*" output
