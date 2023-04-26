@@ -64,8 +64,13 @@ function SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
     return SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
+
 @inline Base.eltype(::Type{SurfacePanel{TF}}) where TF = TF
 @inline Base.eltype(::SurfacePanel{TF}) where TF = TF
+
+SurfacePanel{TF}(p::SurfacePanel) where TF = SurfacePanel{TF}(p.rtl, p.rtc, p.rtr,
+    p.rbl, p.rbc, p.rbr, p.rcp, p.ncp, p.core_size, p.chord)
+Base.convert(::Type{SurfacePanel{TF}}, p::SurfacePanel) where {TF} = SurfacePanel{TF}(p)
 
 """
     top_left(panel::SurfacePanel)
@@ -384,6 +389,9 @@ end
 
 @inline Base.eltype(::Type{WakePanel{TF}}) where TF = TF
 @inline Base.eltype(::WakePanel{TF}) where TF = TF
+
+WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.chord)
+Base.convert(::Type{WakePanel{TF}}, p::WakePanel) where {TF} = WakePanel{TF}(p)
 
 @inline top_left(panel::WakePanel) = panel.rtl
 

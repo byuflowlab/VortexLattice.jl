@@ -28,6 +28,9 @@ end
 Base.eltype(::Type{Reference{TF}}) where TF = TF
 Base.eltype(::Reference{TF}) where TF = TF
 
+Reference{TF}(r::Reference) where TF = Reference{TF}(r.S, r.c, r.b, r.r, r.V)
+Base.convert(::Type{Reference{TF}}, r::Reference) where {TF} = Reference{TF}(r)
+
 # --- reference frames --- #
 
 """
