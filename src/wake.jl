@@ -147,15 +147,19 @@ end
         # velocity at the wake shedding locations
         for is = 1:ns+1
 
+            # skip loop if true
+            continue_loop = false
+
             # check if this point is a duplicate, skip if it is
             if (isurf, is) in keys(repeated_points)
                 for (jsurf, js) in repeated_points[(isurf, is)]
                     # NOTE: we assume that a point is not repeated on the same surface
                     if jsurf < isurf
                         wake_velocities[isurf][1, is] = wake_velocities[jsurf][1, js]
-                        continue
+                        continue_loop = true
                     end
                 end
+                continue_loop && continue
             end
 
             # get vertex location
