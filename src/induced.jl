@@ -27,6 +27,41 @@ relative to the end of the bound vortex
     return Vhat
 end
 
+function bound_velocity_gradient(r1::SVector{3,TF},r2) where TF
+    # zeta
+    r1norm = norm(r1)
+    r2norm = norm(r2)
+    dotprod = dot(r1,r2)
+    t1 = 1/(r1norm*r2norm + dotprod)
+    t2 = 1/r1norm + 1/r2norm
+    t3 = 1/4/pi
+    z = t1*t2*t3
+
+    # zeta gradient
+    r1norm3 = r1norm^3
+    r2norm3 = r2norm^3
+    t4 = SVector{3,TF}(r1[i]/r1norm^3 + r2[i]/r2norm^3 for i in 1:3)
+    t5 = SVector{3,TF}(r1norm/r2norm*r2[i] + r2norm/r1norm*r1[i] + r1[i] + r2[i] for i in 1:3)
+    zgrad = t3*(-t1*t4 - t2*t5*t1^2)
+
+    # Omega
+    o = cross(r1,r2)
+
+    # Omega gradient
+    ograd = SMatrix{3,3,TF,9}(
+        0.0,# 1,1
+        r1[3]-r2[3], # 2,1
+        r2[2]-r1[2], # 3,1
+        r2[3]-r1[3], # 1,2
+        0.0, # 2,2
+        r1[1]-r2[1], # 3,2
+        r1[2]-r2[2], # 1,3
+        r2[1]-r1[1], # 2,3
+        0.0 # 3,3
+    )
+    return transpose(zgrad * transpose(o)) + z * ograd
+end
+
 """
     trailing_induced_velocity(r1, r2, xhat, finite_core, core_size)
 

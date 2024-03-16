@@ -390,7 +390,7 @@ end
 @inline Base.eltype(::Type{WakePanel{TF}}) where TF = TF
 @inline Base.eltype(::WakePanel{TF}) where TF = TF
 
-WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.chord)
+WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.gamma)
 Base.convert(::Type{WakePanel{TF}}, p::WakePanel) where {TF} = WakePanel{TF}(p)
 
 @inline top_left(panel::WakePanel) = panel.rtl
@@ -613,4 +613,42 @@ Return induced drag from vortex `j` induced on panel `i`
     Di = RHO/2.0*Γi*Vn
 
     return Di
+end
+
+"""
+    FastMultipolePanel{TF}
+
+SurfacePanel used for fast multipole acceleration.
+
+**Fields**
+ - `rtl`: position of the left side of the top bound vortex
+ - `rtr`: position of the right side of the top bound vortex
+ - `rbl`: position of the left side of the bottom bound vortex
+ - `rbr`: position of the right side of the bottom bound vortex
+ - `rcp`: position of the panel control point
+ - `ncp`: normal vector at the panel control point
+ - `radius`: effective panel radius for determining multipole acceptance
+ - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
+ - `gamma`: circulation strength of the panel
+"""
+struct FastMultipolePanel{TF}
+    rtl::SVector{3,TF}
+    rtr::SVector{3,TF}
+    rbl::SVector{3,TF}
+    rbr::SVector{3,TF}
+    ncp::SVector{3,TF}
+    radius::TF
+    core_size::TF
+    gamma::TF
+end
+
+FastMultipolePanel(p::SurfacePanel{TF}, gamma) where TF = FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.ncp, max(norm(p.rtl-p.rbr)/2, norm(p.rbl-p.rtr)/2), p.core_size, gamma)
+
+function FastMultipolePanel(p::WakePanel{TF}) where TF
+    v1 = p.rtr-p.rbl
+    v2 = p.rtl-p.rbr
+    ncp = cross(v1, v2)
+    ncp /= norm(ncp)
+    radius = max(norm(v1)/2, norm(v2)/2)
+    return FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, ncp, radius, p.core_size, p.gamma)
 end

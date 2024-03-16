@@ -1,8 +1,9 @@
 module VortexLattice
 
+using FLOWFMM
+using Interpolations
 using LinearAlgebra
 using StaticArrays
-using Interpolations
 using WriteVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms

@@ -45,7 +45,7 @@ Contains pre-allocated storage for internal system variables.
  - `AIC`: Aerodynamic influence coefficient matrix from the surface panels
  - `w`: Normal velocity at the control points from external sources and wakes
  - `Γ`: Circulation strength of the surface panels
- - `V`: Velocity at the wake vertices for each surface
+ - `V`: Velocity at the wake vertices for each surface (includes velocity at wake-shed locations)
  - `surfaces`: Surfaces, represented by matrices of surface panels
  - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
@@ -73,6 +73,13 @@ Contains pre-allocated storage for internal system variables.
  - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
+ - `fmm_panels`: Fast-access copies of all surface panels (including surface-wake transition panels) for fast multipole acceleration.
+ - `fmm_Vcp`: Velocity at the control points of `fmm_panels`
+ - `fmm_force_probes`: Locations and induced velocity of the center of the top vortices
+ - `fmm_wake_probes`: Locations, induced velocity, and induced velocity gradient of the wake particle shed locations
+ - `fmm_p`: Multipole expansion order
+ - `fmm_ncrit`: Maximum number of panels in the leaf level of the FMM
+ - `fmm_theta`: Multipole acceptance criterion for the FMM, between 0 and 1
 """
 struct System{TF}
     AIC::Matrix{TF}
@@ -103,6 +110,13 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
+    # fmm_panels::Vector{FastMultipolePanel{TF}}
+    # fmm_Vcp::Vector{SVector{3,TF}}
+    # fmm_velocity_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
+    # fmm_gradient_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Vector{SMatrix{3,3,TF,9}}}
+    # fmm_p::Val{Int}
+    # fmm_ncrit::Int
+    # fmm_theta::Float64
 end
 
 @inline Base.eltype(::Type{System{TF}}) where TF = TF

@@ -565,6 +565,7 @@ function propagate_system!(system, surfaces, fs, dt;
     system.nwake .= nwake
 
     # update the wake shedding location for this time step
+    # (based on freestream/kinematic/other velocity only)
     update_wake_shedding_locations!(wakes, wake_shedding_locations,
         current_surfaces, ref, fs, dt, additional_velocity, Vte,
         nwake, eta)
@@ -585,7 +586,7 @@ function propagate_system!(system, surfaces, fs, dt;
         wake_shedding_locations = wake_shedding_locations,
         trailing_vortices = trailing_vortices)
 
-    # calculate RHS
+    # calculate RHS <-- add FMM here: wake-on-all
     if derivatives
         normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
             ref, fs; additional_velocity, Vcp, symmetric, nwake,
@@ -611,6 +612,7 @@ function propagate_system!(system, surfaces, fs, dt;
     dΓdt ./= dt # divide by corresponding time step
 
     # compute transient forces on each panel (if necessary)
+    # also compute surface-on-all induced velocity
     if near_field_analysis
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
@@ -633,6 +635,7 @@ function propagate_system!(system, surfaces, fs, dt;
     system.derivatives[] = derivatives
 
     # update wake velocities
+    # ---should already be done if I've done this right---
     get_wake_velocities!(wake_velocities, current_surfaces,
         wakes, ref, fs, Γ, additional_velocity, Vte, symmetric,
         repeated_points, nwake, surface_id, wake_finite_core,
