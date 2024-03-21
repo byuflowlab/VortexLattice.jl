@@ -48,7 +48,7 @@ induced velocity from the wake panels.
 
 This forms the right hand side of the circulation linear system solve.
 """
-@inline function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
+@inline function normal_velocity!(w, surfaces, wakes, ref, fs, probes=nothing; additional_velocity,
     Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat)
 
     nsurf = length(surfaces)
@@ -88,15 +88,19 @@ This forms the right hand side of the circulation linear system solve.
             end
 
             # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
-                    V += induced_velocity(rcp, wakes[jsurf];
-                        finite_core = wake_finite_core[isurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
+            if isnothing(probes)
+                for jsurf = 1:length(wakes)
+                    if nwake[jsurf] > 0
+                        V += induced_velocity(rcp, wakes[jsurf];
+                            finite_core = wake_finite_core[isurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
                 end
+            else # use probes to obtain FMM acceleration
+                V += probes.velocity[iw+i]
             end
 
             # get normal component
@@ -122,7 +126,7 @@ respect to the freestream parameters.
 
 This forms the right hand side of the circulation linear system solve (and its derivatives).
 """
-@inline function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
+@inline function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs, probes=nothing;
     additional_velocity, Vcp, symmetric, nwake, surface_id, wake_finite_core,
     trailing_vortices, xhat)
 
@@ -172,15 +176,20 @@ This forms the right hand side of the circulation linear system solve (and its d
             end
 
             # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
-                    V += induced_velocity(rcp, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
+            if isnothing(probes)
+                for jsurf = 1:length(wakes)
+                    if nwake[jsurf] > 0
+                        V += induced_velocity(rcp, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
                 end
+            else # use probes for FMM acceleration
+                V += probes.velocity[iw+i]
+                @assert probes.position[iw+i] == rcp
             end
 
             # right hand side vector

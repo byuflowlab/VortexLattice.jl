@@ -132,10 +132,18 @@ end
 """
 @inline function get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
     additional_velocity, Vte, symmetric, repeated_points, nwake,
-    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
+    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
+    probes=nothing)
 
     # number of surfaces
     nsurf = length(surfaces)
+    
+    # first probe
+    i_probe = 1
+    for surface in surfaces # surface control points and filament centers
+        nc, ns = size(surface)
+        i_probe += nc*ns + 2*nc*ns + nc
+    end
 
     # loop through all surfaces
     for isurf = 1:nsurf
@@ -147,20 +155,21 @@ end
         # velocity at the wake shedding locations
         for is = 1:ns+1
 
-            # skip loop if true
-            continue_loop = false
+            # # skip loop if true
+            # continue_loop = false
 
             # check if this point is a duplicate, skip if it is
-            if (isurf, is) in keys(repeated_points)
-                for (jsurf, js) in repeated_points[(isurf, is)]
-                    # NOTE: we assume that a point is not repeated on the same surface
-                    if jsurf < isurf
-                        wake_velocities[isurf][1, is] = wake_velocities[jsurf][1, js]
-                        continue_loop = true
-                    end
-                end
-                continue_loop && continue
-            end
+            # if (isurf, is) in keys(repeated_points)
+            #     for (jsurf, js) in repeated_points[(isurf, is)]
+            #         # NOTE: we assume that a point is not repeated on the same surface
+            #         if jsurf < isurf
+            #             wake_velocities[isurf][1, is] = wake_velocities[jsurf][1, js]
+            #             # continue_loop = true
+            #             continue
+            #         end
+            #     end
+            #     # continue_loop && continue
+            # end
 
             # get vertex location
             rc = wake_shedding_locations[isurf][is]
@@ -178,6 +187,9 @@ end
 
             # velocity at the trailing edge
             wake_velocities[isurf][1,is] = V
+
+            # we're ignoring the wake- and surface-induced velocity here
+            i_probe += 1
         end
 
         # velocity at all other wake vertices
@@ -187,15 +199,15 @@ end
         for I in cr
 
             # check if this point is a duplicate, skip if it is
-            if (isurf, I[2]) in keys(repeated_points)
-                for (jsurf, js) in repeated_points[(isurf, I[2])]
-                    # NOTE: we assume that a point is not repeated on the same surface
-                    if jsurf < isurf
-                        wake_velocities[isurf][I] = wake_velocities[jsurf][I[1], js]
-                        continue
-                    end
-                end
-            end
+            # if (isurf, I[2]) in keys(repeated_points)
+            #     for (jsurf, js) in repeated_points[(isurf, I[2])]
+            #         # NOTE: we assume that a point is not repeated on the same surface
+            #         if jsurf < isurf
+            #             wake_velocities[isurf][I] = wake_velocities[jsurf][I[1], js]
+            #             continue
+            #         end
+            #     end
+            # end
 
             # get vertex location
             if I[1] <= nw && I[2] <= ns
@@ -220,77 +232,82 @@ end
             end
 
             # induced velocity from each surface and wake
-            jΓ = 0 # index for accessing Γ
-            for jsurf = 1:nsurf
+            if isnothing(probes) # no fmm acceleration
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
 
-                # number of panels on sending surface
-                Ns = length(surfaces[jsurf])
+                    # number of panels on sending surface
+                    Ns = length(surfaces[jsurf])
 
-                # check if receiving point is repeated on the sending surface
-                if isurf == jsurf
-                    # the surfaces are the same
-                    same_surface = true
-                    # vertex spanwise coordinate
-                    js = I[2]
-                else
-                    # the surfaces are different, but the point could still be a duplicate
-                    if (isurf, I[2]) in keys(repeated_points)
-                        # the vertex is duplicated
-
-                        # check if the vertex is on the sending surface
-                        idx = findfirst(x -> x[1] == jsurf, repeated_points[(isurf, I[2])])
-
-                        if isnothing(idx)
-                            # the vertex is not duplicated on the sending surface
-                            same_surface = false
-                        else
-                            # the vertex is duplicated on the sending surface
-                            same_surface = true
-                            # vertex spanwise coordinate on sending surface
-                            js = repeated_points[(isurf, I[2])][idx][2]
-                        end
+                    # check if receiving point is repeated on the sending surface
+                    if isurf == jsurf
+                        # the surfaces are the same
+                        same_surface = true
+                        # vertex spanwise coordinate
+                        js = I[2]
                     else
-                        # the vertex is not duplicated
+                        # the surfaces are different, but the point could still be a duplicate
+                        if (isurf, I[2]) in keys(repeated_points)
+                            # the vertex is duplicated
 
-                        # the vertex is not on the sending surface
-                        same_surface = false
+                            # check if the vertex is on the sending surface
+                            idx = findfirst(x -> x[1] == jsurf, repeated_points[(isurf, I[2])])
+
+                            if isnothing(idx)
+                                # the vertex is not duplicated on the sending surface
+                                same_surface = false
+                            else
+                                # the vertex is duplicated on the sending surface
+                                same_surface = true
+                                # vertex spanwise coordinate on sending surface
+                                js = repeated_points[(isurf, I[2])][idx][2]
+                            end
+                        else
+                            # the vertex is not duplicated
+
+                            # the vertex is not on the sending surface
+                            same_surface = false
+                        end
                     end
-                end
 
-                # extract circulation values corresponding to the sending surface
-                vΓ = view(Γ, jΓ+1:jΓ+Ns)
+                    # extract circulation values corresponding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
 
-                # induced velocity from this surface
-                wake_velocities[isurf][I] += induced_velocity(rc, surfaces[jsurf], vΓ;
-                    finite_core = surface_id[isurf] != surface_id[jsurf],
-                    wake_shedding_locations = wake_shedding_locations[jsurf],
-                    symmetric = symmetric[jsurf],
-                    trailing_vortices = false,
-                    xhat = xhat)
-
-                # add induced velocity from the wake
-                if same_surface
-                    # vertex location on wake
-                    J = CartesianIndex(I[1], js)
-
-                    # induced velocity from wake on its own vertex
-                    wake_velocities[isurf][I] += induced_velocity(J, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                    # induced velocity from this surface
+                    wake_velocities[isurf][I] += induced_velocity(rc, surfaces[jsurf], vΓ;
+                        finite_core = surface_id[isurf] != surface_id[jsurf],
+                        wake_shedding_locations = wake_shedding_locations[jsurf],
                         symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
+                        trailing_vortices = false,
                         xhat = xhat)
-                else
-                    # induced velocity from wake on another wake's vertex
-                    wake_velocities[isurf][I] += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-                end
 
-                jΓ += Ns # increment Γ index
+                    # add induced velocity from the wake
+                    if same_surface
+                        # vertex location on wake
+                        J = CartesianIndex(I[1], js)
+
+                        # induced velocity from wake on its own vertex
+                        wake_velocities[isurf][I] += induced_velocity(J, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    else
+                        # induced velocity from wake on another wake's vertex
+                        wake_velocities[isurf][I] += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
+
+                    jΓ += Ns # increment Γ index
+                end
+            else # fmm acceleration
+                wake_velocities[isurf][I] += probes.velocity[i_probe]
+                i_probe += 1
             end
         end
     end

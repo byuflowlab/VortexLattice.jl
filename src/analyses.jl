@@ -75,7 +75,8 @@ function steady_analysis!(system, surfaces, ref, fs;
     fcore = (c, Δs) -> 1e-3,
     calculate_influence_matrix = true,
     near_field_analysis = true,
-    derivatives = true)
+    derivatives = true,
+    vertical_segments = false)
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -181,7 +182,7 @@ function steady_analysis!(system, surfaces, ref, fs;
                 wake_finite_core = wake_finite_core,
                 wake_shedding_locations = nothing, # shedding location at trailing edge
                 trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                xhat = xhat, vertical_segments = vertical_segments)
         else
             near_field_forces!(properties, surfaces, wakes, ref, fs, Γ;
                 dΓdt = nothing, # no unsteady forces
@@ -194,7 +195,7 @@ function steady_analysis!(system, surfaces, ref, fs;
                 wake_finite_core = wake_finite_core,
                 wake_shedding_locations = nothing, # shedding location at trailing edge
                 trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                xhat = xhat, vertical_segments = vertical_segments)
         end
     end
 
@@ -241,7 +242,7 @@ step.
     panels in the system.  Defaults to `zeros(N)` where `N` is the total number
     of surface panels in `surfaces`.
  - `nwake`: Maximum number of wake panels in the chordwise direction for each
-    surface.  Defaults to `length(dx)` for all surfaces.
+    surface.  Defaults to `length(dt)` for all surfaces.
  - `surface_id`: Surface ID for each surface.  The finite core model is disabled
     when calculating the influence of surfaces/wakes that share the same ID.
  - `wake_finite_core`: Flag for each wake indicating whether the finite core
@@ -264,10 +265,12 @@ unsteady_analysis
 
 # same grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractArray}, ref, fs, dt;
-    nwake = fill(length(dt), length(surfaces)), kwargs...)
+    nwake = fill(length(dt), length(surfaces)), 
+    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
+    kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces; nw = nwake)
+    system = System(surfaces; nw = nwake, fmm_toggle, fmm_direct, fmm_p, fmm_ncrit, fmm_theta)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -275,10 +278,12 @@ end
 
 # different grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractVector{<:AbstractArray}},
-    ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])), kwargs...)
+    ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])), 
+    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
+    kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces[1]; nw = nwake)
+    system = System(surfaces[1]; nw = nwake, fmm_toggle, fmm_direct, fmm_p, fmm_ncrit, fmm_theta)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -301,7 +306,8 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
     save = 1:length(dt),
     calculate_influence_matrix = true,
     near_field_analysis = true,
-    derivatives = true)
+    derivatives = true,
+    vertical_segments = false)
 
     # float number type
     TF = eltype(system)
@@ -406,7 +412,8 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
                 eta = 0.25,
                 calculate_influence_matrix = first_step && calculate_influence_matrix,
                 near_field_analysis = it in save || (last_step && near_field_analysis),
-                derivatives = last_step && derivatives)
+                derivatives = last_step && derivatives, vertical_segments = vertical_segments,
+                fmm_velocity_probes = system.fmm_toggle ? system.fmm_velocity_probes : nothing)
         else
             propagate_system!(system, fs[it], dt[it];
                 additional_velocity,
@@ -415,7 +422,8 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
                 eta = 0.25,
                 calculate_influence_matrix = first_step && calculate_influence_matrix,
                 near_field_analysis = it in save || (last_step && near_field_analysis),
-                derivatives = last_step && derivatives)
+                derivatives = last_step && derivatives, vertical_segments = vertical_segments,
+                fmm_velocity_probes = system.fmm_toggle ? system.fmm_velocity_probes : nothing)
         end
 
         # increment wake panel counter for each surface
@@ -484,7 +492,8 @@ function propagate_system!(system, surfaces, fs, dt;
     eta,
     calculate_influence_matrix,
     near_field_analysis,
-    derivatives)
+    derivatives, vertical_segments,
+    fmm_velocity_probes)
 
     # NOTE: Each step models the transition from `t = t[it]` to `t = [it+1]`
     # (e.g. the first step models from `t = 0` to `t = dt`).  Properties are
@@ -520,6 +529,11 @@ function propagate_system!(system, surfaces, fs, dt;
     Vh = system.Vh
     Vv = system.Vv
     Vte = system.Vte
+    fmm_toggle = system.fmm_toggle
+    fmm_panels = system.fmm_panels
+    fmm_p = system.fmm_p
+    fmm_ncrit = system.fmm_ncrit
+    fmm_theta = system.fmm_theta
 
     # check if the surfaces are moving
     surface_motion = !isnothing(surfaces)
@@ -566,6 +580,7 @@ function propagate_system!(system, surfaces, fs, dt;
 
     # update the wake shedding location for this time step
     # (based on freestream/kinematic/other velocity only)
+    # become the top corners of the next generation of wake
     update_wake_shedding_locations!(wakes, wake_shedding_locations,
         current_surfaces, ref, fs, dt, additional_velocity, Vte,
         nwake, eta)
@@ -586,13 +601,59 @@ function propagate_system!(system, surfaces, fs, dt;
         wake_shedding_locations = wake_shedding_locations,
         trailing_vortices = trailing_vortices)
 
-    # calculate RHS <-- add FMM here: wake-on-all
+    # wake-on-all
+    if fmm_toggle # wake on all surfaces
+        # compile sources
+        update_fmm_panels!(fmm_panels, wakes, nwake)
+        
+        # preallocate probes
+        n_surface_panels = 0
+        n_surface_filaments = 0
+        for surface in current_surfaces
+            nc, ns = size(surface)
+            n_surface_panels += nc * ns # control points
+            n_surface_filaments += nc * ns + nc * ns + nc # top (nc*ns) + left (nc*ns) + right (nc)
+        end
+
+        # n_wake_shedding_locations = 0
+        # for wake_shedding_location in wake_shedding_locations
+        #     n_wake_shedding_locations += length(wake_shedding_location)
+        # end
+        
+        n_wake_corners = 0
+        for (nc, wake) in zip(nwake, wakes)
+            if nc > 0
+                ns = size(wake, 2)
+                n_wake_corners += (nc+1)*(ns+1)
+            end
+        end
+
+        update_n_probes!(fmm_velocity_probes, n_surface_panels + n_surface_filaments + n_wake_corners)
+
+        # reset to zero
+        reset!(fmm_velocity_probes)
+
+        # compile targets
+        update_probes!(fmm_velocity_probes, current_surfaces, 0) # control points and filament centers
+        update_probes!(fmm_velocity_probes, wakes, nwake, n_surface_panels + n_surface_filaments) # wake corners
+        
+        # run FMM
+        if length(fmm_panels) > 0
+            if system.fmm_direct
+                FLOWFMM.direct!(fmm_velocity_probes, system)
+            else
+                FLOWFMM.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, theta=fmm_theta, ndivisions_source=10, ndivisions_target=10)
+            end
+        end
+    end
+
+    # calculate RHS
     if derivatives
         normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
-            ref, fs; additional_velocity, Vcp, symmetric, nwake,
-            surface_id, wake_finite_core, trailing_vortices, xhat)
-    else
-        normal_velocity!(w, current_surfaces, wakes, ref, fs;
+        ref, fs, fmm_velocity_probes; additional_velocity, Vcp, symmetric, nwake,
+        surface_id, wake_finite_core, trailing_vortices, xhat)
+    else 
+        normal_velocity!(w, current_surfaces, wakes, ref, fs, fmm_velocity_probes;
             additional_velocity, Vcp, symmetric, nwake, surface_id,
             wake_finite_core, trailing_vortices, xhat)
     end
@@ -612,19 +673,28 @@ function propagate_system!(system, surfaces, fs, dt;
     dΓdt ./= dt # divide by corresponding time step
 
     # compute transient forces on each panel (if necessary)
-    # also compute surface-on-all induced velocity
     if near_field_analysis
+        if fmm_toggle
+            # update sources
+            update_fmm_panels!(fmm_panels, current_surfaces, wake_shedding_locations, Γ)
+            # run FMM
+            if system.fmm_direct
+                FLOWFMM.direct!(fmm_velocity_probes, system)
+            else
+                FLOWFMM.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, theta=fmm_theta, ndivisions_source=10, ndivisions_target=10)
+            end
+        end
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
-                current_surfaces, wakes, ref, fs, Γ, dΓ; dΓdt,
+                current_surfaces, wakes, ref, fs, Γ, dΓ, fmm_velocity_probes; dΓdt,
                 additional_velocity, Vh, Vv, symmetric, nwake,
                 surface_id, wake_finite_core, wake_shedding_locations,
-                trailing_vortices, xhat)
+                trailing_vortices, xhat, vertical_segments)
         else
             near_field_forces!(properties, current_surfaces, wakes,
-                ref, fs, Γ; dΓdt, additional_velocity, Vh, Vv,
+                ref, fs, Γ, fmm_velocity_probes; dΓdt, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
-                wake_shedding_locations, trailing_vortices, xhat)
+                wake_shedding_locations, trailing_vortices, xhat, vertical_segments)
         end
 
         # save flag indicating that a near-field analysis has been performed
@@ -635,11 +705,11 @@ function propagate_system!(system, surfaces, fs, dt;
     system.derivatives[] = derivatives
 
     # update wake velocities
-    # ---should already be done if I've done this right---
     get_wake_velocities!(wake_velocities, current_surfaces,
         wakes, ref, fs, Γ, additional_velocity, Vte, symmetric,
         repeated_points, nwake, surface_id, wake_finite_core,
-        wake_shedding_locations, trailing_vortices, xhat)
+        wake_shedding_locations, trailing_vortices, xhat,
+        fmm_velocity_probes)
 
     # shed additional wake panel (and translate existing wake panels)
     shed_wake!(wakes, wake_shedding_locations, wake_velocities,

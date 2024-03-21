@@ -10,7 +10,7 @@ using WriteVTK
 const RHO = 1.0
 
 include("panel.jl")
-export SurfacePanel, WakePanel, TrefftzPanel
+export SurfacePanel, WakePanel, TrefftzPanel, FastMultipolePanel
 export reflect, set_normal
 
 include("wake.jl")
@@ -36,6 +36,8 @@ include("circulation.jl")
 include("system.jl")
 export System
 export PanelProperties, get_surface_properties
+
+include("fmm.jl")
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!

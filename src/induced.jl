@@ -27,6 +27,36 @@ relative to the end of the bound vortex
     return Vhat
 end
 
+@inline function bound_induced_velocity_fmm(r1, r2, finite_core, core_size; epsilon=sqrt(eps()))
+
+    # parameters
+    nr1 = norm(r1)
+    nr2 = norm(r2)
+    nr1nr2 = nr1*nr2
+    rcross = cross(r1, r2)
+    rdot = dot(r1, r2)
+
+    # check if evaluation point is colinear with the bound vortex
+    if norm(rcross) < epsilon # colinear if true
+        if isapprox(rdot, -nr1nr2; atol=epsilon) # at the midpoint, so return zero
+            return zero(typeof(r1))
+        elseif rdot <= 0.0 # coincident with the filament so use the finite core model
+            r1s, r2s, εs = nr1^2, nr2^2, core_size^2
+            f1 = rcross/(r1s*r2s - rdot^2 + εs*(r1s + r2s - 2*nr1nr2))
+            f2 = (r1s - rdot)/sqrt(r1s + εs) + (r2s - rdot)/sqrt(r2s + εs)
+            Vhat = (f1*f2)/(4*pi)
+            return Vhat
+        end
+    end
+    
+    f1 = rcross/(nr1nr2 + rdot)
+    f2 = (1/nr1 + 1/nr2)
+
+    Vhat = (f1*f2)/(4*pi)
+
+    return Vhat
+end
+
 function bound_velocity_gradient(r1::SVector{3,TF},r2) where TF
     # zeta
     r1norm = norm(r1)

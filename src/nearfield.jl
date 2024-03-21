@@ -5,15 +5,21 @@
 
 Calculate local panel forces in the body frame.
 """
-@inline function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
+@inline function near_field_forces!(props, surfaces, wakes, ref, fs, Γ, probes=nothing;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
-    wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
+    wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
 
     # number of surfaces
     nsurf = length(surfaces)
 
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
+    i_probe = 1 # index for accessing probes
+    for surface in surfaces
+        nc, ns = size(surface)
+        i_probe += nc*ns
+    end
+
     for isurf = 1:nsurf
 
         receiving = surfaces[isurf]
@@ -48,57 +54,65 @@ Calculate local panel forces in the body frame.
                 Vi += Vh[isurf][i]
             end
 
+            this_Vind = zero(SVector{3,Float64})
+
             # induced velocity from surfaces and wakes
-            jΓ = 0 # index for accessing Γ
-            for jsurf = 1:nsurf
+            if isnothing(probes) # no fast multipole acceleration
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
 
-                # number of panels on sending surface
-                sending = surfaces[jsurf]
-                Ns = length(sending)
+                    # number of panels on sending surface
+                    sending = surfaces[jsurf]
+                    Ns = length(sending)
 
-                # see if wake panels are being used
-                wake_panels = nwake[jsurf] > 0
+                    # see if wake panels are being used
+                    wake_panels = nwake[jsurf] > 0
 
-                # check if we need to shift shedding locations
-                if isnothing(wake_shedding_locations)
-                    shedding_locations = nothing
-                else
-                    shedding_locations = wake_shedding_locations[jsurf]
+                    # check if we need to shift shedding locations
+                    if isnothing(wake_shedding_locations)
+                        shedding_locations = nothing
+                    else
+                        shedding_locations = wake_shedding_locations[jsurf]
+                    end
+
+                    # extract circulation values corresonding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
+
+                    # induced velocity from this surface
+                    if isurf == jsurf
+                        # induced velocity on self
+                        Vi += induced_velocity(I, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                    else
+                        # induced velocity on another surface
+                        Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                    end
+
+                    # induced velocity from corresponding wake
+                    if wake_panels # no fast multipole acceleration
+                        Vi += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
+
+                    jΓ += Ns # increment Γ index for sending panels
                 end
-
-                # extract circulation values corresonding to the sending surface
-                vΓ = view(Γ, jΓ+1:jΓ+Ns)
-
-                # induced velocity from this surface
-                if isurf == jsurf
-                    # induced velocity on self
-                    Vi += induced_velocity(I, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-                else
-                    # induced velocity on another surface
-                    Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-                end
-
-                # induced velocity from corresponding wake
-                if wake_panels
-                    Vi += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-                end
-
-                jΓ += Ns # increment Γ index for sending panels
+            else # fast multipole acceleration
+                Vi += probes.velocity[i_probe]
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -144,6 +158,14 @@ Calculate local panel forces in the body frame.
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # BUT.... if we did, and we wanted to use fast multipole acceleration,
+            # this is what it would look like:
+            # ACTUALLY: We DO include induced velocity in the effective velocity IF THE FMM IS USED
+            # as its cost is small at this point, and it provides greater generality.
+
+            if !isnothing(probes) && vertical_segments
+                Veff += probes.velocity[i_probe + 1] # left bound vortex is always 1 index ahead of the bound vortex
+            end
 
             # steady part of Kutta-Joukowski theorem
             Γli = Γ[iΓ+i]
@@ -174,6 +196,17 @@ Calculate local panel forces in the body frame.
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # BUT.... if we did, and we wanted to use fast multipole acceleration,
+            # what it would look like:
+            # ACTUALLY... we DO include the induced velocity IF THE FMM IS USED
+            # as its cost is negligible.
+
+            if !isnothing(probes) && vertical_segments
+                i_probe_right = i_probe + nr1<<1 + 1
+                I[2] == ns && (i_probe_right -= I[1])
+                Veff += probes.velocity[i_probe_right] # right bound vortex is always 2*nc+1 indices ahead of the bound vortex
+                                                       # unless we are in the final column, in which case it is I[1] less
+            end
 
             # steady part of Kutta-Joukowski theorem
             Γri = Γ[iΓ+i]
@@ -185,10 +218,17 @@ Calculate local panel forces in the body frame.
 
             props[isurf][i] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
                 Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S))
+        
+            
+            # increment probe index
+            i_probe += 2 # by 2 since each column has top and left bound vortices
         end
 
         # increment Γ index for receiving panels
         iΓ += nr
+
+        # increment probe index
+        i_probe += nr1 # by nc to account for the column of right bound vortices
     end
 
     return props
@@ -205,8 +245,8 @@ the local panel forces with respect to the freestream variables.
 near_field_forces_derivatives!
 
 @inline function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
-    ref, fs, Γ, dΓ; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
-    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
+    ref, fs, Γ, dΓ, probes=nothing; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
+    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
 
     # unpack derivatives
     props_a, props_b, props_p, props_q, props_r = dprops
@@ -217,6 +257,11 @@ near_field_forces_derivatives!
 
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
+    i_probe = 1 # index for accessing probes
+    for surface in surfaces # filament probes begin after control points of each surface panel
+        i_probe += length(surface)
+    end
+
     for isurf = 1:nsurf
 
         receiving = surfaces[isurf]
@@ -252,74 +297,78 @@ near_field_forces_derivatives!
             end
 
             # induced velocity from surfaces and wakes
-            jΓ = 0 # index for accessing Γ
-            for jsurf = 1:nsurf
+            if isnothing(probes)
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
 
-                # number of panels on sending surface
-                sending = surfaces[jsurf]
-                Ns = length(sending)
+                    # number of panels on sending surface
+                    sending = surfaces[jsurf]
+                    Ns = length(sending)
 
-                # see if wake panels are being used
-                wake_panels = nwake[jsurf] > 0
+                    # see if wake panels are being used
+                    wake_panels = nwake[jsurf] > 0
 
-                # check if we need to shift shedding locations
-                if isnothing(wake_shedding_locations)
-                    shedding_locations = nothing
-                else
-                    shedding_locations = wake_shedding_locations[jsurf]
+                    # check if we need to shift shedding locations
+                    if isnothing(wake_shedding_locations)
+                        shedding_locations = nothing
+                    else
+                        shedding_locations = wake_shedding_locations[jsurf]
+                    end
+
+                    # extract circulation values corresonding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
+
+                    vΓ_a = view(Γ_a, jΓ+1:jΓ+Ns)
+                    vΓ_b = view(Γ_b, jΓ+1:jΓ+Ns)
+                    vΓ_p = view(Γ_p, jΓ+1:jΓ+Ns)
+                    vΓ_q = view(Γ_q, jΓ+1:jΓ+Ns)
+                    vΓ_r = view(Γ_r, jΓ+1:jΓ+Ns)
+
+                    vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
+
+                    # induced velocity from this surface
+                    if isurf == jsurf
+                        # induced velocity on self
+                        Vind, dVind = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+                    else
+                        # induced velocity on another surface
+                        Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                    end
+
+                    Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
+                    Vi += Vind
+                    Vi_a += Vind_a
+                    Vi_b += Vind_b
+                    Vi_p += Vind_p
+                    Vi_q += Vind_q
+                    Vi_r += Vind_r
+
+                    # induced velocity from corresponding wake
+                    if wake_panels
+                        Vi += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
+
+                    jΓ += Ns # increment Γ index for sending panels
                 end
-
-                # extract circulation values corresonding to the sending surface
-                vΓ = view(Γ, jΓ+1:jΓ+Ns)
-
-                vΓ_a = view(Γ_a, jΓ+1:jΓ+Ns)
-                vΓ_b = view(Γ_b, jΓ+1:jΓ+Ns)
-                vΓ_p = view(Γ_p, jΓ+1:jΓ+Ns)
-                vΓ_q = view(Γ_q, jΓ+1:jΓ+Ns)
-                vΓ_r = view(Γ_r, jΓ+1:jΓ+Ns)
-
-                vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
-
-                # induced velocity from this surface
-                if isurf == jsurf
-                    # induced velocity on self
-                    Vind, dVind = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-                else
-                    # induced velocity on another surface
-                    Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-                end
-
-                Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
-
-                Vi += Vind
-
-                Vi_a += Vind_a
-                Vi_b += Vind_b
-                Vi_p += Vind_p
-                Vi_q += Vind_q
-                Vi_r += Vind_r
-
-                # induced velocity from corresponding wake
-                if wake_panels
-                    Vi += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-                end
-
-                jΓ += Ns # increment Γ index for sending panels
+            else # fast multipole acceleration
+                Vi += probes.velocity[i_probe]
+                @assert probes.position[i_probe] == rc
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -394,6 +443,12 @@ near_field_forces_derivatives!
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # BUT.... if we did, and we wanted to use fast multipole acceleration,
+            # this is what it would look like:
+
+            if !isnothing(probes) && vertical_segments
+                Veff += probes.velocity[i_probe + 1] # left bound vortex is always 1 index ahead of the bound vortex
+            end
 
             # steady part of Kutta-Joukowski theorem
             Γli = Γ[iΓ+i]
@@ -444,6 +499,15 @@ near_field_forces_derivatives!
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # BUT.... if we did, and we wanted to use fast multipole acceleration,
+            # this is what it would look like:
+
+            if !isnothing(probes) && vertical_segments
+                i_probe_right = i_probe + nr1<<1 + 1
+                I[2] == nr2 && (i_probe_right -= I[1])
+                Veff += probes.velocity[i_probe_right] # right bound vortex is always 2*nc+1 indices ahead of the bound vortex
+                                                       # unless we are in the final column, in which case it is I[1] less
+            end
 
             # steady part of Kutta-Joukowski theorem
             Γri = Γ[iΓ+i]
@@ -482,10 +546,17 @@ near_field_forces_derivatives!
                 Fbli_q/(q*ref.S), Fbri_q/(q*ref.S))
             props_r[isurf][I] = PanelProperties(Γ_r[iΓ+i]/ref.V, Vi_r/ref.V, Fbi_r/(q*ref.S),
                 Fbli_r/(q*ref.S), Fbri_r/(q*ref.S))
+
+            # increment probe index
+            i_probe += 2 # by 2 since each column has top and left bound vortices
+                         # (note there is a final column containing the right bound vortices)
         end
 
         # increment Γ index for receiving panels
         iΓ += nr
+
+        # increment probe index
+        i_probe += nr1 # by nc to account for the column of right bound vortices
     end
 
     return props, dprops

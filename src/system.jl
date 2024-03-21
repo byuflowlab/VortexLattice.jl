@@ -73,10 +73,10 @@ Contains pre-allocated storage for internal system variables.
  - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
- - `fmm_panels`: Fast-access copies of all surface panels (including surface-wake transition panels) for fast multipole acceleration.
- - `fmm_Vcp`: Velocity at the control points of `fmm_panels`
- - `fmm_force_probes`: Locations and induced velocity of the center of the top vortices
- - `fmm_wake_probes`: Locations, induced velocity, and induced velocity gradient of the wake particle shed locations
+ - `fmm_toggle`: Switch for activating fast multipole acceleration
+ - `fmm_direct`: Switch for activating the `FLOWFMM.direct!` function (for debugging purposes)
+ - `fmm_panels`: Fast-access copies of all surface panels (including surface-wake transition panels) for fast multipole acceleration
+ - `fmm_velocity_probes`: Probes for obtaining the induced velocity at surface control points, wake corners, and wake shedding locations
  - `fmm_p`: Multipole expansion order
  - `fmm_ncrit`: Maximum number of panels in the leaf level of the FMM
  - `fmm_theta`: Multipole acceptance criterion for the FMM, between 0 and 1
@@ -110,13 +110,13 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
-    # fmm_panels::Vector{FastMultipolePanel{TF}}
-    # fmm_Vcp::Vector{SVector{3,TF}}
-    # fmm_velocity_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
-    # fmm_gradient_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Vector{SMatrix{3,3,TF,9}}}
-    # fmm_p::Val{Int}
-    # fmm_ncrit::Int
-    # fmm_theta::Float64
+    fmm_toggle::Bool
+    fmm_direct::Bool
+    fmm_panels::Vector{FastMultipolePanel{TF}}
+    fmm_velocity_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
+    fmm_p::Int
+    fmm_ncrit::Int
+    fmm_theta::Float64
 end
 
 @inline Base.eltype(::Type{System{TF}}) where TF = TF
@@ -192,7 +192,8 @@ variables
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
 """
-function System(TF::Type, nc, ns; nw = zero(nc))
+function System(TF::Type, nc, ns; nw = zero(nc), 
+    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -230,12 +231,16 @@ function System(TF::Type, nc, ns; nw = zero(nc))
     Vv = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]+1) for i = 1:nsurf]
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
+    fmm_panels = Vector{FastMultipolePanel{TF}}(undef,0)
+    fmm_toggle && sizehint!(fmm_panels, max(sum((nc .+1).*ns), sum(length.(wakes))))
+    n_velocity_probes = fmm_toggle ? N + sum((nw .+1) .* (ns .+1)) + sum(ns .+1) : 0 # surface control points + wake corners + wake shedding locations
+    fmm_velocity_probes = FLOWFMM.ProbeSystem(n_velocity_probes, TF; velocity=true)
 
     return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt)
+        Vv, Vte, dΓdt, fmm_toggle, fmm_direct, fmm_panels, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
 end
 
 """
