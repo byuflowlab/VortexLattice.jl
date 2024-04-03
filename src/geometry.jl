@@ -137,6 +137,7 @@ Interpolates the grid `xyz` along direction `dir`
 function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 
     y = nothing
+    z = nothing
 
     ydim = ydir + 1
 
@@ -151,9 +152,6 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
             ds = [xyz_i[xdir,k] - xyz_i[xdir,max(1,k-1)] for k = 1:ni]
         end
 
-        # display(xyz_i)
-        # @show ds
-
         # create interpolation vector
         t = cumsum(ds)
 
@@ -166,7 +164,11 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
         else
             y = interp(t, xyz_i[2,:], eta)
         end
-        z = interp(t, xyz_i[3,:], eta)
+
+        if !isnothing(z) && ydir==2
+        else
+            z = interp(t, xyz_i[3,:], eta)
+        end
 
         vcat(x',y',z')
     end
@@ -570,7 +572,7 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             zc = fc[j](xc)
 
             # location on airfoil
-            r = SVector(xc, 0, zc)
+            r = SVector(xc, 0.0, zc)
 
             # scale by chord length
             r = chord[j] * r
@@ -578,11 +580,11 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             # apply twist
             r = Rt * r
 
-            # apply dihedral
-            r = Rp * r
-
             # add leading edge offset
             r = r + rle
+
+            # apply dihedral
+            r = Rp * r
 
             # store final location
             xyz_edge[:,i,j] = r
@@ -603,11 +605,11 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             # apply twist
             r = Rt * r
 
-            # apply dihedral
-            r = Rp * r
-
             # add leading edge offset
             r = r + rle
+
+            # apply dihedral
+            r = Rp * r
 
             # store final location
             xyz_bound[:,i,j] = r
@@ -628,11 +630,11 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             # apply twist
             r = Rt * r
 
-            # apply dihedral
-            r = Rp * r
-
             # add leading edge offset
             r = r + rle
+
+            # apply dihedral
+            r = Rp * r
 
             # store final location
             xyz_cp[:,i,j] = r
