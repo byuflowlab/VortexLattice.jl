@@ -165,10 +165,10 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
             y = interp(t, xyz_i[2,:], eta)
         end
 
-        if !isnothing(z) && ydir==2
-        else
+        # if !isnothing(z) && ydir==2
+        # else
             z = interp(t, xyz_i[3,:], eta)
-        end
+        # end
 
         vcat(x',y',z')
     end
