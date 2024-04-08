@@ -390,7 +390,7 @@ end
 @inline Base.eltype(::Type{WakePanel{TF}}) where TF = TF
 @inline Base.eltype(::WakePanel{TF}) where TF = TF
 
-WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.chord)
+WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.gamma)
 Base.convert(::Type{WakePanel{TF}}, p::WakePanel) where {TF} = WakePanel{TF}(p)
 
 @inline top_left(panel::WakePanel) = panel.rtl
