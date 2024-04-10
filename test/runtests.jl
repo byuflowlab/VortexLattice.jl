@@ -1009,6 +1009,31 @@ end
             @test isapprox(getproperty(surface1[I], field), getproperty(surface4[I], field))
         end
     end
+
+    # Reference line (use 0.5 * chord as reference so middle chorwise node will have x and z = 0)
+
+    xle = zeros(2)
+    yle = LinRange(0,4,length(xle))
+    zle = zeros(length(xle))
+    chord = [2.0, 2.0]
+    theta = zeros(length(xle))# .+ 30*pi/180#LinRange(0,30*pi/180,length(xle))
+    phi = zeros(length(xle))
+    ns = 4
+    nc = 2
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    my_ref = zeros(length(xle),2)
+    my_ref[:,1] .= 0.5
+
+    # construct surface
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;spacing_s=spacing_s, spacing_c=spacing_c, reference_line=my_ref)
+
+    for p = 1:ns+1
+        @test grid[1,2,p] == 0.0
+        @test grid[2,2,p] == p-1
+        @test grid[3,2,p] == 0.0
+    end
 end
 
 @testset "Grid Input" begin
