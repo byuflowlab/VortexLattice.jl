@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Examples · VortexLattice.jl</title><meta name="title" content="Examples · VortexLattice.jl"/><meta property="og:title" content="Examples · VortexLattice.jl"/><meta property="twitter:title" content="Examples · VortexLattice.jl"/><meta name="description" content="Documentation for VortexLattice.jl."/><meta property="og:description" content="Documentation for VortexLattice.jl."/><meta property="twitter:description" content="Documentation for VortexLattice.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">VortexLattice.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../guide/">Getting Started</a></li><li class="is-active"><a class="tocitem" href>Examples</a><ul class="internal"><li><a class="tocitem" href="#Steady-State-Analysis-of-a-Wing"><span>Steady State Analysis of a Wing</span></a></li><li><a class="tocitem" href="#Steady-State-Analysis-of-a-Wing-with-Dihedral"><span>Steady State Analysis of a Wing with Dihedral</span></a></li><li><a class="tocitem" href="#Steady-State-Analysis-of-a-Wing-and-Tail"><span>Steady State Analysis of a Wing and Tail</span></a></li><li><a class="tocitem" href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight"><span>Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight</span></a></li><li><a class="tocitem" href="#Heaving-Oscillations-of-a-Rectangular-Wing"><span>Heaving Oscillations of a Rectangular Wing</span></a></li></ul></li><li><a class="tocitem" href="../library/">Library</a></li><li><a class="tocitem" href="../theory/">Theory</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Examples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Examples</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/byuflowlab/VortexLattice.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/byuflowlab/VortexLattice.jl/blob/master/docs/src/examples.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Examples"><a class="docs-heading-anchor" href="#Examples">Examples</a><a id="Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Examples" title="Permalink"></a></h1><p>These examples show how to use VortexLattice for various geometries, flow conditions, and analyses.  Many of these examples also provide a verification for the implementation of the vortex lattice method in this package.</p><ul><li><a href="#Examples">Examples</a></li><li class="no-marker"><ul><li><a href="#Steady-State-Analysis-of-a-Wing">Steady State Analysis of a Wing</a></li><li><a href="#Steady-State-Analysis-of-a-Wing-with-Dihedral">Steady State Analysis of a Wing with Dihedral</a></li><li><a href="#Steady-State-Analysis-of-a-Wing-and-Tail">Steady State Analysis of a Wing and Tail</a></li><li><a href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight">Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight</a></li><li><a href="#Heaving-Oscillations-of-a-Rectangular-Wing">Heaving Oscillations of a Rectangular Wing</a></li></ul></li></ul><h2 id="Steady-State-Analysis-of-a-Wing"><a class="docs-heading-anchor" href="#Steady-State-Analysis-of-a-Wing">Steady State Analysis of a Wing</a><a id="Steady-State-Analysis-of-a-Wing-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-State-Analysis-of-a-Wing" title="Permalink"></a></h2><p>This example shows how to calculate aerodynamic coefficients and stability derivatives for a symmetric planar wing.</p><pre><code class="language-julia hljs">using VortexLattice
+
+# geometry (right half of the wing)
+xle = [0.0, 0.4]
+yle = [0.0, 7.5]
+zle = [0.0, 0.0]
+chord = [2.2, 1.8]
+theta = [2.0*pi/180, 2.0*pi/180]
+phi = [0.0, 0.0]
+fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+
+# discretization parameters
+ns = 12
+nc = 6
+spacing_s = Uniform()
+spacing_c = Uniform()
+
+# reference parameters
+Sref = 30.0
+cref = 2.0
+bref = 15.0
+rref = [0.50, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+# freestream parameters
+alpha = 1.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# construct surface
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# create vector containing all surfaces
+surfaces = [surface]
+
+# we can use symmetry since the geometry and flow conditions are symmetric about the X-Z axis
+symmetric = true
+
+# perform steady state analysis
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system; frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><p>The aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24437</td><td align="right">0.24454</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">-3.4e-06</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00248</td><td align="right">0.00248</td><td align="right">-3.9e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02085</td><td align="right">-0.02091</td><td align="right">6.3e-05</td></tr></table>
+</div><p>We can also generate files to visualize the results in Paraview using the function <code>write_vtk</code>.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+
+write_vtk(&quot;symmetric-planar-wing&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../symmetric-planar-wing.png" alt/></p><p>For asymmetric flow conditions and/or to obtain accurate asymmetric stability derivatives we can use the keyword argument <code>mirror</code> when constructing the geometry to reflect the geometry across the X-Z plane prior to the analysis.  We also set the <code>symmetric</code> flag to <code>false</code> since we are no longer using symmetry in the analysis.</p><pre><code class="language-julia hljs"># construct geometry with mirror image
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    fc=fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
+
+# symmetry is not used in the analysis
+symmetric = false
+
+# create vector containing all surfaces
+surfaces = [surface]
+
+# perform steady state analysis
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system; frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><p>Once again, the aerodynamic coefficients predicted by VortexLattice are nearly identical to those predicted by AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24437</td><td align="right">0.24454</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">-3.4e-06</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00248</td><td align="right">0.00248</td><td align="right">-3.9e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02085</td><td align="right">-0.02091</td><td align="right">6.3e-05</td></tr></table>
+</div><p>The stability derivatives are also very close to those predicted by AVL.</p><pre><code class="language-julia hljs">dCF, dCM = stability_derivatives(system)
+
+CDa, CYa, CLa = dCF.alpha
+Cla, Cma, Cna = dCM.alpha
+CDb, CYb, CLb = dCF.beta
+Clb, Cmb, Cnb = dCM.beta
+CDp, CYp, CLp = dCF.p
+Clp, Cmp, Cnp = dCM.p
+CDq, CYq, CLq = dCF.q
+Clq, Cmq, Cnq = dCM.q
+CDr, CYr, CLr = dCF.r
+Clr, Cmr, Cnr = dCM.r</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_&#123;La&#125;&#36;</td><td align="right">4.65884</td><td align="right">4.66321</td><td align="right">-4.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Lb&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">9.5e-18</td></tr><tr><td align="right">&#36;C_&#123;Ya&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">1.3e-17</td></tr><tr><td align="right">&#36;C_&#123;Yb&#125;&#36;</td><td align="right">-0.00002</td><td align="right">-0.00000</td><td align="right">-1.4e-05</td></tr><tr><td align="right">&#36;C_&#123;la&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-2.4e-16</td></tr><tr><td align="right">&#36;C_&#123;lb&#125;&#36;</td><td align="right">-0.02648</td><td align="right">-0.02543</td><td align="right">-1.0e-03</td></tr><tr><td align="right">&#36;C_&#123;ma&#125;&#36;</td><td align="right">-0.39567</td><td align="right">-0.39776</td><td align="right">2.1e-03</td></tr><tr><td align="right">&#36;C_&#123;mb&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-4.3e-18</td></tr><tr><td align="right">&#36;C_&#123;na&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-1.2e-17</td></tr><tr><td align="right">&#36;C_&#123;nb&#125;&#36;</td><td align="right">0.00125</td><td align="right">0.00045</td><td align="right">8.0e-04</td></tr><tr><td align="right">&#36;C_&#123;Lp&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">2.2e-17</td></tr><tr><td align="right">&#36;C_&#123;Lq&#125;&#36;</td><td align="right">5.65083</td><td align="right">5.64941</td><td align="right">1.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Lr&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">2.3e-17</td></tr><tr><td align="right">&#36;C_&#123;Yp&#125;&#36;</td><td align="right">0.04569</td><td align="right">0.04906</td><td align="right">-3.4e-03</td></tr><tr><td align="right">&#36;C_&#123;Yq&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">6.1e-18</td></tr><tr><td align="right">&#36;C_&#123;Yr&#125;&#36;</td><td align="right">-0.00219</td><td align="right">-0.00083</td><td align="right">-1.4e-03</td></tr><tr><td align="right">&#36;C_&#123;lp&#125;&#36;</td><td align="right">-0.52393</td><td align="right">-0.52475</td><td align="right">8.2e-04</td></tr><tr><td align="right">&#36;C_&#123;lq&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-6.7e-17</td></tr><tr><td align="right">&#36;C_&#123;lr&#125;&#36;</td><td align="right">0.06460</td><td align="right">0.06446</td><td align="right">1.5e-04</td></tr><tr><td align="right">&#36;C_&#123;mp&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-3.7e-17</td></tr><tr><td align="right">&#36;C_&#123;mq&#125;&#36;</td><td align="right">-1.24779</td><td align="right">-1.27021</td><td align="right">2.2e-02</td></tr><tr><td align="right">&#36;C_&#123;mr&#125;&#36;</td><td align="right">0.00000</td><td align="right">0.00000</td><td align="right">1.3e-17</td></tr><tr><td align="right">&#36;C_&#123;np&#125;&#36;</td><td align="right">-0.01918</td><td align="right">-0.01918</td><td align="right">-3.3e-06</td></tr><tr><td align="right">&#36;C_&#123;nq&#125;&#36;</td><td align="right">-0.00000</td><td align="right">0.00000</td><td align="right">-7.1e-18</td></tr><tr><td align="right">&#36;C_&#123;nr&#125;&#36;</td><td align="right">-0.00094</td><td align="right">-0.00093</td><td align="right">-5.2e-06</td></tr></table>
+</div><p>Visualizing the geometry now shows the circulation distribution across the entire wing.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+
+write_vtk(&quot;mirrored-planar-wing&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../mirrored-planar-wing.png" alt/></p><h2 id="Steady-State-Analysis-of-a-Wing-with-Dihedral"><a class="docs-heading-anchor" href="#Steady-State-Analysis-of-a-Wing-with-Dihedral">Steady State Analysis of a Wing with Dihedral</a><a id="Steady-State-Analysis-of-a-Wing-with-Dihedral-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-State-Analysis-of-a-Wing-with-Dihedral" title="Permalink"></a></h2><p>This example shows how to calculate aerodynamic coefficients and stability derivatives for a simple wing with dihedral.</p><pre><code class="language-julia hljs">using VortexLattice
+
+xle = [0.0, 0.4]
+yle = [0.0, 7.5]
+zle = [0.0, 3.0]
+chord = [2.2, 1.8]
+theta = [2.0*pi/180, 2.0*pi/180]
+phi = [0.0, 0.0]
+fc = fill((xc) -&gt; 0, 2) #camberline function for each section
+
+ns = 12
+nc = 6
+spacing_s = Uniform()
+spacing_c = Uniform()
+mirror = false
+symmetric = true
+
+Sref = 30.0
+cref = 2.0
+bref = 15.0
+rref = [0.50, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+alpha = 1.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# declare symmetry
+symmetric = true
+
+# construct surface
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# create vector containing all surfaces
+surfaces = [surface]
+
+# perform steady state analysis
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system; frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL, with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.23592</td><td align="right">0.24808</td><td align="right">-1.2e-02</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00226</td><td align="right">0.00248</td><td align="right">-2.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00223</td><td align="right">0.00247</td><td align="right">-2.4e-04</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02155</td><td align="right">-0.02250</td><td align="right">9.5e-04</td></tr></table>
+</div><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are even closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
+
+# function to construct a normal vector the way AVL does
+#  - `ds` is a line representing the leading edge
+#  - `theta` is the incidence angle, taken as a rotation (+ by RH rule) about
+#        the surface&#39;s spanwise axis projected onto the Y-Z plane.
+function avl_normal_vector(ds, theta)
+
+    st, ct = sincos(theta)
+
+    # bound vortex vector
+    bhat = ds/norm(ds)
+
+    # chordwise strip normal vector
+    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2)
+
+    # camberline vector
+    chat = [ct, -st*shat[2], -st*shat[3]]
+
+    # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+    ncp = cross(chat, ds)
+    return ncp / norm(ncp) # normal vector used by AVL
+end
+
+# new normal vector
+ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+# overwrite normal vector for each panel
+for i = 1:length(surface)
+    surface[i] = set_normal(surface[i], ncp)
+end
+
+# create vector containing all surfaces
+surfaces = [surface]
+
+# perform steady state analysis
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system; frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.24820</td><td align="right">0.24808</td><td align="right">1.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.00250</td><td align="right">0.00248</td><td align="right">1.6e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.00247</td><td align="right">0.00247</td><td align="right">2.3e-06</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02258</td><td align="right">-0.02250</td><td align="right">-7.8e-05</td></tr></table>
+</div><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+
+write_vtk(&quot;wing-with-dihedral&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../wing-with-dihedral.png" alt/></p><h2 id="Steady-State-Analysis-of-a-Wing-and-Tail"><a class="docs-heading-anchor" href="#Steady-State-Analysis-of-a-Wing-and-Tail">Steady State Analysis of a Wing and Tail</a><a id="Steady-State-Analysis-of-a-Wing-and-Tail-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-State-Analysis-of-a-Wing-and-Tail" title="Permalink"></a></h2><p>This example shows how to calculate aerodynamic coefficients and stability derivatives for multiple lifting surfaces.</p><pre><code class="language-julia hljs">using VortexLattice
+
+# wing
+xle = [0.0, 0.2]
+yle = [0.0, 5.0]
+zle = [0.0, 1.0]
+chord = [1.0, 0.6]
+theta = [2.0*pi/180, 2.0*pi/180]
+phi = [0.0, 0.0]
+fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+ns = 12
+nc = 6
+spacing_s = Uniform()
+spacing_c = Uniform()
+mirror = false
+
+# horizontal stabilizer
+xle_h = [0.0, 0.14]
+yle_h = [0.0, 1.25]
+zle_h = [0.0, 0.0]
+chord_h = [0.7, 0.42]
+theta_h = [0.0, 0.0]
+phi_h = [0.0, 0.0]
+fc_h = fill((xc) -&gt; 0, 2) #camberline function for each section
+ns_h = 6
+nc_h = 3
+spacing_s_h = Uniform()
+spacing_c_h = Uniform()
+mirror_h = false
+
+# vertical stabilizer
+xle_v = [0.0, 0.14]
+yle_v = [0.0, 0.0]
+zle_v = [0.0, 1.0]
+chord_v = [0.7, 0.42]
+theta_v = [0.0, 0.0]
+phi_v = [0.0, 0.0]
+fc_v = fill((xc) -&gt; 0, 2) #camberline function for each section
+ns_v = 5
+nc_v = 3
+spacing_s_v = Uniform()
+spacing_c_v = Uniform()
+mirror_v = false
+
+Sref = 9.0
+cref = 0.9
+bref = 10.0
+rref = [0.5, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+alpha = 5.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+symmetric = [true, true, false]
+
+# generate surface panels for wing
+wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    mirror=mirror, fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# generate surface panels for horizontal tail
+hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+    mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+translate!(hgrid, [4.0, 0.0, 0.0])
+translate!(htail, [4.0, 0.0, 0.0])
+
+# generate surface panels for vertical tail
+vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+    mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+translate!(vgrid, [4.0, 0.0, 0.0])
+translate!(vtail, [4.0, 0.0, 0.0])
+
+grids = [wgrid, hgrid, vgrid]
+surfaces = [wing, htail, vtail]
+surface_id = [1, 2, 3]
+
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+CF, CM = body_forces(system; frame=Wind())
+
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><p>The results predicted by VortexLattice are close to those predicted by AVL (with the finite core model disabled in AVL), with the difference primarily explained by the manner in which the normal vector is defined in VortexLattice and AVL, respectively.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60113</td><td align="right">0.60478</td><td align="right">-3.7e-03</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01052</td><td align="right">0.01060</td><td align="right">-8.4e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01026</td><td align="right">0.01043</td><td align="right">-1.7e-04</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02691</td><td align="right">-0.02700</td><td align="right">9.1e-05</td></tr></table>
+</div><p>If we set the normal vectors in VortexLattice equal to those used in AVL, the results are closer, though not necessarily more accurate.</p><pre><code class="language-julia hljs">using LinearAlgebra
+
+# function to construct a normal vector the way AVL does
+#  - `ds` is a line representing the leading edge
+#  - `theta` is the incidence angle, taken as a rotation (+ by RH rule) about
+#        the surface&#39;s spanwise axis projected onto the Y-Z plane.
+function avl_normal_vector(ds, theta)
+
+    st, ct = sincos(theta)
+
+    # bound vortex vector
+    bhat = ds/norm(ds)
+
+    # chordwise strip normal vector
+    shat = [0, -ds[3], ds[2]]/sqrt(ds[2]^2+ds[3]^2)
+
+    # camberline vector
+    chat = [ct, -st*shat[2], -st*shat[3]]
+
+    # normal vector perpindicular to camberline and bound vortex for entire chordwise strip
+    ncp = cross(chat, ds)
+    return ncp / norm(ncp) # normal vector used by AVL
+end
+
+# new normal vector for the wing
+ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+# overwrite normal vector for each wing panel
+for i = 1:length(wing)
+    wing[i] = set_normal(wing[i], ncp)
+end
+surfaces[1] = wing
+
+# perform steady state analysis
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+
+# retrieve near-field forces
+CF, CM = body_forces(system; frame=Wind())
+
+# perform far-field analysis
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60424</td><td align="right">0.60478</td><td align="right">-5.4e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01062</td><td align="right">0.01060</td><td align="right">1.8e-05</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01036</td><td align="right">0.01043</td><td align="right">-7.0e-05</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02575</td><td align="right">-0.02700</td><td align="right">1.3e-03</td></tr></table>
+</div><p>To achieve a theoretically identical setup as AVL we can place all our panels in the X-Y plane and then set the normal vector manually to match the actual lifting geometry.  In our case this involves removing the small amount of twist on the wing when creating the wing surface panels.</p><pre><code class="language-julia hljs">using VortexLattice
+
+# wing
+xle = [0.0, 0.2]
+yle = [0.0, 5.0]
+zle = [0.0, 1.0]
+chord = [1.0, 0.6]
+theta = [0.0, 0.0]
+phi = [0.0, 0.0]
+fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+ns = 12
+nc = 6
+spacing_s = Uniform()
+spacing_c = Uniform()
+mirror = false
+
+# horizontal stabilizer
+xle_h = [0.0, 0.14]
+yle_h = [0.0, 1.25]
+zle_h = [0.0, 0.0]
+chord_h = [0.7, 0.42]
+theta_h = [0.0, 0.0]
+phi_h = [0.0, 0.0]
+fc_h = fill((xc) -&gt; 0, 2) # camberline function for each section
+ns_h = 6
+nc_h = 3
+spacing_s_h = Uniform()
+spacing_c_h = Uniform()
+mirror_h = false
+
+# vertical stabilizer
+xle_v = [0.0, 0.14]
+yle_v = [0.0, 0.0]
+zle_v = [0.0, 1.0]
+chord_v = [0.7, 0.42]
+theta_v = [0.0, 0.0]
+phi_v = [0.0, 0.0]
+fc_v = fill((xc) -&gt; 0, 2) # camberline function for each section
+ns_v = 5
+nc_v = 3
+spacing_s_v = Uniform()
+spacing_c_v = Uniform()
+mirror_v = false
+
+Sref = 9.0
+cref = 0.9
+bref = 10.0
+rref = [0.5, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+alpha = 5.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+symmetric = [true, true, false]
+
+# generate surface panels for wing
+wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# generate surface panels for horizontal tail
+hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+    mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+translate!(hgrid, [4.0, 0.0, 0.0])
+translate!(htail, [4.0, 0.0, 0.0])
+
+# generate surface panels for vertical tail
+vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+    mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
+translate!(vgrid, [4.0, 0.0, 0.0])
+translate!(vtail, [4.0, 0.0, 0.0])
+
+# now set normal vectors manually
+ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
+
+# overwrite normal vector for each wing panel
+for i = 1:length(wing)
+    wing[i] = set_normal(wing[i], ncp)
+end
+
+grids = [wgrid, hgrid, vgrid]
+surfaces = [wing, htail, vtail]
+surface_id = [1, 2, 3]
+
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+
+CF, CM = body_forces(system; frame=Stability())
+
+CDiff = far_field_drag(system)
+
+CD, CY, CL = CF
+Cl, Cm, Cn = CM</code></pre><p>The resulting aerodynamic coefficients now match very closely with AVL.</p><div class="markdown"><table><tr><th align="right">Coefficient</th><th align="right">VortexLattice</th><th align="right">AVL</th><th align="right">Difference</th></tr><tr><td align="right">&#36;C_L&#36;</td><td align="right">0.60466</td><td align="right">0.60478</td><td align="right">-1.2e-04</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;nearfield&#41;</td><td align="right">0.01060</td><td align="right">0.01060</td><td align="right">-7.2e-07</td></tr><tr><td align="right">&#36;C_&#123;Di&#125;&#36; &#40;farfield&#41;</td><td align="right">0.01037</td><td align="right">0.01043</td><td align="right">-6.2e-05</td></tr><tr><td align="right">&#36;C_M&#36;</td><td align="right">-0.02702</td><td align="right">-0.02700</td><td align="right">-1.7e-05</td></tr></table>
+</div><p>By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.</p><pre><code class="language-julia hljs">properties = get_surface_properties(system)
+
+write_vtk(&quot;wing-tail&quot;, surfaces, properties; symmetric)</code></pre><p><img src="../wing-tail.png" alt/></p><h2 id="Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight"><a class="docs-heading-anchor" href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight">Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight</a><a id="Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight-1"></a><a class="docs-heading-anchor-permalink" href="#Sudden-Acceleration-of-a-Rectangular-Wing-into-a-Constant-Speed-Forward-Flight" title="Permalink"></a></h2><p>This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.</p><pre><code class="language-julia hljs"># Katz and Plotkin: Figures 13.34 and 13.35
+# AR = [4, 8, 12, 20, ∞]
+# Vinf*Δt/c = 1/16
+# α = 5°
+
+using VortexLattice
+
+AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
+
+system = Vector{Any}(undef, length(AR))
+surface_history = Vector{Any}(undef, length(AR))
+property_history = Vector{Any}(undef, length(AR))
+wake_history = Vector{Any}(undef, length(AR))
+CF = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+CM = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 10.0, step=1/16)
+
+# chord length
+c = 1
+
+# time step
+dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+
+for i = 1:length(AR)
+
+    # span length
+    b = AR[i]*c
+
+    # planform area
+    S = b*c
+
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [-b/2, b/2]
+    zle = [0.0, 0.0]
+    chord = [c, c]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = false
+
+    # reference parameters
+    cref = c
+    bref = b
+    Sref = S
+    rref = [0.0, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    # freestream parameters
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # create vortex rings
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # create vector containing surfaces
+    surfaces = [surface]
+
+    # run analysis
+    system[i], surface_history[i], property_history[i], wake_history[i] =
+        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+
+    # extract forces at each time step
+    CF[i], CM[i] = body_forces_history(system[i], surface_history[i],
+        property_history[i]; frame=Wind())
+
+end</code></pre><p>We can visualize the solution using the <code>write_vtk</code> function.</p><pre><code class="language-julia hljs">write_vtk(&quot;acceleration-AR4&quot;, surface_history[1], property_history[1],
+    wake_history[1], dt; symmetric=false)</code></pre><p><img src="../acceleration-AR4.gif" alt/></p><p>The transient lift and drag coefficients are similar to those shown in Figures 13.34 and 13.35 of Low-Speed Aerodynamics by Katz and Plotkin.</p><pre><code class="language-julia hljs">using Plots
+pyplot()
+
+# lift coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = &quot;\$ \\frac{U_\\infty t}{c} \$&quot;,
+    ylim = (0.0, 0.55),
+    yticks = 0.0:0.1:0.5,
+    ylabel = &quot;\$ C_{L} \$&quot;,
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CL = [CF[i][j][3] for j = 1:length(CF[i])]
+    plot!(t[2:end], CL, label=&quot;AR = $(AR[i])&quot;)
+end
+
+plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-cl.svg" alt/></p><pre><code class="language-julia hljs"># drag coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = &quot;\$ \\frac{U_\\infty t}{c} \$&quot;,
+    ylim = (0.0, 0.030),
+    yticks = 0.0:0.005:0.03,
+    ylabel = &quot;\$ C_{D} \$&quot;,
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CD = [CF[i][j][1] for j = 1:length(CF[i])]
+    plot!(t[2:end], CD, label=&quot;AR = $(AR[i])&quot;)
+end
+
+plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-cd.svg" alt/></p><p>We modeled the problem in the body-fixed reference frame (which for this problem is more straightforward), but we could have also modeled the problem in the global reference frame.</p><pre><code class="language-julia hljs"># Katz and Plotkin: Figures 13.34 and 13.35
+# AR = [4, 8, 12, 20, ∞]
+# Vinf*Δt/c = 1/16
+# α = 5°
+
+using VortexLattice
+
+AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
+
+system_t = Vector{Any}(undef, length(AR))
+surface_history_t = Vector{Any}(undef, length(AR))
+property_history_t = Vector{Any}(undef, length(AR))
+wake_history_t = Vector{Any}(undef, length(AR))
+CF_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+CM_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 10.0, step=1/16)
+
+# chord length
+c = 1
+
+# time step
+dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+
+for i = 1:length(AR)
+
+    # span length
+    b = AR[i]*c
+
+    # planform area
+    S = b*c
+
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [-b/2, b/2]
+    zle = [0.0, 0.0]
+    chord = [c, c]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = false
+
+    # reference parameters
+    cref = c
+    bref = b
+    Sref = S
+    rref = [0.0, 0.0, 0.0]
+    Vinf = 1.0 # reference velocity is 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    # freestream parameters
+    Vinf = 0.0 # freestream velocity is 0.0
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # create vortex rings
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # create vector containing surfaces at each time step
+    surfaces = [[VortexLattice.translate(surface,
+        -t[it]*[cos(alpha), 0, sin(alpha)])] for it = 1:length(t)]
+
+    # run analysis
+    system_t[i], surface_history_t[i], property_history_t[i], wake_history_t[i] =
+        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+
+    # extract forces at each time step
+    CF_t[i], CM_t[i] = body_forces_history(system_t[i], surface_history_t[i],
+        property_history_t[i]; frame=Wind())
+
+end</code></pre><p>As can be seen, the transient lift and drag coefficients for the two setups are identical.</p><pre><code class="language-julia hljs">using Plots
+pyplot()
+
+# lift coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = &quot;\$ \\frac{U_\\infty t}{c} \$&quot;,
+    ylim = (0.0, 0.55),
+    yticks = 0.0:0.1:0.5,
+    ylabel = &quot;\$ C_{L} \$&quot;,
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CL = [CF_t[i][j][3] for j = 1:length(CF_t[i])]
+    plot!(t[2:end], CL, label=&quot;AR = $(AR[i])&quot;)
+end
+
+plot!(show=true)</code></pre><p><img src="../moving-rectangular-wing-sudden-acceleration-cl.svg" alt/></p><pre><code class="language-julia hljs"># drag coefficient plot
+plot(
+    xlim = (0.0, 10.0),
+    xticks = 0.0:1.0:10.0,
+    xlabel = &quot;\$ \\frac{U_\\infty t}{c} \$&quot;,
+    ylim = (0.0, 0.030),
+    yticks = 0.0:0.005:0.03,
+    ylabel = &quot;\$ C_{D} \$&quot;,
+    grid = false,
+    overwrite_figure=false
+    )
+
+for i = 1:length(AR)
+    CD = [CF_t[i][j][1] for j = 1:length(CF_t[i])]
+    plot!(t[2:end], CD, label=&quot;AR = $(AR[i])&quot;)
+end
+
+plot!(show=true)</code></pre><p><img src="../moving-rectangular-wing-sudden-acceleration-cd.svg" alt/></p><p>Visualizing the solution shows the movement of the body in the global reference frame.</p><pre><code class="language-julia hljs">write_vtk(&quot;acceleration-AR4-moving&quot;, surface_history_t[1], property_history_t[1],
+    wake_history_t[1], dt; symmetric=false)</code></pre><p><img src="../acceleration-AR4-moving.gif" alt/></p><p>For infinite aspect ratios, the problem degenerates into the analysis of the sudden acceleration of a 2D flat plate, for which we have an analytical solution through the work of Herbert Wagner.</p><pre><code class="language-julia hljs"># See Katz and Plotkin: Figure 13.37
+# AR = ∞
+# Vinf*Δt/c = 1/16
+# α = 5°
+
+# essentially infinite aspect ratio
+AR = 1e3
+
+# chord length
+c = 1
+
+# span length
+b = AR*c
+
+# planform area
+S = b*c
+
+# geometry
+xle = [0.0, 0.0]
+yle = [-b/2, b/2]
+zle = [0.0, 0.0]
+chord = [c, c]
+theta = [0.0, 0.0]*pi/180
+phi = [0.0, 0.0]
+fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+ns = 1
+nc = 4
+spacing_s = Uniform()
+spacing_c = Uniform()
+mirror = false
+symmetric = false
+
+# reference parameters
+cref = c
+bref = b
+Sref = S
+rref = [0.0, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+# freestream parameters
+alpha = 5.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 7.0, step=1/8)
+
+# time step
+dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
+
+# create vortex rings
+grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+# create vector containing all surfaces
+surfaces = [surface]
+
+# run steady analysis
+system = steady_analysis(surfaces, ref, fs; symmetric)
+
+# extract steady forces
+CFs, CMs = body_forces(system; frame=Wind())
+
+# run transient analysis
+system, surface_history, property_history, wake_history = unsteady_analysis(
+    surfaces, ref, fs, dt; symmetric=symmetric)
+
+# extract transient forces
+CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())</code></pre><p>The results from VortexLattice compare very well with the analytical solution provided by Wagner.  As discussed in Low Speed Aerodynamics by Katz and Plotkin, the difference between the curves can be attributed to the finite acceleration rate during the first time step, which increases the lift sharply during the acceleration and then increases it moderately later.</p><pre><code class="language-julia hljs"># lift coefficient plot
+plot(
+    xlim = (0.0, 7.0),
+    xticks = 0.0:1.0:7.0,
+    xlabel = &quot;\$ \\frac{U_\\infty t}{c} \$&quot;,
+    ylim = (0.0, 1.0),
+    yticks = 0.0:0.1:1.0,
+    ylabel = &quot;\$ C_{L} \$&quot;,
+    grid = false,
+    overwrite_figure=false
+    )
+
+# Computational Results
+CL = getindex.(CF, 3)
+CLs = getindex(CFs, 3)
+plot!(t[2:end], CL./CLs, label=&quot;VortexLattice&quot;)
+
+# Wagner&#39;s Function (using approximation of R. T. Jones)
+Φ(t) = 1 - 0.165*exp(-0.045*t) - 0.335*exp(-0.3*t)
+
+plot!(t, Φ.(2*t), label = &quot;Wagner&#39;s Function&quot;)
+
+plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-wagner.svg" alt/></p><h2 id="Heaving-Oscillations-of-a-Rectangular-Wing"><a class="docs-heading-anchor" href="#Heaving-Oscillations-of-a-Rectangular-Wing">Heaving Oscillations of a Rectangular Wing</a><a id="Heaving-Oscillations-of-a-Rectangular-Wing-1"></a><a class="docs-heading-anchor-permalink" href="#Heaving-Oscillations-of-a-Rectangular-Wing" title="Permalink"></a></h2><p>This example shows how to predict the transient forces and moments for a heaving rectangular wing.</p><pre><code class="language-julia hljs"># Katz and Plotkin: Figures 13.38a
+# AR = 4
+# k = ω*c/(2*Vinf) = [0.5, 0.3, 0.1]
+# c = [1.0, 0.6, 0.2]
+# α = -5°
+
+using VortexLattice
+
+# forward velocity
+Vinf = 1
+
+# angle of attack
+alpha = -5*pi/180
+
+# aspect ratio
+AR = 4
+
+# chord lengths
+c = [1.0, 0.6, 0.2]
+
+# reduced frequency
+k = [0.5, 0.3, 0.1]
+
+t = Vector{Vector{Float64}}(undef, length(k))
+CF = Vector{Vector{Vector{Float64}}}(undef, length(k))
+CM = Vector{Vector{Vector{Float64}}}(undef, length(k))
+
+for i = 1:length(k)
+
+    # span length
+    b = AR*c[i]
+
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [0.0, b/2]
+    zle = [0.0, 0.0]
+    chord = [c[i], c[i]]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    fc = fill((xc) -&gt; 0, 2) # camberline function for each section
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = true
+
+    # reference parameters
+    cref = c[i]
+    bref = b
+    Sref = b*c[i]
+    rref = [0.0, 0.0, 0.0]
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    # angular frequency
+    ω = 2*Vinf*k[i]/c[i]
+
+    # time
+    t[i] = range(0.0, 9*pi/ω, length = 100)
+    dt = t[i][2:end] - t[i][1:end-1]
+    dt = Vinf*dt
+
+    # heaving amplitude
+    h = 0.1*c[i]
+
+    # use forward and vertical velocity at beginning of each time step
+    Xdot = Vinf*cos(alpha)
+    Zdot = Vinf*sin(alpha) .- h*cos.(ω*t[i][1:end-1])
+
+    # freestream parameters for each time step
+    fs = trajectory_to_freestream(dt; Xdot, Zdot)
+
+    # surface panels
+    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    # create vector containing all surfaces
+    surfaces = [surface]
+
+    # run analysis
+    system, surface_history, property_history, wake_history = unsteady_analysis(
+        surfaces, ref, fs, dt; symmetric=symmetric, nwake = 50)
+
+    # extract forces at each time step (uses instantaneous velocity as reference)
+    CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
+
+end</code></pre><p>Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.</p><pre><code class="language-julia hljs">using Plots
+pyplot()
+
+# lift coefficient plot
+plot(
+    xlim = (6*pi, 8*pi),
+    xticks = ([6*pi, 13*pi/2, 7*pi, 15*pi/2, 8*pi], [&quot;\$ 0 \$&quot;,
+        &quot;\$ \\frac{\\pi}{2} \$&quot;, &quot;\$ \\pi \$&quot;, &quot;\$ \\frac{3\\pi}{2} \$&quot;,
+        &quot;\$ 2\\pi \$&quot;]),
+    xlabel = &quot;\$ ω \\cdot t \$&quot;,
+    ylim = (-1.0, 0.1),
+    yticks = -1.0:0.2:0.0,
+    yflip = true,
+    ylabel = &quot;\$ C_{L} \$&quot;,
+    grid = false,
+    )
+
+for i = 1:length(k)
+    # extract ω
+    ω = 2*Vinf*k[i]/c[i]
+
+    # extract ω*t (use time at the beginning of the time step)
+    ωt = ω*t[i][1:end-1]
+
+    # extract CL
+    CL = [CF[i][it][3] for it = 1:length(t[i])-1]
+
+    plot!(ωt, CL, label=&quot;\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$&quot;)
+end
+
+plot!(show=true)</code></pre><p><img src="../heaving-rectangular-wing.svg" alt/></p><p>Visualizing the <code>k=0.5</code> case in ParaView yields the following animation.</p><p><img src="../heaving-rectangular-wing.gif" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../library/">Library »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Wednesday 10 April 2024 20:40">Wednesday 10 April 2024</span>. Using Julia version 1.6.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
