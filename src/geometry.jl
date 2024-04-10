@@ -513,6 +513,8 @@ with dimensions (i, j) containing the generated panels.
  - `ns`: number of spanwise panels
  - `nc`: number of chordwise panels
  - `fc`: (optional) camber line function y=f(x) of each airfoil section
+ - 'reference_line': 2D array, each row is the x, y coordinate of the reference point of the airfoil.
+        This allows xle, yle, and zle to be defined about points that are not the leading edge
  - `mirror`:  mirror the geometry across the X-Z plane?, defaults to `false`
  - `fcore`: function for setting the finite core size based on the chord length
         (in the x-direction) and/or the panel width (in the y/z directions).
@@ -523,6 +525,7 @@ with dimensions (i, j) containing the generated panels.
 """
 function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),
+    reference_line = zeros(length(xle),2),
     mirror = false,
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
@@ -558,8 +561,10 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         sp, cp = sincos(phi[j])
         Rp = @SMatrix [1 0 0; 0 cp -sp; 0 sp cp]
 
+        reference_offset = SVector(reference_line[j,1],0.0,reference_line[j,2]) * chord[j]
+
         # location of leading edge
-        rle = SVector(xle[j], yle[j], zle[j])
+        rle = SVector(xle[j], yle[j], zle[j]) - (Rt * reference_offset)
 
         # panel edge chordwise locations
         for i = 1:nc+1
