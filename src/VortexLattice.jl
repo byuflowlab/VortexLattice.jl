@@ -1,6 +1,6 @@
 module VortexLattice
 
-using FLOWFMM
+using FastMultipole
 using Interpolations
 using LinearAlgebra
 using StaticArrays
@@ -11,7 +11,7 @@ const RHO = 1.0
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel, FastMultipolePanel
-export reflect, set_normal
+export reflect, set_normal, update_fmm_panels!
 
 include("wake.jl")
 export Wake

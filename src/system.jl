@@ -74,7 +74,6 @@ Contains pre-allocated storage for internal system variables.
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
  - `fmm_toggle`: Switch for activating fast multipole acceleration
- - `fmm_direct`: Switch for activating the `FLOWFMM.direct!` function (for debugging purposes)
  - `fmm_panels`: Fast-access copies of all surface panels (including surface-wake transition panels) for fast multipole acceleration
  - `fmm_velocity_probes`: Probes for obtaining the induced velocity at surface control points, wake corners, and wake shedding locations
  - `fmm_p`: Multipole expansion order
@@ -111,9 +110,8 @@ struct System{TF}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
     fmm_toggle::Bool
-    fmm_direct::Bool
     fmm_panels::Vector{FastMultipolePanel{TF}}
-    fmm_velocity_probes::FLOWFMM.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
+    fmm_velocity_probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
     fmm_p::Int
     fmm_ncrit::Int
     fmm_theta::Float64
@@ -193,7 +191,7 @@ variables
     panels on each surface
 """
 function System(TF::Type, nc, ns; nw = zero(nc), 
-    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4)
+    fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -232,15 +230,17 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
     fmm_panels = Vector{FastMultipolePanel{TF}}(undef,0)
-    fmm_toggle && sizehint!(fmm_panels, max(sum((nc .+1).*ns), sum(length.(wakes))))
+    if fmm_toggle
+        sizehint!(fmm_panels, max(sum((nc .+1).*ns), sum(length.(wakes))))
+    end
     n_velocity_probes = fmm_toggle ? N + sum((nw .+1) .* (ns .+1)) + sum(ns .+1) : 0 # surface control points + wake corners + wake shedding locations
-    fmm_velocity_probes = FLOWFMM.ProbeSystem(n_velocity_probes, TF; velocity=true)
+    fmm_velocity_probes = FastMultipole.ProbeSystem(n_velocity_probes, TF; velocity=true)
 
     return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt, fmm_toggle, fmm_direct, fmm_panels, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
+        Vv, Vte, dΓdt, fmm_toggle, fmm_panels, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
 end
 
 """

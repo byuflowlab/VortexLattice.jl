@@ -59,7 +59,7 @@ function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; k
         # loop through all wakes
         for i = 1:length(wakes)
             # add paraview files corresponding to the wake to the multiblock file
-            write_vtk!(vtmfile, wakes[i]; kwargs..., surface_index = i)
+            write_vtk!(vtmfile, wakes[i]; kwargs...)#, surface_index = i)
         end
     end
 
@@ -547,7 +547,7 @@ Writes geometry to Paraview files for visualization.
  - `metadata = Dict()`: Dictionary of metadata to include in generated files
 """
 function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
-    symmetric,
+    symmetric = false,
     trailing_vortices = false,
     xhat = SVector(1, 0, 0),
     wake_length = 10,

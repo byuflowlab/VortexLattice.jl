@@ -1,4 +1,4 @@
-using ForwardDiff
+# using ForwardDiff
 using LinearAlgebra
 using VortexLattice
 using Test
@@ -1424,12 +1424,61 @@ end
     CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
 
-@testset "FMM acceleration" begin
+@testset "FMM acceleration: single panel" begin
 
-function test_fmm(; fmm_toggle=true, fmm_direct=false, fmm_p=5, fmm_ncrit=20, fmm_theta=0.4)
+function test_single_panel()
+    # build system
+	xle = [0.0,0.0]
+	yle = [0.0,1.0]
+	zle = [0.0,0.0]
+	theta = [0.0,0.0]
+	chord = [1.0,1.0]
+	phi = [0.0,0.0]
+	ns = 1
+	nc = 1
+	mirror = false
+	spacing_s = spacing_c = Uniform()
+	wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+		mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+	surfaces = [wing]
+	surface_id = [1]
+	system = System(surfaces)
+    system.Γ .= 1.0
+    VortexLattice.update_surface_panels!(system.surfaces[1], wgrid)
+    update_fmm_panels!(system.fmm_panels, system.surfaces, system.wake_shedding_locations, system.Γ; transition_panels=false)
+    
+    # build probes
+    # probe_locations = [VortexLattice.SVector{3,Float64}(rand(3) - [0.5,0.5,0.5])*20  for _ in 1:100]
+    probe_locations = [VortexLattice.SVector{3,Float64}(0.5, 0.5, 2.0)]
+    probes = VortexLattice.FastMultipole.ProbeSystem(probe_locations; velocity=true, velocity_gradient=true)
+
+    # direct influence
+    VortexLattice.FastMultipole.direct!(probes, system)
+    direct_velocity = deepcopy(probes.velocity)
+    direct_gradient = deepcopy(probes.velocity_gradient)
+
+    # fmm influence
+    VortexLattice.FastMultipole.reset!(probes)
+    st, tt = VortexLattice.FastMultipole.fmm!(probes, system; expansion_order = 30, multipole_acceptance_criterion=1.0, n_per_branch_target=1, n_per_branch_source=1, nearfield=true)
+    fmm_velocity = probes.velocity
+    fmm_gradient = probes.velocity_gradient
+
+	return direct_velocity, direct_gradient, fmm_velocity, fmm_gradient
+end
+
+direct_velocity, direct_gradient, fmm_velocity, fmm_gradient = test_single_panel()
+
+@test isapprox(direct_velocity, fmm_velocity; atol=1e-12)
+@test isapprox(direct_gradient, fmm_gradient; atol=1e-12)
+
+end
+
+@testset "FMM acceleration: full system" begin
+
+function test_fmm(; fmm_toggle=true, fmm_p=20, fmm_ncrit=20, fmm_theta=0.4)
     # Unsteady Wing and Tail
     ns_multiplier = 1
-    nc_multiplier = 1
+    nc_multiplier = 1 
     time_step = 0.05 # in [6.4, 3.2, 1.6, 0.8, 0.4, 0.2, 0.1, 0.05]
 
     # wing
@@ -1443,7 +1492,7 @@ function test_fmm(; fmm_toggle=true, fmm_direct=false, fmm_p=5, fmm_ncrit=20, fm
     nc = 1 * nc_multiplier
     spacing_s = Uniform()
     spacing_c = Uniform()
-    mirror = false
+    mirror = true
 
     # horizontal stabilizer
     xle_h = [0.0, 0.14]
@@ -1510,7 +1559,7 @@ function test_fmm(; fmm_toggle=true, fmm_direct=false, fmm_p=5, fmm_ncrit=20, fm
     dt = t[2:end] - t[1:end-1]
 
     system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; 
-        symmetric, fmm_toggle, fmm_direct, fmm_p, fmm_ncrit, fmm_theta, fcore = (c, Δs) -> 1e-3, vertical_segments=false,
+        symmetric, fmm_toggle, fmm_p, fmm_ncrit, fmm_theta, fcore = (c, Δs) -> 1e-3, vertical_segments=false,
         wake_finite_core=fill(false, length(surfaces)))
 
     # extract forces at each time step
@@ -1519,22 +1568,19 @@ function test_fmm(; fmm_toggle=true, fmm_direct=false, fmm_p=5, fmm_ncrit=20, fm
     return CF, CM, system, surface_history, property_history, wake_history
 end
 
-# test with FLOWFMM.direct!
-CF_fmm, CM_fmm, system_fmm, surface_history_fmm, property_history_fmm, wake_history_fmm = test_fmm(; fmm_toggle=true, fmm_direct=true)
+# test without expansions
+CF_fmm1, CM_fmm1, system_fmm1, surface_history_fmm1, property_history_fmm1, wake_history_fmm1 = test_fmm(; fmm_toggle=true, fmm_p=20, fmm_ncrit=10, fmm_theta=0.0)
+
+# test with expansions 
+CF_fmm2, CM_fmm2, system_fmm2, surface_history_fmm2, property_history_fmm2, wake_history_fmm2 = test_fmm(; fmm_toggle=true, fmm_p=20, fmm_ncrit=10, fmm_theta=0.4)
+
+# test without FastMultipole for comparison
 CF_direct, CM_direct, system_direct, surface_history_direct, property_history_direct, wake_history_direct = test_fmm(; fmm_toggle=false)
 
-for i in eachindex(CF_fmm)
+for i in eachindex(CF_fmm1)
     for j in 1:3
-        @test isapprox(CF_fmm[i][j], CF_direct[i][j]; atol=1e-10)
-    end
-end
-
-# test with FLOWFMM.fmm!
-CF_fmm, CM_fmm, system_fmm, surface_history_fmm, property_history_fmm, wake_history_fmm = test_fmm(; fmm_toggle=true, fmm_direct=false)
-CF_direct, CM_direct, system_direct, surface_history_direct, property_history_direct, wake_history_direct = test_fmm(; fmm_toggle=false)
-for i in eachindex(CF_fmm)
-    for j in 1:3
-        @test isapprox(CF_fmm[i][j], CF_direct[i][j]; atol=1e-3)
+        @test isapprox(CF_fmm1[i][j], CF_direct[i][j]; atol=1e-10)
+        @test isapprox(CF_fmm2[i][j], CF_direct[i][j]; atol=1e-10)
     end
 end
 

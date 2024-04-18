@@ -266,11 +266,11 @@ unsteady_analysis
 # same grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractArray}, ref, fs, dt;
     nwake = fill(length(dt), length(surfaces)), 
-    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
+    fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
     kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces; nw = nwake, fmm_toggle, fmm_direct, fmm_p, fmm_ncrit, fmm_theta)
+    system = System(surfaces; nw = nwake, fmm_toggle, fmm_p, fmm_ncrit, fmm_theta)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -279,11 +279,11 @@ end
 # different grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractVector{<:AbstractArray}},
     ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])), 
-    fmm_toggle=false, fmm_direct=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
+    fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
     kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces[1]; nw = nwake, fmm_toggle, fmm_direct, fmm_p, fmm_ncrit, fmm_theta)
+    system = System(surfaces[1]; nw = nwake, fmm_toggle, fmm_p, fmm_ncrit, fmm_theta)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -406,7 +406,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
 
         if surface_motion
             propagate_system!(system, surfaces[1+it], fs[it], dt[it];
-                additional_velocity,
+                additional_velocity, reuse_kinematic_velocity=false,
                 repeated_points,
                 nwake = iwake,
                 eta = 0.25,
@@ -416,7 +416,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
                 fmm_velocity_probes = system.fmm_toggle ? system.fmm_velocity_probes : nothing)
         else
             propagate_system!(system, fs[it], dt[it];
-                additional_velocity,
+                additional_velocity, reuse_kinematic_velocity=false,
                 repeated_points,
                 nwake = iwake,
                 eta = 0.25,
@@ -486,7 +486,7 @@ propagate_system!(system, fs, dt; kwargs...) = propagate_system!(system,
 
 # moving/deforming surfaces
 function propagate_system!(system, surfaces, fs, dt;
-    additional_velocity,
+    additional_velocity, reuse_kinematic_velocity,
     repeated_points,
     nwake,
     eta,
@@ -494,7 +494,7 @@ function propagate_system!(system, surfaces, fs, dt;
     near_field_analysis,
     derivatives, vertical_segments,
     fmm_velocity_probes)
-
+    
     # NOTE: Each step models the transition from `t = t[it]` to `t = [it+1]`
     # (e.g. the first step models from `t = 0` to `t = dt`).  Properties are
     # assumed to be constant during each time step and resulting transient
@@ -539,36 +539,38 @@ function propagate_system!(system, surfaces, fs, dt;
     surface_motion = !isnothing(surfaces)
 
     # move geometry and calculate velocities for this time step
-    if surface_motion
+    if !reuse_kinematic_velocity
+        if surface_motion
 
-        # check if grids are used to represent the new surfaces
-        grid_input = eltype(surfaces) <: AbstractArray{<:Any, 3}
+            # check if grids are used to represent the new surfaces
+            grid_input = eltype(surfaces) <: AbstractArray{<:Any, 3}
 
-        for isurf = 1:nsurf
+            for isurf = 1:nsurf
 
-            # save current surfaces as previous surfaces
-            previous_surfaces[isurf] .= current_surfaces[isurf]
+                # save current surfaces as previous surfaces
+                previous_surfaces[isurf] .= current_surfaces[isurf]
 
-            # set new surface shape...
-            if grid_input
-                # ...based on grid inputs
-                update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore)
-            else
-                # ...based on surface panels
-                current_surfaces[isurf] .= surfaces[isurf]
+                # set new surface shape...
+                if grid_input
+                    # ...based on grid inputs
+                    update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore)
+                else
+                    # ...based on surface panels
+                    current_surfaces[isurf] .= surfaces[isurf]
+                end
+
+                # calculate surface velocities
+                get_surface_velocities!(Vcp[isurf], Vh[isurf], Vv[isurf], Vte[isurf],
+                    current_surfaces[isurf], previous_surfaces[isurf], dt)
             end
-
-            # calculate surface velocities
-            get_surface_velocities!(Vcp[isurf], Vh[isurf], Vv[isurf], Vte[isurf],
-                current_surfaces[isurf], previous_surfaces[isurf], dt)
-        end
-    else
-        # zero out surface motion
-        for isurf = 1:nsurf
-            system.Vcp[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
-            system.Vh[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
-            system.Vv[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
-            system.Vte[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
+        else
+            # zero out surface motion
+            for isurf = 1:nsurf
+                system.Vcp[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
+                system.Vh[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
+                system.Vv[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
+                system.Vte[isurf] .= Ref(SVector(0.0, 0.0, 0.0))
+            end
         end
     end
 
@@ -607,11 +609,11 @@ function propagate_system!(system, surfaces, fs, dt;
         update_fmm_panels!(fmm_panels, wakes, nwake)
         
         # preallocate probes
-        n_surface_panels = 0
+        n_control_points = 0
         n_surface_filaments = 0
         for surface in current_surfaces
             nc, ns = size(surface)
-            n_surface_panels += nc * ns # control points
+            n_control_points += nc * ns # control points
             n_surface_filaments += nc * ns + nc * ns + nc # top (nc*ns) + left (nc*ns) + right (nc)
         end
 
@@ -628,26 +630,22 @@ function propagate_system!(system, surfaces, fs, dt;
             end
         end
 
-        update_n_probes!(fmm_velocity_probes, n_surface_panels + n_surface_filaments + n_wake_corners)
-
-        # reset to zero
-        reset!(fmm_velocity_probes)
+        update_n_probes!(fmm_velocity_probes, n_control_points + n_surface_filaments + n_wake_corners)
 
         # compile targets
         update_probes!(fmm_velocity_probes, current_surfaces, 0) # control points and filament centers
-        update_probes!(fmm_velocity_probes, wakes, nwake, n_surface_panels + n_surface_filaments) # wake corners
+        update_probes!(fmm_velocity_probes, wakes, nwake, n_control_points + n_surface_filaments) # wake corners
         
+        # reset to zero
+        reset!(fmm_velocity_probes)
+
         # run FMM
         if length(fmm_panels) > 0
-            if system.fmm_direct
-                FLOWFMM.direct!(fmm_velocity_probes, system)
-            else
-                FLOWFMM.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, theta=fmm_theta, ndivisions_source=10, ndivisions_target=10)
-            end
+            FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, multipole_acceptance_criterion=fmm_theta)
         end
     end
 
-    # calculate RHS
+    # calculate RHS (doesn't store velocity induced by wake)
     if derivatives
         normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
         ref, fs, fmm_velocity_probes; additional_velocity, Vcp, symmetric, nwake,
@@ -672,18 +670,21 @@ function propagate_system!(system, surfaces, fs, dt;
     dΓdt .+= Γ # add newly computed circulation
     dΓdt ./= dt # divide by corresponding time step
 
+    # surface-on-all
+    if fmm_toggle
+        
+        # update sources
+        update_fmm_panels!(fmm_panels, current_surfaces, wake_shedding_locations, Γ)
+        if VortexLattice.FastMultipole.DEBUG_TOGGLE[]
+            @show fmm_panels
+        end
+        
+        # run FMM
+		FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, multipole_acceptance_criterion=fmm_theta)
+    end
+    
     # compute transient forces on each panel (if necessary)
     if near_field_analysis
-        if fmm_toggle
-            # update sources
-            update_fmm_panels!(fmm_panels, current_surfaces, wake_shedding_locations, Γ)
-            # run FMM
-            if system.fmm_direct
-                FLOWFMM.direct!(fmm_velocity_probes, system)
-            else
-                FLOWFMM.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, theta=fmm_theta, ndivisions_source=10, ndivisions_target=10)
-            end
-        end
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
                 current_surfaces, wakes, ref, fs, Γ, dΓ, fmm_velocity_probes; dΓdt,

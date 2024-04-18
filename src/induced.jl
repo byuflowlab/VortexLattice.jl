@@ -40,7 +40,7 @@ end
     if norm(rcross) < epsilon # colinear if true
         if isapprox(rdot, -nr1nr2; atol=epsilon) # at the midpoint, so return zero
             return zero(typeof(r1))
-        elseif rdot <= 0.0 # coincident with the filament so use the finite core model
+        elseif rdot <= 0.0 && finite_core # coincident with the filament so use the finite core model
             r1s, r2s, εs = nr1^2, nr2^2, core_size^2
             f1 = rcross/(r1s*r2s - rdot^2 + εs*(r1s + r2s - 2*nr1nr2))
             f2 = (r1s - rdot)/sqrt(r1s + εs) + (r2s - rdot)/sqrt(r2s + εs)

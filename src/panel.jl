@@ -657,13 +657,6 @@ function FastMultipolePanel(p::WakePanel{TF}) where TF
     return FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, rcp, ncp, radius, p.core_size, p.gamma)
 end
 
-function FastMultipolePanel(p::SurfacePanel{TF}, gamma) where TF
-    v1 = p.rtr-p.rbl
-    v2 = p.rtl-p.rbr
-    radius = max(norm(v1), norm(v2))/2
-    return FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.rcp, p.ncp, radius, p.core_size, gamma)
-end
-
 function update_fmm_panels!(fmm_panels, wake_panels, nwake)
     # clear space for fmm panels
     n_panels = 0
@@ -687,12 +680,13 @@ function update_fmm_panels!(fmm_panels, wake_panels, nwake)
     return fmm_panels
 end
 
-function update_fmm_panels!(fmm_panels, surface_panels, wake_shedding_locations, gamma)
+function update_fmm_panels!(fmm_panels, surface_panels, wake_shedding_locations, gamma; transition_panels=true)
     # clear space for fmm panels
     n_panels = 0
+    extra_rows = transition_panels ? 1 : 0
     for surface in surface_panels
         nc, ns = size(surface)
-        n_panels += (nc+1)*ns
+        n_panels += (nc+extra_rows)*ns
     end
     resize!(fmm_panels, n_panels)
 
@@ -706,34 +700,36 @@ function update_fmm_panels!(fmm_panels, surface_panels, wake_shedding_locations,
     end
 
     # add wake transition panels
-    i_start = 0
-    for (wake_shedding_location,surface) in zip(wake_shedding_locations,surface_panels)
+    if transition_panels
+        i_start = 0
+        for (wake_shedding_location,surface) in zip(wake_shedding_locations,surface_panels)
 
-        # number of chord/spanwise panels
-        nc, ns = size(surface)
+            # number of chord/spanwise panels
+            nc, ns = size(surface)
 
-        # loop over transition panels
-        i_gamma = i_start + nc
-        for j in 1:ns
-            rtl = surface[nc,j].rbl
-            rtr = surface[nc,j].rbr
-            core_size = surface[nc,j].core_size
-            rbl = wake_shedding_location[j]
-            rbr = wake_shedding_location[j+1]
-            v1 = rtr-rbl
-            v2 = rtl-rbr
-            rcp_t = linearinterp(0.5,rtr,rtl)
-            rcp_b = linearinterp(0.5,rbr,rbl)
-            rcp = linearinterp(0.5,rcp_t,rcp_b)
-            ncp = cross(v1, v2)
-            ncp /= norm(ncp)
-            radius = max(norm(v1), norm(v2))/2
-            fmm_panels[i_panel] = FastMultipolePanel(rtl,rtr,rbl,rbr,rcp,ncp,radius,core_size,gamma[i_gamma])
-            i_gamma += nc
-            i_panel += 1
+            # loop over transition panels
+            i_gamma = i_start + nc
+            for j in 1:ns
+                rtl = surface[nc,j].rbl
+                rtr = surface[nc,j].rbr
+                core_size = surface[nc,j].core_size
+                rbl = wake_shedding_location[j]
+                rbr = wake_shedding_location[j+1]
+                v1 = rtr-rbl
+                v2 = rtl-rbr
+                rcp_t = linearinterp(0.5,rtr,rtl)
+                rcp_b = linearinterp(0.5,rbr,rbl)
+                rcp = linearinterp(0.5,rcp_t,rcp_b)
+                ncp = cross(v1, v2)
+                ncp /= norm(ncp)
+                radius = max(norm(v1), norm(v2))/2
+                fmm_panels[i_panel] = FastMultipolePanel(rtl,rtr,rbl,rbr,rcp,ncp,radius,core_size,gamma[i_gamma])
+                i_gamma += nc
+                i_panel += 1
+            end
+
+            i_start += length(surface)
         end
-
-        i_start += length(surface)
     end
 
     return fmm_panels
