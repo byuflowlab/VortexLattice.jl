@@ -41,7 +41,7 @@ function import_vsp(comp::VSPGeom.VSPComponent; geomType::String="", optargs...)
         end
     end
 
-    if lowercase(geomType) == "wing"
+    if lowercase(geomType) == "wing" || lowercase(geomType) == "propgeom"
 
         nXsecs, npts = VSPGeom.degenGeomSize(comp.plate)
 
