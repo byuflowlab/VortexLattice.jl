@@ -22,6 +22,7 @@ Imports properties from OpenVSP component to VortexLattice objects. Importing pr
 **Arguments**
 - `comp::VSPGeom.VSPComponent`: Single `VSPGeom.VSPComponent` object
 - `geomType::String` : Geometry type may be one of - `wing`, `fuselage`, `prop`, `duct`
+- `optargs` : Optional arguments that are passed into grid_to_surface_panels() called inside
 
 **Returns**
 - `grid`: Array with dimensions (3, i, j) containing the panel corners
