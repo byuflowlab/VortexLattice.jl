@@ -4,6 +4,7 @@ using LinearAlgebra
 using StaticArrays
 using Interpolations
 using WriteVTK
+using VSPGeom
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -20,6 +21,9 @@ export AbstractSpacing, Uniform, Sine, Cosine
 export grid_to_surface_panels, wing_to_surface_panels
 export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
+
+include("vspgeom.jl")
+export read_degengeom, import_vsp
 
 include("reference.jl")
 export Reference
