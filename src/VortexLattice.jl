@@ -21,6 +21,9 @@ export grid_to_surface_panels, wing_to_surface_panels
 export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
 
+include("vspgeom.jl")
+export read_degengeom
+
 include("reference.jl")
 export Reference
 export AbstractFrame, Body, Stability, Wind
