@@ -22,6 +22,8 @@ grid_to_surface_panels
 wing_to_surface_panels
 lifting_line_geometry
 lifting_line_geometry!
+read_degengeom
+import_vsp
 set_normal
 translate
 translate!
