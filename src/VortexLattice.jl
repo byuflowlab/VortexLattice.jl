@@ -23,7 +23,7 @@ export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
 
 include("vspgeom.jl")
-export read_degengeom
+export read_degengeom, import_vsp
 
 include("reference.jl")
 export Reference
