@@ -4,6 +4,7 @@ using LinearAlgebra
 using StaticArrays
 using Interpolations
 using WriteVTK
+using VSPGeom
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
