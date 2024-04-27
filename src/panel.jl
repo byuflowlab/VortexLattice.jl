@@ -204,7 +204,7 @@ end
 
 Return a copy of `panel` rotated about point `r` using the rotation matrix `R`
 """
-@inline function rotate(panel::SurfacePanel, R, r = (@SVector zeros(3)))
+@inline function rotate(panel::SurfacePanel, R::AbstractMatrix, r = (@SVector zeros(3)))
 
     rtl = R*(panel.rtl - r) + r
     rtc = R*(panel.rtc - r) + r
