@@ -9,6 +9,9 @@ Calculate local panel forces in the body frame.
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
 
+    # extract air density
+    rho = fs.rho
+
     # number of surfaces
     nsurf = length(surfaces)
 
@@ -119,7 +122,7 @@ Calculate local panel forces in the body frame.
             Γi = I[1] == 1 ? Γ[iΓ+i] : Γ[iΓ+i] - Γ[iΓ+i-1] # net circulation
             Δs = top_vector(receiving[I]) # bound vortex vector
             tmp = cross(Vi, Δs)
-            Fbi = RHO*Γi*tmp
+            Fbi = rho*Γi*tmp
 
             if !isnothing(dΓdt)
                 # unsteady part of Kutta-Joukowski theorem
@@ -129,7 +132,7 @@ Calculate local panel forces in the body frame.
 
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += rho*dΓdti*c*tmp
 
             end
 
@@ -170,7 +173,7 @@ Calculate local panel forces in the body frame.
             # steady part of Kutta-Joukowski theorem
             Γli = Γ[iΓ+i]
             Δs = left_vector(receiving[I])
-            Fbli = RHO*Γli*cross(Veff, Δs)
+            Fbli = rho*Γli*cross(Veff, Δs)
 
             # --- Calculate forces on the right bound vortex --- #
 
@@ -203,7 +206,7 @@ Calculate local panel forces in the body frame.
 
             if !isnothing(probes) && vertical_segments
                 i_probe_right = i_probe + nr1<<1 + 1
-                I[2] == ns && (i_probe_right -= I[1])
+                I[2] == nr2 && (i_probe_right -= I[1]) # nr2 is the number of spanwise panels of the receiving surface
                 Veff += probes.velocity[i_probe_right] # right bound vortex is always 2*nc+1 indices ahead of the bound vortex
                                                        # unless we are in the final column, in which case it is I[1] less
             end
@@ -211,15 +214,15 @@ Calculate local panel forces in the body frame.
             # steady part of Kutta-Joukowski theorem
             Γri = Γ[iΓ+i]
             Δs = right_vector(receiving[I])
-            Fbri = RHO*Γri*cross(Veff, Δs)
+            Fbri = rho*Γri*cross(Veff, Δs)
 
             # store panel circulation, velocity, and forces
-            q = 1/2*RHO*ref.V^2
+            q = 1/2*rho*ref.V^2
 
             props[isurf][i] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
                 Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S))
-        
-            
+
+
             # increment probe index
             i_probe += 2 # by 2 since each column has top and left bound vortices
         end
@@ -247,6 +250,9 @@ near_field_forces_derivatives!
 @inline function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ, probes=nothing; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
+
+    # extract air density
+    rho = fs.rho
 
     # unpack derivatives
     props_a, props_b, props_p, props_q, props_r = dprops
@@ -395,13 +401,13 @@ near_field_forces_derivatives!
 
             tmp = cross(Vi, Δs)
 
-            Fbi = RHO*Γi*tmp
+            Fbi = rho*Γi*tmp
 
-            Fbi_a = RHO*(Γi_a*tmp + Γi*cross(Vi_a, Δs))
-            Fbi_b = RHO*(Γi_b*tmp + Γi*cross(Vi_b, Δs))
-            Fbi_p = RHO*(Γi_p*tmp + Γi*cross(Vi_p, Δs))
-            Fbi_q = RHO*(Γi_q*tmp + Γi*cross(Vi_q, Δs))
-            Fbi_r = RHO*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
+            Fbi_a = rho*(Γi_a*tmp + Γi*cross(Vi_a, Δs))
+            Fbi_b = rho*(Γi_b*tmp + Γi*cross(Vi_b, Δs))
+            Fbi_p = rho*(Γi_p*tmp + Γi*cross(Vi_p, Δs))
+            Fbi_q = rho*(Γi_q*tmp + Γi*cross(Vi_q, Δs))
+            Fbi_r = rho*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
 
             if !isnothing(dΓdt)
                 # unsteady part of Kutta-Joukowski theorem
@@ -411,7 +417,7 @@ near_field_forces_derivatives!
 
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += rho*dΓdti*c*tmp
 
             end
 
@@ -463,13 +469,13 @@ near_field_forces_derivatives!
 
             tmp = cross(Veff, Δs)
 
-            Fbli = RHO*Γli*tmp
+            Fbli = rho*Γli*tmp
 
-            Fbli_a = RHO*(Γli_a*tmp + Γli*cross(Veff_a, Δs))
-            Fbli_b = RHO*(Γli_b*tmp + Γli*cross(Veff_b, Δs))
-            Fbli_p = RHO*(Γli_p*tmp + Γli*cross(Veff_p, Δs))
-            Fbli_q = RHO*(Γli_q*tmp + Γli*cross(Veff_q, Δs))
-            Fbli_r = RHO*(Γli_r*tmp + Γli*cross(Veff_r, Δs))
+            Fbli_a = rho*(Γli_a*tmp + Γli*cross(Veff_a, Δs))
+            Fbli_b = rho*(Γli_b*tmp + Γli*cross(Veff_b, Δs))
+            Fbli_p = rho*(Γli_p*tmp + Γli*cross(Veff_p, Δs))
+            Fbli_q = rho*(Γli_q*tmp + Γli*cross(Veff_q, Δs))
+            Fbli_r = rho*(Γli_r*tmp + Γli*cross(Veff_r, Δs))
 
             # --- Calculate forces on the right bound vortex --- #
 
@@ -522,16 +528,16 @@ near_field_forces_derivatives!
 
             tmp = cross(Veff, Δs)
 
-            Fbri = RHO*Γri*tmp
+            Fbri = rho*Γri*tmp
 
-            Fbri_a = RHO*(Γri_a*tmp + Γri*cross(Veff_a, Δs))
-            Fbri_b = RHO*(Γri_b*tmp + Γri*cross(Veff_b, Δs))
-            Fbri_p = RHO*(Γri_p*tmp + Γri*cross(Veff_p, Δs))
-            Fbri_q = RHO*(Γri_q*tmp + Γri*cross(Veff_q, Δs))
-            Fbri_r = RHO*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
+            Fbri_a = rho*(Γri_a*tmp + Γri*cross(Veff_a, Δs))
+            Fbri_b = rho*(Γri_b*tmp + Γri*cross(Veff_b, Δs))
+            Fbri_p = rho*(Γri_p*tmp + Γri*cross(Veff_p, Δs))
+            Fbri_q = rho*(Γri_q*tmp + Γri*cross(Veff_q, Δs))
+            Fbri_r = rho*(Γri_r*tmp + Γri*cross(Veff_r, Δs))
 
             # store panel circulation, velocity, and forces
-            q = 1/2*RHO*ref.V^2
+            q = 1/2*rho*ref.V^2
 
             props[isurf][I] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V, Fbi/(q*ref.S),
                 Fbli/(q*ref.S), Fbri/(q*ref.S))
@@ -615,7 +621,7 @@ performed to obtain the panel forces.
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
    [`Stability()`](@ref), and [`Wind()`](@ref)
 """
-function body_forces(surfaces, properties, ref, fs, symmetric, frame)
+function body_forces(surfaces, properties, ref, fs, symmetric, frame; convention_change=[-1.0,1.0,-1.0])
 
     TF = eltype(eltype(eltype(properties)))
 
@@ -672,7 +678,6 @@ function body_forces(surfaces, properties, ref, fs, symmetric, frame)
     CM = CM ./ reference_length
 
     # positive Mx corresponds to negative roll, and positive Mz corresponds to negative yaw
-    convention_change = [-1.0, 1.0, -1.0]
     CM = CM .* convention_change
 
     # switch to specified frame

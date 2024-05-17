@@ -9,17 +9,19 @@ Defines the freestream and rotational velocity properties.
 - `beta`: sideslip angle (rad)
 - `Omega`: rotation vector (p, q, r) of the body frame about the reference center.
     Uses standard coordinate system from dynamics (positve p roll right wing down to turn right, positive q is pitch nose up, positive r is yaw nose to the right)
+- `rho`: air density
 """
 struct Freestream{TF}
     Vinf::TF
     alpha::TF
     beta::TF
     Omega::SVector{3, TF}
+    rho::TF
 end
 
-function Freestream(Vinf, alpha, beta, Omega)
-    TF = promote_type(typeof(Vinf), typeof(alpha), typeof(beta), eltype(Omega))
-    return Freestream{TF}(Vinf, alpha, beta, Omega)
+function Freestream(Vinf, alpha, beta, Omega, rho=1.0)
+    TF = promote_type(typeof(Vinf), typeof(alpha), typeof(beta), eltype(Omega), typeof(rho))
+    return Freestream{TF}(Vinf, alpha, beta, Omega, rho)
 end
 
 Base.eltype(::Type{Freestream{TF}}) where TF = TF
@@ -283,7 +285,7 @@ rotational_velocity
 
 @inline rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
 
-@inline function rotational_velocity(r, Omega, rref) 
+@inline function rotational_velocity(r, Omega, rref)
     Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
     return cross(r - rref, Ω)
 end

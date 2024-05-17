@@ -33,7 +33,7 @@ to account for the new wake shedding location
     for isurf = 1:nsurf
 
         # number of spanwise panels
-        ns = size(wakes[isurf], 2)
+        ns = size(surfaces[isurf], 2)
 
         # update wake shedding location
         for j = 1:ns+1
