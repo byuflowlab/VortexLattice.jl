@@ -734,3 +734,4 @@ function update_fmm_panels!(fmm_panels, surface_panels, wake_shedding_locations,
 
     return fmm_panels
 end
+

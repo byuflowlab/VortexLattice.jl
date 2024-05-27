@@ -54,7 +54,7 @@ FastMultipole.get_n_bodies(system::System) = length(system.fmm_panels)
 
 FastMultipole.buffer_element(system::System) = deepcopy(system.fmm_panels[1])#, deepcopy(system.fmm_Vcp[1])
 
-FastMultipole.B2M!(system::System, branch, bodies_index, harmonics, expansion_order) = 
+FastMultipole.B2M!(system::System, branch, bodies_index, harmonics, expansion_order) =
     FastMultipole.B2M!_quadpanel(system, branch, bodies_index, harmonics, expansion_order, FastMultipole.UniformNormalDipolePanel(-1); compute_normal=true, invert_normal=true)
 
 function FastMultipole.direct!(target_system, target_index, derivatives_switch::FastMultipole.DerivativesSwitch{<:Any,<:Any,VS,GS}, source_system::System{TF}, source_index) where {TF,VS,GS}
@@ -75,14 +75,14 @@ function FastMultipole.direct!(target_system, target_index, derivatives_switch::
             r22 = panel.rbr
             gamma = panel.gamma
             core_size = panel.core_size
-            
+
             # move origin to control point
             r1 = rcp - r11
             r2 = rcp - r12
             r3 = rcp - r22
             r4 = rcp - r21
 
-            # add induced velocity, ignoring finite core size for now
+            # add induced velocity
             finite_core = true
 			if VS
             	this_V = zero(SVector{3,TF})
@@ -96,10 +96,10 @@ function FastMultipole.direct!(target_system, target_index, derivatives_switch::
             # velocity gradient
 			if GS
             	this_Vgrad = zero(SMatrix{3,3,TF,9})
-            	this_Vgrad += bound_velocity_gradient(r1, r2)
-            	this_Vgrad += bound_velocity_gradient(r2, r3)
-            	this_Vgrad += bound_velocity_gradient(r3, r4)
-            	this_Vgrad += bound_velocity_gradient(r4, r1)
+            	this_Vgrad += bound_velocity_gradient(r1, r2, finite_core, core_size)
+            	this_Vgrad += bound_velocity_gradient(r2, r3, finite_core, core_size)
+            	this_Vgrad += bound_velocity_gradient(r3, r4, finite_core, core_size)
+            	this_Vgrad += bound_velocity_gradient(r4, r1, finite_core, core_size)
             	Vgrad += this_Vgrad
 			end
         end
@@ -118,11 +118,11 @@ function update_n_probes!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,T
     resize!(probes.velocity, n)
 end
 
-# function update_n_probes!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,TVG}, n) where {TF,TV,TVG}
-#     resize!(probes.position, n)
-#     resize!(probes.velocity, n)
-#     resize!(probes.velocity_gradient, n)
-# end
+function update_n_probes!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,TVG}, n) where {TF,TV,TVG}
+    resize!(probes.position, n)
+    resize!(probes.velocity, n)
+    resize!(probes.velocity_gradient, n)
+end
 
 function reset!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,Nothing}) where {TF,TV}
     for i in eachindex(probes.velocity)
@@ -130,15 +130,15 @@ function reset!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,Nothing}
     end
 end
 
-# function reset!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,TVG}) where {TF,TV,TVG}
-#     for i in eachindex(probes.velocity)
-#         probes.velocity[i] = zero(eltype(probes.velocity))
-#         probes.velocity_gradient[i] = zero(eltype(probes.velocity_gradient))
-#     end
-# end
+function reset!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,TVG}) where {TF,TV,TVG}
+    for i in eachindex(probes.velocity)
+        probes.velocity[i] = zero(eltype(probes.velocity))
+        probes.velocity_gradient[i] = zero(eltype(probes.velocity_gradient))
+    end
+end
 
 "Places probes at the control point of all surface panels, and additional probes at the center of all surface filaments"
-function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem{<:Any,<:Any,<:Any,<:Any,<:Any}, surfaces::Vector{Matrix{SurfacePanel{TF}}}, i_start) where TF # wake corners
+function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem, surfaces::Vector{Matrix{SurfacePanel{TF}}}, i_start) where TF # wake corners
     i_probe = 1
 
     # place probes at control points
@@ -186,7 +186,7 @@ function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem{<:Any,<:A
     for (nc, wake) in zip(nwake, wakes)
         if nc > 0
             ns = size(wake,2) # number of spanwise panels
-            
+
             # get wake_shedding_locations (first row of wake points)
             for i in 1:ns
                 fmm_velocity_probes.position[i_corner] = wake[1,i].rtl

@@ -37,48 +37,107 @@ end
     rdot = dot(r1, r2)
 
     # check if evaluation point is colinear with the bound vortex
-    if norm(rcross) < epsilon # colinear if true
+    #if norm(rcross) < epsilon # colinear if true
         if isapprox(rdot, -nr1nr2; atol=epsilon) # at the midpoint, so return zero
             return zero(typeof(r1))
-        elseif rdot <= 0.0 && finite_core # coincident with the filament so use the finite core model
+        # elseif rdot <= 0.0 && finite_core # coincident with the filament so use the finite core model
+        elseif finite_core # coincident with the filament so use the finite core model
             r1s, r2s, εs = nr1^2, nr2^2, core_size^2
             f1 = rcross/(r1s*r2s - rdot^2 + εs*(r1s + r2s - 2*nr1nr2))
             f2 = (r1s - rdot)/sqrt(r1s + εs) + (r2s - rdot)/sqrt(r2s + εs)
             Vhat = (f1*f2)/(4*pi)
             return Vhat
         end
-    end
-    
+    #end
+
     f1 = rcross/(nr1nr2 + rdot)
     f2 = (1/nr1 + 1/nr2)
-
     Vhat = (f1*f2)/(4*pi)
 
     return Vhat
 end
 
-function bound_velocity_gradient(r1::SVector{3,TF},r2) where TF
-    # zeta
+"""
+    bound_velocity_gradient_finite_core(r1, r2, finite_core, core_size)
+
+Computes the velocity gradient of the finite core vortex filament of unit strength with evaluation point located at `r1` relative to the start of the vortex filament and `r2` relative to the end of the vortex filament. Note that the filament vortex strength is defined in the direction from `r1` to `r2`. See derivation in my notebook `20240501.md`.
+
+# Arguments
+
+* `r1::SVector{3,Float64}`: the evaluation point relative to the first endpoint of the vortex filament
+* `r2::SVector{3,Float64}`: the evaluation point relative to the second endpoint of the vortex filament
+* `finite_core::Bool`: whether or not to include the finite core model
+* `core_size::Float64`: the finite core size
+
+# Keyword Arguments
+
+* `epsilon::Float64`: the finite core model is still undefined at the midpoint of the filament; if probed near the midpoint according to `epsilon`, zero is returned
+
+# Returns
+
+* `∇v::SMatrix{3,3,Float64,9}`: the velocity gradient ''\\frac{\\partial U_i}{\\partial x_j}''
+
+"""
+function bound_velocity_gradient(r1::SVector{3,TF}, r2, finite_core, core_size; epsilon=sqrt(eps())) where TF
     r1norm = norm(r1)
     r2norm = norm(r2)
-    dotprod = dot(r1,r2)
-    t1 = 1/(r1norm*r2norm + dotprod)
-    t2 = 1/r1norm + 1/r2norm
-    t3 = 1/4/pi
-    z = t1*t2*t3
+    dot_prod = dot(r1,r2)
 
-    # zeta gradient
-    r1norm3 = r1norm^3
-    r2norm3 = r2norm^3
-    t4 = SVector{3,TF}(r1[i]/r1norm^3 + r2[i]/r2norm^3 for i in 1:3)
-    t5 = SVector{3,TF}(r1norm/r2norm*r2[i] + r2norm/r1norm*r1[i] + r1[i] + r2[i] for i in 1:3)
-    zgrad = t3*(-t1*t4 - t2*t5*t1^2)
+    if finite_core
+        # alpha
+        r1norm2 = r1norm^2
+        r2norm2 = r2norm^2
+        r1norm_r2norm = r1norm * r2norm
+        core_size2 = core_size^2
+        α_denom = r1norm2 * r2norm2 - dot_prod^2 + core_size2 * ( r1norm2 + r2norm2 - 2*r1norm_r2norm )
+        α = 1/α_denom
+
+        # alpha gradient
+        t0 = -dot_prod + core_size2
+        t1 = (r2norm2 + t0) * r1
+        t2 = (r1norm2 + t0) * r2
+        r1hat = r1 / r1norm
+        r2hat = r2 / r2norm
+        t3 = core_size2 * (r2norm * r1hat + r1norm * r2hat)
+        ∇α = -α^2 * 2 * (t1 + t2 + t3)
+
+        # beta
+        d1 = r1norm2 + core_size2
+        sqrtd1 = sqrt(d1)
+        d2 = r2norm2 + core_size2
+        sqrtd2 = sqrt(d2)
+        n1 = r1norm2 - dot_prod
+        n2 = r2norm2 - dot_prod
+        β = n1/sqrtd1 + n2/sqrtd2
+
+        # beta gradient
+        diff = r1 - r2
+        ∇β = diff / sqrtd1 - diff / sqrtd2 - n1 / (d1*sqrtd1) * r1 - n2 / (d2*sqrtd2) * r2
+
+        # zeta
+        ζ = α * β
+
+        # zeta gradient
+        ∇ζ = α * ∇β + β * ∇α
+    else
+        # zeta
+        t1 = 1/(r1norm*r2norm + dot_prod)
+        t2 = 1/r1norm + 1/r2norm
+        ζ = t1*t2
+
+        # zeta gradient
+        r1norm3 = r1norm^3
+        r2norm3 = r2norm^3
+        t4 = SVector{3,TF}(r1[i]/r1norm^3 + r2[i]/r2norm^3 for i in 1:3)
+        t5 = SVector{3,TF}(r1norm/r2norm*r2[i] + r2norm/r1norm*r1[i] + r1[i] + r2[i] for i in 1:3)
+        ∇ζ = -t1*t4 - t2*t5*t1^2
+    end
 
     # Omega
-    o = cross(r1,r2)
+    Ω = cross(r1,r2)
 
     # Omega gradient
-    ograd = SMatrix{3,3,TF,9}(
+    ∇Ω = SMatrix{3,3,TF,9}(
         0.0,# 1,1
         r1[3]-r2[3], # 2,1
         r2[2]-r1[2], # 3,1
@@ -89,7 +148,7 @@ function bound_velocity_gradient(r1::SVector{3,TF},r2) where TF
         r2[1]-r1[1], # 2,3
         0.0 # 3,3
     )
-    return transpose(zgrad * transpose(o)) + z * ograd
+    return (transpose(∇ζ * transpose(Ω)) + ζ * ∇Ω) / (4*pi)
 end
 
 """
