@@ -96,8 +96,8 @@ function bound_velocity_gradient(r1::SVector{3,TF}, r2, finite_core, core_size; 
         t0 = -dot_prod + core_size2
         t1 = (r2norm2 + t0) * r1
         t2 = (r1norm2 + t0) * r2
-        r1hat = r1 / r1norm
-        r2hat = r2 / r2norm
+        r1hat = iszero(r1norm) ? SVector{3,TF}(1.0,1.0,1.0) : r1 / r1norm
+        r2hat = iszero(r2norm) ? SVector{3,TF}(1.0,1.0,1.0) : r2 / r2norm
         t3 = core_size2 * (r2norm * r1hat + r1norm * r2hat)
         ∇α = -α^2 * 2 * (t1 + t2 + t3)
 
