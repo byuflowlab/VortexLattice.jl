@@ -615,123 +615,221 @@ Return induced drag from vortex `j` induced on panel `i`
     return Di
 end
 
-"""
-    FastMultipolePanel{TF}
+function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}, nwake) where TF
 
-SurfacePanel used for fast multipole acceleration.
-
-**Fields**
- - `rtl`: position of the left side of the top bound vortex
- - `rtr`: position of the right side of the top bound vortex
- - `rbl`: position of the left side of the bottom bound vortex
- - `rbr`: position of the right side of the bottom bound vortex
- - `rcp`: position of the panel control point
- - `ncp`: normal vector at the panel control point
- - `radius`: effective panel radius for determining multipole acceptance
- - `core_size`: finite core size (for use when the finite core smoothing model is enabled)
- - `gamma`: circulation strength of the panel
-"""
-struct FastMultipolePanel{TF}
-    rtl::SVector{3,TF}
-    rtr::SVector{3,TF}
-    rbl::SVector{3,TF}
-    rbr::SVector{3,TF}
-    rcp::SVector{3,TF}
-    ncp::SVector{3,TF}
-    radius::TF
-    core_size::TF
-    gamma::TF
-end
-
-FastMultipolePanel(p::SurfacePanel{TF}, gamma) where TF = FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.rcp, p.ncp, max(norm(p.rtl-p.rbr)/2, norm(p.rbl-p.rtr)/2), p.core_size, gamma)
-
-function FastMultipolePanel(p::WakePanel{TF}) where TF
-    v1 = p.rtr-p.rbl
-    v2 = p.rtl-p.rbr
-    rcp_t = linearinterp(0.5,p.rtr,p.rtl)
-    rcp_b = linearinterp(0.5,p.rbr,p.rbl)
-    rcp = linearinterp(0.5,rcp_t,rcp_b)
-    ncp = cross(v1, v2)
-    ncp /= norm(ncp)
-    radius = max(norm(v1), norm(v2))/2
-    return FastMultipolePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, rcp, ncp, radius, p.core_size, p.gamma)
-end
-
-function update_fmm_panels!(fmm_panels, wake_panels, nwake)
     # clear space for fmm panels
-    n_panels = 0
+    n_filaments = 0
     for (nc, wake) in zip(nwake, wake_panels)
-        nc > 0 && (n_panels += size(wake,2) * nc)
+        nc > 0 && (n_filaments += 2 * size(wake,2) * nc + size(wake,2) + nc)
     end
-    resize!(fmm_panels, n_panels)
+    resize!(filaments, n_filaments)
 
-    # copy wake panels to fmm panels
-    i_fmm = 1
-    for (nc, wake) in zip(nwake, wake_panels)
-        ns = size(wake, 2)
-        for i in 1:ns
-            for j in 1:nc
-                fmm_panels[i_fmm] = FastMultipolePanel(wake[j,i])
-                i_fmm += 1
+    # copy wake panels to filaments
+    i_filament = 0
+    if n_filaments > 0
+        for (nc, wake) in zip(nwake, wake_panels)
+            ns = size(wake, 2)
+            for j in 1:ns
+                Γ_above = zero(TF)
+                for i in 1:nc
+                    # get panel
+                    panel = wake[i,j]
+                    Γ = panel.gamma
+                    core_size = panel.core_size
+
+                    # top filament
+                    x1 = panel.rtl
+                    x2 = panel.rtr
+                    i_filament += 1
+                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_above, core_size)
+                    Γ_above = Γ
+
+                    # left filament
+                    x2 = x1
+                    x1 = panel.rbl
+                    Γ_left = j > 1 ? wake[i,j-1].gamma : zero(TF)
+                    i_filament += 1
+                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
+
+                end
+
+                # bottom filament
+                Γ = Γ_above
+                panel = wake[nc,j]
+                x1 = panel.rbr
+                x2 = panel.rbl
+                core_size = panel.core_size
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+
+            end
+
+            # right edge filaments
+            for i in 1:nc
+
+                # get panel
+                panel = wake[i,end]
+                Γ = panel.gamma
+                core_size = panel.core_size
+
+                # right filament
+                x1 = panel.rtr
+                x2 = panel.rbr
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+
             end
         end
     end
+    @assert i_filament == n_filaments "wrong number of vortex filaments created; expected $n_filaments, got $i_filament"
 
-    return fmm_panels
+    return filaments
 end
 
-function update_fmm_panels!(fmm_panels, surface_panels, wake_shedding_locations, gamma; transition_panels=true)
-    # clear space for fmm panels
-    n_panels = 0
+function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel{TF1}}}, wake_shedding_locations, gamma::Vector{TF2}; transition_panels=true) where {TF1,TF2}
+
+    TF = promote_type(TF1,TF2)
+
+    # clear space for filaments
+    n_filaments = 0
     extra_rows = transition_panels ? 1 : 0
     for surface in surface_panels
         nc, ns = size(surface)
-        n_panels += (nc+extra_rows)*ns
+        n_filaments += 2*nc*ns + nc + ns
+        transition_panels && (n_filaments += 2*ns + 1)
     end
-    resize!(fmm_panels, n_panels)
+    resize!(filaments, n_filaments)
 
-    # add surface panels
-    i_panel = 1
+    # convert surface panels to filaments
+    i_filament = 0
+    i_Γ = 0
     for surface in surface_panels
-        for panel in surface
-            fmm_panels[i_panel] = VortexLattice.FastMultipolePanel(panel, gamma[i_panel])
-            i_panel += 1
+        nc, ns = size(surface)
+        for j in 1:ns
+            Γ_above = zero(TF)
+            for i in 1:nc
+                # get panel
+                panel = surface[i,j]
+                i_Γ += 1
+                Γ = gamma[i_Γ]
+
+                # top bound vortex
+                x1 = panel.rtl
+                x2 = panel.rtr
+                xc = panel.rtc
+                core_size = panel.core_size
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, xc, Γ - Γ_above, core_size)
+                Γ_above = Γ
+
+                # left vertical vortex
+                x1 = panel.rbl
+                x2 = panel.rtl
+                Γ_left = j > 1 ? gamma[i_Γ - nc] : zero(TF)
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
+            end
+
+            # trailing edge vortex
+            panel = surface[nc,j]
+            Γ = transition_panels ? zero(TF) : gamma[i_Γ]
+            core_size = panel.core_size
+
+            x1 = panel.rbr
+            x2 = panel.rbl
+            i_filament += 1
+            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+        end
+
+        # right size vortices
+        i_Γ -= nc
+        for i in 1:nc
+            # get panel
+            panel = surface[i,end]
+            i_Γ += 1
+            Γ = gamma[i_Γ]
+            core_size = panel.core_size
+
+            # right vertical vortex
+            x1 = panel.rtr
+            x2 = panel.rbr
+            i_filament += 1
+            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
         end
     end
 
     # add wake transition panels
     if transition_panels
-        i_start = 0
+        i_Γ = 0
         for (wake_shedding_location,surface) in zip(wake_shedding_locations,surface_panels)
 
             # number of chord/spanwise panels
             nc, ns = size(surface)
 
             # loop over transition panels
-            i_gamma = i_start + nc
+            Γ_left = zero(TF)
             for j in 1:ns
-                rtl = surface[nc,j].rbl
-                rtr = surface[nc,j].rbr
-                core_size = surface[nc,j].core_size
-                rbl = wake_shedding_location[j]
-                rbr = wake_shedding_location[j+1]
-                v1 = rtr-rbl
-                v2 = rtl-rbr
-                rcp_t = linearinterp(0.5,rtr,rtl)
-                rcp_b = linearinterp(0.5,rbr,rbl)
-                rcp = linearinterp(0.5,rcp_t,rcp_b)
-                ncp = cross(v1, v2)
-                ncp /= norm(ncp)
-                radius = max(norm(v1), norm(v2))/2
-                fmm_panels[i_panel] = FastMultipolePanel(rtl,rtr,rbl,rbr,rcp,ncp,radius,core_size,gamma[i_gamma])
-                i_gamma += nc
-                i_panel += 1
+
+                # get panel
+                panel = surface[end,j]
+                core_size = panel.core_size
+                i_Γ += nc
+                Γ = gamma[i_Γ]
+
+                # left vertical filament
+                x1 = wake_shedding_location[j]
+                x2 = panel.rbl
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
+                Γ_left = Γ
+
+                # bottom filament
+                x2 = x1
+                x1 = wake_shedding_location[j+1]
+                i_filament += 1
+                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+
             end
 
-            i_start += length(surface)
+            # right filament
+            panel = surface[end,end]
+            x1 = panel.rbr
+            x2 = wake_shedding_location[end]
+            core_size = panel.core_size
+            Γ = Γ_left
+            i_filament += 1
+            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+
         end
     end
 
-    return fmm_panels
+    @assert i_filament == n_filaments "wrong number of vortex filaments created; expected $n_filaments, got $i_filament"
+
+    return filaments
 end
 
+"""
+    VortexFilament
+
+Represents a vortex filament.
+
+# Fields
+
+* `x1::SVector{3,Float64}`: the first endpoint
+* `x2::SVector{3,Float64}`: the second endpoint
+* `xc::SVector{3,Float64}`: midpoint of the filament
+* `gamma::Float64`: the strength of this vortex filament
+* `core_size::Flaot64`: used when applying the finite core model
+
+"""
+struct VortexFilament{TF}
+    x1::SVector{3,TF}
+    x2::SVector{3,TF}
+    xc::SVector{3,TF}
+    gamma::TF
+    core_size::TF
+end
+
+function VortexFilament(x1, x2, gamma, core_size)
+    return VortexFilament(x1, x2, (x1+x2)/2, gamma, core_size)
+end

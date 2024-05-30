@@ -11,7 +11,7 @@ const RHO = 1.0
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel, FastMultipolePanel
-export reflect, set_normal, update_fmm_panels!
+export reflect, set_normal, update_filaments!
 
 include("wake.jl")
 export Wake

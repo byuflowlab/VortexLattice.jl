@@ -265,7 +265,7 @@ unsteady_analysis
 
 # same grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractArray}, ref, fs, dt;
-    nwake = fill(length(dt), length(surfaces)), 
+    nwake = fill(length(dt), length(surfaces)),
     fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
     kwargs...)
 
@@ -278,7 +278,7 @@ end
 
 # different grids/surfaces at each time step
 function unsteady_analysis(surfaces::AbstractVector{<:AbstractVector{<:AbstractArray}},
-    ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])), 
+    ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])),
     fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4,
     kwargs...)
 
@@ -484,6 +484,60 @@ propagate_system!
 propagate_system!(system, fs, dt; kwargs...) = propagate_system!(system,
     nothing, fs, dt; kwargs...)
 
+const DEBUG = Array{Bool,0}(undef)
+DEBUG[] = false
+
+function wake_on_all!(system::System)
+    # compile sources
+    update_filaments!(system.filaments, system.wakes, system.nwake)
+    if DEBUG[] && isnan(system)
+        throw("found nans: 6")
+    end
+
+    # preallocate probes
+    n_control_points = 0
+    n_surface_filaments = 0
+    for surface in system.surfaces
+        nc, ns = size(surface)
+        n_control_points += nc * ns # control points
+        n_surface_filaments += nc * ns + nc * ns + nc # top (nc*ns) + left (nc*ns) + right (nc)
+    end
+
+    # n_wake_shedding_locations = 0
+    # for wake_shedding_location in wake_shedding_locations
+    #     n_wake_shedding_locations += length(wake_shedding_location)
+    # end
+
+    n_wake_corners = 0
+    for (nc, wake) in zip(system.nwake, system.wakes)
+        if nc > 0
+            ns = size(wake, 2)
+            n_wake_corners += (nc+1)*(ns+1)
+        end
+    end
+
+    update_n_probes!(system.fmm_velocity_probes, n_control_points + n_surface_filaments + n_wake_corners)
+
+    # compile targets
+    update_probes!(system.fmm_velocity_probes, system.surfaces, 0) # control points and filament centers
+    update_probes!(system.fmm_velocity_probes, system.wakes, system.nwake, n_control_points + n_surface_filaments) # wake corners
+
+    # reset to zero
+    reset!(system.fmm_velocity_probes)
+    if DEBUG[] && isnan(system.fmm_velocity_probes)
+        throw("found nans! 6.5")
+    end
+
+    # run FMM
+    if length(system.filaments) > 0
+        FastMultipole.fmm!(system.fmm_velocity_probes, system; expansion_order=system.fmm_p, leaf_size_source=system.fmm_ncrit, leaf_size_target=system.fmm_ncrit, multipole_threshold=system.fmm_theta)
+        #FastMultipole.direct!(system.fmm_velocity_probes, system)
+        if DEBUG[] && isnan(system)
+            throw("found nans: 7")
+        end
+    end
+end
+
 # moving/deforming surfaces
 function propagate_system!(system, surfaces, fs, dt;
     additional_velocity, reuse_kinematic_velocity,
@@ -494,7 +548,7 @@ function propagate_system!(system, surfaces, fs, dt;
     near_field_analysis,
     derivatives, vertical_segments,
     fmm_velocity_probes)
-    
+
     # NOTE: Each step models the transition from `t = t[it]` to `t = [it+1]`
     # (e.g. the first step models from `t = 0` to `t = dt`).  Properties are
     # assumed to be constant during each time step and resulting transient
@@ -530,7 +584,7 @@ function propagate_system!(system, surfaces, fs, dt;
     Vv = system.Vv
     Vte = system.Vte
     fmm_toggle = system.fmm_toggle
-    fmm_panels = system.fmm_panels
+    filaments = system.filaments
     fmm_p = system.fmm_p
     fmm_ncrit = system.fmm_ncrit
     fmm_theta = system.fmm_theta
@@ -538,6 +592,9 @@ function propagate_system!(system, surfaces, fs, dt;
     # check if the surfaces are moving
     surface_motion = !isnothing(surfaces)
 
+    if DEBUG[] && isnan(system)
+        throw("found nans: 1")
+    end
     # move geometry and calculate velocities for this time step
     if !reuse_kinematic_velocity
         if surface_motion
@@ -574,6 +631,10 @@ function propagate_system!(system, surfaces, fs, dt;
         end
     end
 
+    if DEBUG[] && isnan(system)
+        throw("found nans: 2")
+    end
+
     # update stored freestream parameters for this time step
     system.freestream[] = fs
 
@@ -587,6 +648,9 @@ function propagate_system!(system, surfaces, fs, dt;
         current_surfaces, ref, fs, dt, additional_velocity, Vte,
         nwake, eta)
 
+    if DEBUG[] && isnan(system)
+        throw("found nans: 3")
+    end
     # calculate/re-calculate AIC matrix (if necessary)
     if surface_motion || calculate_influence_matrix
         influence_coefficients!(AIC, current_surfaces;
@@ -597,52 +661,21 @@ function propagate_system!(system, surfaces, fs, dt;
             xhat = xhat)
     end
 
+    if DEBUG[] && isnan(system)
+        throw("found nans: 4")
+    end
     # update the AIC matrix to use the new wake shedding locations
     update_trailing_edge_coefficients!(AIC, current_surfaces;
         symmetric = symmetric,
         wake_shedding_locations = wake_shedding_locations,
         trailing_vortices = trailing_vortices)
 
+    if DEBUG[] && isnan(system)
+        throw("found nans: 5")
+    end
     # wake-on-all
-    if fmm_toggle # wake on all surfaces
-        # compile sources
-        update_fmm_panels!(fmm_panels, wakes, nwake)
-        
-        # preallocate probes
-        n_control_points = 0
-        n_surface_filaments = 0
-        for surface in current_surfaces
-            nc, ns = size(surface)
-            n_control_points += nc * ns # control points
-            n_surface_filaments += nc * ns + nc * ns + nc # top (nc*ns) + left (nc*ns) + right (nc)
-        end
-
-        # n_wake_shedding_locations = 0
-        # for wake_shedding_location in wake_shedding_locations
-        #     n_wake_shedding_locations += length(wake_shedding_location)
-        # end
-        
-        n_wake_corners = 0
-        for (nc, wake) in zip(nwake, wakes)
-            if nc > 0
-                ns = size(wake, 2)
-                n_wake_corners += (nc+1)*(ns+1)
-            end
-        end
-
-        update_n_probes!(fmm_velocity_probes, n_control_points + n_surface_filaments + n_wake_corners)
-
-        # compile targets
-        update_probes!(fmm_velocity_probes, current_surfaces, 0) # control points and filament centers
-        update_probes!(fmm_velocity_probes, wakes, nwake, n_control_points + n_surface_filaments) # wake corners
-        
-        # reset to zero
-        reset!(fmm_velocity_probes)
-
-        # run FMM
-        if length(fmm_panels) > 0
-            FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, multipole_acceptance_criterion=fmm_theta)
-        end
+    if fmm_toggle # wake on all influence
+        wake_on_all!(system)
     end
 
     # calculate RHS (doesn't store velocity induced by wake)
@@ -650,10 +683,13 @@ function propagate_system!(system, surfaces, fs, dt;
         normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
         ref, fs, fmm_velocity_probes; additional_velocity, Vcp, symmetric, nwake,
         surface_id, wake_finite_core, trailing_vortices, xhat)
-    else 
+    else
         normal_velocity!(w, current_surfaces, wakes, ref, fs, fmm_velocity_probes;
             additional_velocity, Vcp, symmetric, nwake, surface_id,
             wake_finite_core, trailing_vortices, xhat)
+    end
+    if DEBUG[] && isnan(system)
+        throw("found nans: 8")
     end
 
     # save (negative) previous circulation in dΓdt
@@ -665,6 +701,9 @@ function propagate_system!(system, surfaces, fs, dt;
     else
         circulation!(Γ, AIC, w)
     end
+    if DEBUG[] && isnan(system)
+        throw("found nans: 9")
+    end
 
     # solve for dΓdt using finite difference `dΓdt = (Γ - Γp)/dt`
     dΓdt .+= Γ # add newly computed circulation
@@ -672,17 +711,23 @@ function propagate_system!(system, surfaces, fs, dt;
 
     # surface-on-all
     if fmm_toggle
-        
+
         # update sources
-        update_fmm_panels!(fmm_panels, current_surfaces, wake_shedding_locations, Γ)
-        if VortexLattice.FastMultipole.DEBUG_TOGGLE[]
-            @show fmm_panels
+        update_filaments!(filaments, current_surfaces, wake_shedding_locations, Γ)
+        if DEBUG[] && isnan(system)
+            throw("found nans: 10")
         end
-        
+        if VortexLattice.FastMultipole.DEBUG_TOGGLE[]
+            @show filaments
+        end
+
         # run FMM
-		FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, n_per_branch_source=fmm_ncrit, n_per_branch_target=fmm_ncrit, multipole_acceptance_criterion=fmm_theta)
+		FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, leaf_size_source=fmm_ncrit, leaf_size_target=fmm_ncrit, multipole_threshold=fmm_theta)
+        if DEBUG[] && isnan(system)
+            throw("found nans: 11")
+        end
     end
-    
+
     # compute transient forces on each panel (if necessary)
     if near_field_analysis
         if derivatives
@@ -696,6 +741,9 @@ function propagate_system!(system, surfaces, fs, dt;
                 ref, fs, Γ, fmm_velocity_probes; dΓdt, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
                 wake_shedding_locations, trailing_vortices, xhat, vertical_segments)
+        end
+        if DEBUG[] && isnan(system)
+            throw("found nans: 12")
         end
 
         # save flag indicating that a near-field analysis has been performed
@@ -711,10 +759,128 @@ function propagate_system!(system, surfaces, fs, dt;
         repeated_points, nwake, surface_id, wake_finite_core,
         wake_shedding_locations, trailing_vortices, xhat,
         fmm_velocity_probes)
+    if DEBUG[] && isnan(system)
+        throw("found nans: 13")
+    end
 
     # shed additional wake panel (and translate existing wake panels)
     shed_wake!(wakes, wake_shedding_locations, wake_velocities,
         dt, current_surfaces, Γ, nwake)
+    if DEBUG[] && isnan(system)
+        throw("found nans: 14")
+    end
 
     return system
 end
+
+function Base.isnan(array::AbstractArray{<:Real})
+    for v in array
+        if isnan(v)
+            return true
+        end
+    end
+    return false
+end
+
+function Base.isnan(array::AbstractArray{<:AbstractArray})
+    for a in array
+        if isnan(a)
+            return true
+        end
+    end
+    return false
+end
+
+function Base.isnan(object, fields::NTuple{<:Any,Symbol})
+    for field in fields
+        if isnan(getfield(object,field))
+            throw("nan in $field")
+            return true
+        end
+    end
+    return false
+end
+
+function Base.isnan(system::System)
+    for field in (:AIC,:w,:Γ,:V,:xhat,:Vcp,:Vh,:Vv,:Vte,:dΓdt)
+        if isnan(getfield(system,field))
+            throw("nan in system.$field")
+            return true
+        end
+    end
+    for dw in system.dw
+        if isnan(dw)
+            throw("nan in system.dw")
+            return true
+        end
+    end
+    for dΓ in system.dΓ
+        if isnan(dΓ)
+            throw("nan in system.dΓ")
+            return true
+        end
+    end
+    for s in system.surfaces
+        for p in s
+            if isnan(p,(:rtl, :rtc, :rtr, :rbl, :rbc, :rbr, :rcp, :ncp, :core_size, :chord))
+                throw("nan in system.surfaces")
+                return true
+            end
+        end
+    end
+    for prop in system.properties
+        for p in prop
+            if isnan(p,(:gamma,:velocity,:cfb,:cfl,:cfr))
+                throw("nan in system.properties")
+                return true
+            end
+        end
+    end
+    for (wake,nc) in zip(system.wakes, system.nwake)
+        for j in 1:size(wake,2)
+            for i in 1:nc
+                p = wake[i,j]
+                if isnan(p,(:rtl,:rtr,:rbl,:rbr,:core_size,:gamma))
+                    throw("nan in system.wakes")
+                    return true
+                end
+            end
+        end
+    end
+    if isnan(system.reference[],(:S,:c,:b,:r,:V))
+        return true
+    end
+    if isnan(system.freestream[],(:Vinf,:alpha,:beta,:Omega,:rho))
+        return true
+    end
+    for props in system.dproperties
+        for prop in props
+            for p in prop
+                if isnan(p,(:gamma,:velocity,:cfb,:cfl,:cfr))
+                    return true
+                end
+            end
+        end
+    end
+    if !isnothing(system.wake_shedding_locations)
+        for wsl in system.wake_shedding_locations
+            if isnan(wsl)
+                @show wsl
+                throw("nan in system.wake_shedding_locations")
+                return true
+            end
+        end
+    end
+    for p in system.filaments
+        if isnan(p,(:x1,:x2,:xc,:gamma,:core_size))
+            throw("nan in system.filaments")
+            return true
+        end
+    end
+    if isnan(system.fmm_velocity_probes)
+        throw("nan in system.fmm_velocity_probes")
+        return true
+    end
+    return false
+end
+

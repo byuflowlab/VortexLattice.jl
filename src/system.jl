@@ -35,6 +35,7 @@ end
 
 Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
 Base.eltype(::PanelProperties{TF}) where TF = TF
+Base.zero(::Type{PanelProperties{TF}}) where TF = PanelProperties(zero(TF), zero(SVector{3,TF}), zero(SVector{3,TF}), zero(SVector{3,TF}), zero(SVector{3,TF}))
 
 """
     System{TF}
@@ -74,7 +75,7 @@ Contains pre-allocated storage for internal system variables.
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
  - `fmm_toggle`: Switch for activating fast multipole acceleration
- - `fmm_panels`: Fast-access copies of all surface panels (including surface-wake transition panels) for fast multipole acceleration
+ - `filaments`: Fast-access copies of all vortex filaments (including surface-wake transition panels) for fast multipole acceleration
  - `fmm_velocity_probes`: Probes for obtaining the induced velocity at surface control points, wake corners, and wake shedding locations
  - `fmm_p`: Multipole expansion order
  - `fmm_ncrit`: Maximum number of panels in the leaf level of the FMM
@@ -110,7 +111,7 @@ struct System{TF}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
     fmm_toggle::Bool
-    fmm_panels::Vector{FastMultipolePanel{TF}}
+    filaments::Vector{VortexFilament{TF}}
     fmm_velocity_probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,Vector{SVector{3,TF}},Nothing}
     fmm_p::Int
     fmm_ncrit::Int
@@ -190,7 +191,7 @@ variables
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
 """
-function System(TF::Type, nc, ns; nw = zero(nc), 
+function System(TF::Type, nc, ns; nw = zero(nc),
     fmm_toggle=false, fmm_p=4, fmm_ncrit=20, fmm_theta=0.4)
 
     @assert length(nc) == length(ns) == length(nw)
@@ -207,6 +208,7 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     V = [fill((@SVector zeros(TF, 3)), nw[i]+1, ns[i]+1) for i = 1:nsurf]
     surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     properties = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
+    _reset!(properties)
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
     reference = Array{Reference{TF}}(undef)
@@ -222,6 +224,7 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     dw = Tuple(zeros(TF, N) for i = 1:5)
     dΓ = Tuple(zeros(TF, N) for i = 1:5)
     dproperties = Tuple([Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:length(surfaces)] for j = 1:5)
+    _reset!(dproperties)
     wake_shedding_locations = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     previous_surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     Vcp = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]) for i = 1:nsurf]
@@ -229,18 +232,19 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     Vv = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]+1) for i = 1:nsurf]
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
-    fmm_panels = Vector{FastMultipolePanel{TF}}(undef,0)
+    filaments = Vector{VortexFilament{TF}}(undef,0)
     if fmm_toggle
-        sizehint!(fmm_panels, max(sum((nc .+1).*ns), sum(length.(wakes))))
+        sizehint!(filaments, max(sum(nc .* ns .+ nc .+ 2 .* ns), sum(nw .* ns .+ nw .+ ns)))
     end
     n_velocity_probes = fmm_toggle ? N + sum((nw .+1) .* (ns .+1)) + sum(ns .+1) : 0 # surface control points + wake corners + wake shedding locations
     fmm_velocity_probes = FastMultipole.ProbeSystem(n_velocity_probes, TF; velocity=true)
+    FastMultipole.reset!(fmm_velocity_probes)
 
     return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt, fmm_toggle, fmm_panels, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
+        Vv, Vte, dΓdt, fmm_toggle, filaments, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
 end
 
 """
@@ -251,3 +255,17 @@ of panel properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc`
 is the number of chordwise panels and `ns` is the number of spanwise panels
 """
 get_surface_properties(system) = system.properties
+
+function _reset!(properties::Vector{Matrix{PanelProperties{TF}}}) where TF
+    for property in properties
+        for i in eachindex(property)
+            property[i] = zero(PanelProperties{TF})
+        end
+    end
+end
+
+function _reset!(dproperties::Tuple)
+    for dproperty in dproperties
+        _reset!(dproperty)
+    end
+end
