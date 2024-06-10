@@ -1534,3 +1534,31 @@ end
     # extract forces at each time step
     CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
+
+@testset "OpenVSP Geometry Import" begin
+    Sref = 45.0
+    cref = 2.5
+    bref = 18.0
+    rref = [0.625, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    comp = read_degengeom("samplewing.csv")
+    grid, surface = import_vsp(comp[1]; mirror=true)
+
+    symmetric = false
+    surfaces = [surface]
+
+    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    CF, CM = body_forces(system; frame=Wind())
+
+    CF_true = [2.41223539e-3, 0.0, 2.37009019e-1]
+    CM_true = [0.0, -2.75091871e-1, 0.0]
+    @test isapprox(CF, CF_true, atol=1e-5)
+    @test isapprox(CM, CM_true, atol=1e-5)
+end
