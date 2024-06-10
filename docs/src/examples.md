@@ -1352,3 +1352,47 @@ nothing # hide
 Visualizing the `k=0.5` case in ParaView yields the following animation.
 
 ![](heaving-rectangular-wing.gif)
+
+## OpenVSP Geometry Import
+This example shows how to import a wing geometry created using OpenVSP into VortexLattice for analysis. We'll make use of the default swept wing inside OpenVSP with a few minor changes.
+
+![](samplewing.png)
+
+Start up OpenVSP and create the default wing. Change the airfoil to NACA 2412 sections so that our wing has a camber to it. VortexLattice will make use of the cambersurface computed by OpenVSP when simulating it. The number of spanwise panels was increased to 20 per semispan in this example.
+
+Once the geometry has been created, write out a DegenGeom file by selecting `DegenGeom` in the `Analysis` tab in OpenVSP. We only require a DegenGeom file in the csv format. The example DegenGeom file named `samplewing.csv` provided in `docs/src` was created in this manner.
+
+The DegenGeom file can be imported into VortexLattice by using the functions [`read_degengeom`](@ref) and [`import_vsp`](@ref). The `read_degengeom` function reads the DegenGeom file into an array of components suitable for use inside Julia. The `import_vsp` function imports required components from the array as specified by the user.
+
+In the following example code, a steady state analysis is performed on the sample wing imported from OpenVSP and results are visualized in Paraview.
+
+```julia
+using VortexLattice
+
+Sref = 45.0
+cref = 2.5
+bref = 18.0
+rref = [0.625, 0.0, 0.0]
+Vinf = 1.0
+ref = Reference(Sref, cref, bref, rref, Vinf)
+
+alpha = 1.0*pi/180
+beta = 0.0
+Omega = [0.0; 0.0; 0.0]
+fs = Freestream(Vinf, alpha, beta, Omega)
+
+# Import components inside Degengeom file into Julia
+comp = read_degengeom("samplewing.csv")
+
+# Use the first (and only) imported component to create the lifting surface
+grid, surface = import_vsp(comp[1]; mirror=true)
+
+symmetric = false
+surfaces = [surface]
+
+system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+properties = get_surface_properties(system)
+write_vtk("samplewing", surfaces, properties; symmetric)
+```
+
+![](samplewing-result.png)
