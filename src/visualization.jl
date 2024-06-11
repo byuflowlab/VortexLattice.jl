@@ -39,7 +39,7 @@ write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
     properties=fill(nothing, length(surfaces)); symmetric=fill(nothing, length(surfaces)),
-    pvd=nothing, time=0.0, kwargs...) where T
+    pvd=nothing, time=0.0, kwargs...)
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile
@@ -54,7 +54,7 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
     return nothing
 end
 
-function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; kwargs...) where T
+function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; kwargs...)
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile

@@ -58,7 +58,7 @@ end
 end
 
 """
-    bound_velocity_gradient_finite_core(r1, r2, finite_core, core_size)
+    bound_velocity_gradient(r1, r2, finite_core, core_size)
 
 Computes the velocity gradient of the finite core vortex filament of unit strength with evaluation point located at `r1` relative to the start of the vortex filament and `r2` relative to the end of the vortex filament. Note that the filament vortex strength is defined in the direction from `r1` to `r2`. See derivation in my notebook `20240501.md`.
 
@@ -175,6 +175,54 @@ trailing vortex.
     Vhat = -f/(4*pi)
 
     return Vhat
+end
+
+function trailing_induced_velocity(probes::FastMultipole.ProbeSystem, surfaces::Vector{<:Matrix{<:SurfacePanel}}, Γ::Vector{TF}, trailing_vortices; xhat, symmetric) where TF
+    @assert !(true in symmetric) "trailing_induced_velocity does not yet support symmetric systems"
+
+    # loop over targets
+    i_probe = 0
+    for target_surface in surfaces
+        nc_target, ns_target = size(target_surface)
+        n_probes = nc_target * ns_target * 3 + nc_target + ns_target
+
+        for _ in 1:n_probes
+            i_probe += 1
+            x_target = probes.position[i_probe]
+            Vi = SVector{3,TF}(0,0,0)
+
+            # loop over trailing vortices
+            iΓ = 0
+            for (surface, trailing) in zip(surfaces, trailing_vortices)
+
+                nc, ns = size(surface)
+                γ_left = zero(TF)
+                finite_core = surface != target_surface
+
+                for j in 1:ns
+
+                    iΓ += nc
+                    if trailing
+                        γ = Γ[iΓ]
+                        r = x_target - surface[nc,j].rbl
+                        core_size = surface[nc,j].core_size
+                        Vi += (γ_left - γ) * trailing_induced_velocity(r, xhat, finite_core, core_size)
+                        γ_left = γ
+                    end
+                end
+
+                # right-most trailing vortex
+                r = x_target - surface[nc,ns].rbr
+                core_size = surface[nc,ns].core_size
+                Vi += γ_left * trailing_induced_velocity(r, xhat, finite_core, core_size)
+
+            end
+
+            # add to probes
+            probes.velocity[i_probe] += Vi
+
+        end
+    end
 end
 
 """
@@ -370,7 +418,7 @@ Construct the aerodynamic influence coefficient matrix for a single surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
+influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
     influence_coefficients!(AIC, surface, surface; kwargs..., finite_core = false)
 
 """
@@ -395,13 +443,15 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
     each surface. Defaults to `true` for each surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
+ - `trailing_edge::Bool`: whether or not to include the trailing edge vortex in the influence matrix
 """
-@inline function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
     symmetric = fill(false, length(surfaces)),
     surface_id = 1:length(surfaces),
     wake_shedding_locations = fill(nothing, length(surfaces)),
     trailing_vortices = fill(true, length(surfaces)),
-    xhat = SVector(1, 0, 0))
+    xhat = SVector(1, 0, 0),
+    trailing_edge=true)
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -437,7 +487,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
                 symmetric = symmetric[j],
                 wake_shedding_locations = wake_shedding_locations[j],
                 trailing_vortices = trailing_vortices[j],
-                xhat = xhat)
+                xhat = xhat, trailing_edge)
 
             # increment position in AIC matrix
             jAIC += ns
@@ -463,13 +513,15 @@ Compute the AIC coefficients corresponding to the influence of the panels in
  - `trailing_vortices`: Indicates whether trailing vortices are used. Defaults to `true`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
+ - `trailing_edge::Bool`: whether or not to include the trailing edge vortex in the influence matrix
+
 """
-@inline function influence_coefficients!(AIC, receiving, sending;
+function influence_coefficients!(AIC, receiving, sending;
     finite_core = true,
     symmetric = false,
     wake_shedding_locations = nothing,
     trailing_vortices = true,
-    xhat = SVector(1, 0, 0))
+    xhat = SVector(1, 0, 0), trailing_edge = true)
 
     # get sending surface dimensions
     nc, ns = size(sending)
@@ -549,7 +601,7 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                     finite_core = finite_core,
                     symmetric = symmetric,
                     xhat = xhat,
-                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    bottom = trailing_edge && isnothing(wake_shedding_locations) && !trailing_vortices,
                     reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
                     right = false,
                     reflected_right = false,
@@ -589,8 +641,8 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                         xhat = xhat,
                         top = false,
                         reflected_top = false,
-                        bottom = !trailing_vortices,
-                        reflected_bottom = !trailing_vortices,
+                        bottom = !trailing_vortices && trailing_edge,
+                        reflected_bottom = !trailing_vortices && trailing_edge,
                         right = false,
                         reflected_right = false,
                         left_trailing = trailing_vortices,
@@ -618,8 +670,8 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                 finite_core = finite_core,
                 symmetric = symmetric,
                 xhat = xhat,
-                bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
-                reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                bottom = isnothing(wake_shedding_locations) && !trailing_vortices && trailing_edge,
+                reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices && trailing_edge,
                 left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                 reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                 right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
@@ -656,8 +708,8 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                     xhat = xhat,
                     top = false,
                     reflected_top = false,
-                    bottom = !trailing_vortices,
-                    reflected_bottom = !trailing_vortices,
+                    bottom = !trailing_vortices && trailing_edge,
+                    reflected_bottom = !trailing_vortices && trailing_edge,
                     left_trailing = trailing_vortices,
                     reflected_left_trailing = trailing_vortices,
                     right_trailing = trailing_vortices,
@@ -695,8 +747,8 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                     finite_core = finite_core,
                     symmetric = symmetric,
                     xhat = xhat,
-                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
-                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices && trailing_edge,
+                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices && trailing_edge,
                     left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                     reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                     right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
@@ -724,8 +776,8 @@ Compute the AIC coefficients corresponding to the influence of the panels in
                         xhat = xhat,
                         top = false,
                         reflected_top = false,
-                        bottom = !trailing_vortices,
-                        reflected_bottom = !trailing_vortices,
+                        bottom = !trailing_vortices && trailing_edge,
+                        reflected_bottom = !trailing_vortices && trailing_edge,
                         left_trailing = trailing_vortices,
                         reflected_left_trailing = trailing_vortices,
                         right_trailing = trailing_vortices,
@@ -784,7 +836,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
     symmetric = fill(false, length(surfaces)),
     wake_shedding_locations = fill(nothing, length(surfaces)),
     surface_id = 1:length(surfaces),
@@ -851,7 +903,7 @@ panels in `sending` on the panels in `receiving`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function update_trailing_edge_coefficients!(AIC, receiving, sending;
+function update_trailing_edge_coefficients!(AIC, receiving, sending;
     finite_core = true,
     symmetric = false,
     wake_shedding_locations = nothing,
@@ -1157,7 +1209,7 @@ induced_velocity(rcp, wake::AbstractMatrix{<:WakePanel}; kwargs...)
 Compute the induced velocity from the grid of wake panels in `wake` at the
 vertex corresponding to index `I`
 """
-@inline function induced_velocity(I::CartesianIndex, wake::AbstractMatrix{<:WakePanel};
+function induced_velocity(I::CartesianIndex, wake::AbstractMatrix{<:WakePanel};
     nc = size(wake, 1), ns = size(wake, 2), kwargs...)
 
     if iszero(nc)
@@ -1226,7 +1278,7 @@ the circulation strengths provided in Γ.
  - `skip_right_trailing`: Tuple containing panel indices whose right trailing vortex
     is coincident with `rcp` and should therefore be skipped.
 """
-@inline function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
+function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
     nc = size(surface, 1), ns = size(surface, 2),
     symmetric = false, finite_core = true,
     wake_shedding_locations = nothing,

@@ -2,27 +2,27 @@
 ##### overload fmm compatibility functions for `system::System.filaments`
 #####
 
-Base.getindex(system::System, i, ::FastMultipole.Position) = system.filaments[i].xc
-Base.getindex(system::System, i, ::FastMultipole.Radius) = norm(system.filaments[i].x2 - system.filaments[i].xc)
+Base.getindex(filaments::Vector{<:VortexFilament}, i, ::FastMultipole.Position) = filaments[i].xc
+Base.getindex(system::Vector{<:VortexFilament}, i, ::FastMultipole.Radius) = norm(filaments[i].x2 - filaments[i].xc)
 # Base.getindex(system::System{TF}, i, ::FastMultipole.VectorPotential) where TF = zero(SVector{3,TF})
 # Base.getindex(system::System{TF}, i, ::FastMultipole.ScalarPotential) where TF = zero(TF)
-Base.getindex(system::System{TF}, i, ::FastMultipole.Velocity) where TF = zero(SVector{3,TF})
+Base.getindex(system::Vector{VortexFilament{TF}}, i, ::FastMultipole.Velocity) where TF = zero(SVector{3,TF})
 # Base.getindex(system::System{TF}, i, ::FastMultipole.VelocityGradient) where TF = zero(SMatrix{3,3,TF,9})
-Base.getindex(system::System, i, ::FastMultipole.ScalarStrength) = system.filaments[i].gamma
-Base.getindex(system::System, i, ::FastMultipole.Body) = system.filaments[i]#, system.fmm_Vcp[i]
+Base.getindex(system::Vector{<:VortexFilament}, i, ::FastMultipole.ScalarStrength) = system.filaments[i].gamma
+Base.getindex(system::Vector{<:VortexFilament}, i, ::FastMultipole.Body) = system.filaments[i]#, system.fmm_Vcp[i]
 
-function Base.getindex(system::System, i, ::FastMultipole.Vertex, i_vertex)
+function Base.getindex(filaments::Vector{<:VortexFilament}, i, ::FastMultipole.Vertex, i_vertex)
     if i_vertex == 1
-        return system.filaments[i].x1
+        return filaments[i].x1
     elseif i_vertex == 2
-        return system.filaments[i].x2
-    else # i_vertex == 4
+        return filaments[i].x2
+    else
         throw("only 2 vertices exist for a vortex filament; requested $i_vertex")
     end
 end
 
-function Base.setindex!(system::System, val, i, ::FastMultipole.Body)
-    system.filaments[i] = val
+function Base.setindex!(system::Vector{<:VortexFilament}, val, i, ::FastMultipole.Body)
+    filaments[i] = val
 end
 
 # function Base.setindex!(system::System, val, i, ::FastMultipole.ScalarPotential)
@@ -38,17 +38,17 @@ end
 #     reshape(g.potential[i_VELOCITY_GRADIENT,i],3,3) .= val
 # end
 
-FastMultipole.get_n_bodies(system::System) = length(system.filaments)
+FastMultipole.get_n_bodies(filaments::Vector{<:VortexFilament}) = length(filaments)
 
 # Base.eltype(::System{TF}) where TF = TF
 
-FastMultipole.buffer_element(system::System) = deepcopy(system.filaments[1])#, deepcopy(system.fmm_Vcp[1])
+FastMultipole.buffer_element(filaments::Vector{<:VortexFilament}) = deepcopy(filaments[1])
 
-FastMultipole.B2M!(system::System, branch, bodies_index, harmonics, expansion_order) =
+FastMultipole.B2M!(filaments::Vector{<:VortexFilament}, branch, bodies_index, harmonics, expansion_order) =
     nothing
 #    FastMultipole.B2M!_filament(system, branch, bodies_index, harmonics, expansion_order, FastMultipole.Vortex)
 
-function FastMultipole.direct!(target_system, target_index, derivatives_switch::FastMultipole.DerivativesSwitch{<:Any,<:Any,VS,GS}, source_system::System{TF}, source_index) where {TF,VS,GS}
+function FastMultipole.direct!(target_system, target_index, derivatives_switch::FastMultipole.DerivativesSwitch{<:Any,<:Any,VS,GS}, source_system::Vector{VortexFilament{TF}}, source_index) where {TF,VS,GS}
     # loop over targets
     for j_target in target_index
         rcp = target_system[j_target,FastMultipole.POSITION]
@@ -57,12 +57,12 @@ function FastMultipole.direct!(target_system, target_index, derivatives_switch::
 
         # loop over source filaments
         for i_source in source_index
-            filament = source_system.filaments[i_source]
+            filament = source_system[i_source]
 
             # get panel vertices, strength, and core size
             x1 = filament.x1
             x2 = filament.x2
-            gamma = filament.gamma
+            gamma = filament.γ
             core_size = filament.core_size
 
             # move origin to control point
@@ -114,6 +114,11 @@ function reset!(probes::FastMultipole.ProbeSystem{TF,Nothing,Nothing,TV,TVG}) wh
     end
 end
 
+function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem, surfaces::Vector{<:Matrix{<:SurfacePanel}}, wakes::Vector{<:Matrix{<:WakePanel}}, nwake)
+    i_last = update_probes!(fmm_velocity_probes, surfaces, 0)
+    update_probes!(fmm_velocity_probes, wakes, nwake, i_last)
+end
+
 "Places probes at the control point of all surface panels, and additional probes at the center of all surface filaments"
 function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem, surfaces::Vector{Matrix{SurfacePanel{TF}}}, i_start) where TF # wake corners
     i_probe = 1
@@ -141,11 +146,8 @@ function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem, surfaces
                 i_probe += 1
             end
 
-            # NOTE: As the trailing edge panels have the same strength as the wake transition panel, their bottom vortex
-            #       has zero strength and can be neglected when computing the force. Similar behavior to a Kutta condition.
-            #       For now, the bottom vortex is ignored.
-            # # bottom
-            # fmm_velocity_probes.position[i_probe + i_start] = panel.rbc
+            # # bottom (bottom vortices aren't used in force computation, so leave these out)
+            # fmm_velocity_probes.position[i_probe + i_start] = surface[nc,i].rbc
             # i_probe += 1
         end
 
@@ -155,38 +157,52 @@ function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem, surfaces
             i_probe += 1
         end
     end
+
+    return i_probe
 end
 
 "Places probes at the corners of all wake panels"
 function update_probes!(fmm_velocity_probes::FastMultipole.ProbeSystem{<:Any,<:Any,<:Any,<:Any,<:Any}, wakes::Vector{Matrix{WakePanel{TF}}}, nwake, i_start) where TF # wake corners
-    i_corner = i_start + 1
+    # update probe length
+    n_corners = 0
+    for (wake, nw) in zip(wakes, nwake)
+        ns = size(nwake,2)
+        n_corners += (ns+1)*(nw+1)
+    end
+    resize!(fmm_velocity_probes.position, i_start + n_corners)
+    resize!(fmm_velocity_probes.velocity, i_start + n_corners)
+
+    # update probe values
+    i_corner = i_start
     for (nc, wake) in zip(nwake, wakes)
         if nc > 0
             ns = size(wake,2) # number of spanwise panels
 
             # get wake_shedding_locations (first row of wake points)
             for i in 1:ns
-                fmm_velocity_probes.position[i_corner] = wake[1,i].rtl
                 i_corner += 1
+                fmm_velocity_probes.position[i_corner] = wake[1,i].rtl
             end
-            fmm_velocity_probes.position[i_corner] = wake[1,ns].rtr
             i_corner += 1
+            fmm_velocity_probes.position[i_corner] = wake[1,ns].rtr
 
             # bottom left of each panel
             for i in 1:ns
                 for j in 1:nc
-                    fmm_velocity_probes.position[i_corner] = wake[j,i].rbl
                     i_corner += 1
+                    fmm_velocity_probes.position[i_corner] = wake[j,i].rbl
                 end
             end
 
             # bottom right of the last column
             for j in 1:nc
-                fmm_velocity_probes.position[i_corner] = wake[j,ns].rbr
                 i_corner += 1
+                fmm_velocity_probes.position[i_corner] = wake[j,ns].rbr
             end
         end
     end
+
+    return i_corner
 end
 
 # "Places probes at all wake shedding locations"

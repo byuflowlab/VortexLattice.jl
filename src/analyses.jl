@@ -117,13 +117,16 @@ function steady_analysis!(system, surfaces, ref, fs;
 
     # unpack variables stored in `system`
     surfaces = system.surfaces
+    filaments = system.filaments
     AIC = system.AIC
     w = system.w
     Γ = system.Γ
     dw = system.dw
     dΓ = system.dΓ
     properties = system.properties
+    filament_properties = system.filament_properties
     dproperties = system.dproperties
+    fmm_velocity_probes = system.fmm_velocity_probes
 
     # see if wake panels are being used
     wake_panels = nwake .> 0
@@ -196,6 +199,27 @@ function steady_analysis!(system, surfaces, ref, fs;
                 wake_shedding_locations = nothing, # shedding location at trailing edge
                 trailing_vortices = trailing_vortices,
                 xhat = xhat, vertical_segments = vertical_segments)
+
+            # # testing filaments here
+
+            # # update filaments with current surface locations and strengths
+            # wake_shedding_locations = nothing
+            # dΓdt = nothing
+            # update_filaments!(filaments, surfaces, wake_shedding_locations, Γ, dΓdt; trailing_edge=true, trailing_vortices)
+
+            # # update probes with current surface locations
+            # update_probes!(fmm_velocity_probes, surfaces, 0)
+
+            # # compute the surface influence on the probes
+            # FastMultipole.direct!(fmm_velocity_probes, system; scalar_potential=false, vector_potential=false, velocity=true, velocity_gradient=false)
+
+            # # compute the semi-infinite wake influence on the probes
+            # trailing_induced_velocity(fmm_velocity_probes, surfaces, Γ, trailing_vortices; xhat, symmetric)
+
+            # # compute forces
+            # near_field_forces!(filament_properties, filaments, surfaces, ref, fs, fmm_velocity_probes;
+            #     additional_velocity, Vh=nothing, Vv=nothing, vertical_segments)
+
         end
     end
 
@@ -530,8 +554,11 @@ function wake_on_all!(system::System)
 
     # run FMM
     if length(system.filaments) > 0
-        FastMultipole.fmm!(system.fmm_velocity_probes, system; expansion_order=system.fmm_p, leaf_size_source=system.fmm_ncrit, leaf_size_target=system.fmm_ncrit, multipole_threshold=system.fmm_theta)
-        #FastMultipole.direct!(system.fmm_velocity_probes, system)
+        if system.fmm_toggle[]
+            FastMultipole.fmm!(system.fmm_velocity_probes, system; expansion_order=system.fmm_p, leaf_size_source=system.fmm_ncrit, leaf_size_target=system.fmm_ncrit, multipole_threshold=system.fmm_theta)
+        else
+            FastMultipole.direct!(system.fmm_velocity_probes, system)
+        end
         if DEBUG[] && isnan(system)
             throw("found nans: 7")
         end
@@ -717,9 +744,6 @@ function propagate_system!(system, surfaces, fs, dt;
         if DEBUG[] && isnan(system)
             throw("found nans: 10")
         end
-        if VortexLattice.FastMultipole.DEBUG_TOGGLE[]
-            @show filaments
-        end
 
         # run FMM
 		FastMultipole.fmm!(fmm_velocity_probes, system; expansion_order=fmm_p, leaf_size_source=fmm_ncrit, leaf_size_target=fmm_ncrit, multipole_threshold=fmm_theta)
@@ -872,7 +896,7 @@ function Base.isnan(system::System)
         end
     end
     for p in system.filaments
-        if isnan(p,(:x1,:x2,:xc,:gamma,:core_size))
+        if isnan(p,(:x1,:x2,:xc,:γ,:dγdt,:core_size))
             throw("nan in system.filaments")
             return true
         end

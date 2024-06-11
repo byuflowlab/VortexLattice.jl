@@ -832,6 +832,43 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
     return surface
 end
 
+# function lifting_line_geometry(surfaces, xc=0.25)
+#     TF = eltype(eltype(eltype(surfaces)))
+#     nsurf = length(surfaces)
+#     r = Vector{Matrix{TF}}(undef, nsurf)
+#     c = Vector{Vector{TF}}(undef, nsurf)
+#     for isurf in 1:nsurf
+#         ns = size(surfaces[isurf],2)
+#         r[isurf] = Matrix{TF}(undef, 3, ns+1)
+#         c[isurf] = Vector{TF}(undef, ns+1)
+#     end
+#     return lifting_line_geometry!(r, c, surfaces, xc)
+# end
+
+# function lifting_line_geometry!(r, c, surfaces, xc)
+#     nsurf = length(surfaces)
+#     # iterate through each lifting surface
+#     for isurf = 1:nsurf
+#         # extract current surface
+#         surface = surfaces[isurf]
+#
+#         # dimensions of this grid
+#         nc, ns = size(surface)
+#
+#         # loop through each spanwise section
+#         for j = 1:ns
+#             # get leading and trailing edges
+#             le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
+#             te = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
+#             # get quarter-chord
+#             r[isurf][:,j] = linearinterp(xc, le, te)
+#             # get chord length
+#             c[isurf][j] = norm(le - te)
+#         end
+#     end
+#     return r, c
+# end
+
 """
     lifting_line_geometry(grids, xc=0.25)
 Construct a lifting line representation of the surfaces in `grids` at the

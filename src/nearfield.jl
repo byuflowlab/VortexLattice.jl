@@ -1,3 +1,263 @@
+# """
+#     near_field_forces!(filament_properties, filaments, surfaces, reference, freestream, probes;
+#         additional_velocity, Vh, Vv)
+#
+# Calculate local panel forces and velocities and store them in `FilamentProperties` objects.
+# """
+# function near_field_forces!(filament_props::Vector{<:FilamentProperties}, filaments::Vector{<:VortexFilament}, surfaces::Vector{<:Matrix{<:SurfacePanel}}, ref, fs, probes;
+#         additional_velocity, Vh, Vv, vertical_segments)
+#
+#     # extract air density
+#     rho = fs.rho
+#
+#     # qinf
+#     q = 1/2*rho*ref.V^2
+#
+#     # number of surfaces
+#     nsurf = length(surfaces)
+#
+#     # loop through receiving surfaces
+#     iΓ = 0 # index for accessing Γ
+#     i_probe = 0 # index for accessing probes
+#     for surface in surfaces # set first index after control points
+#         nc, ns = size(surface)
+#         i_probe += nc*ns
+#     end
+#     i_filament = 0
+#
+#     for isurf = 1:nsurf
+#
+#         receiving = surfaces[isurf]
+#         nr1, nr2 = size(receiving)
+#
+#         # loop through receiving panels
+#         for j in 1:nr2
+#             for i in 1:nr1
+#
+#                 # --- Calculate forces on the panel bound vortex --- #
+#
+#                 # bound vortex location
+#                 i_filament += 1
+#                 i_probe += 1
+#                 filament = filaments[i_filament]
+#                 r = filament.xc
+#
+#                 # freestream velocity
+#                 Vi = freestream_velocity(fs)
+#
+#                 # rotational velocity
+#                 Vi += rotational_velocity(r, fs, ref)
+#
+#                 # additional velocity field
+#                 if !isnothing(additional_velocity)
+#                     Vi += additional_velocity(r)
+#                 end
+#
+#                 # velocity due to surface motion
+#                 if !isnothing(Vh)
+#                     Vi += Vh[isurf][i,j]
+#                 end
+#
+#                 Vi += probes.velocity[i_probe]
+#
+#                 # steady part of Kutta-Joukowski theorem
+#                 Γi = filament.γ
+#                 Δs = filament.x2 - filament.x1 # bound vortex vector
+#                 tmp = cross(Vi, Δs)
+#                 Fbi = rho*Γi*tmp
+#
+#                 # unsteady part of Kutta-Joukowski theorem
+#
+#                 #TODO: decide whether to divide by perpindicular velocity like
+#                 # Drela does in ASWING?
+#
+#                 dΓdti = filament.dγdt
+#                 # c = receiving[I].chord
+#                 c = abs(dot(Δs, Vi))
+#                 Fbi += rho*dΓdti*c*tmp
+#
+#                 # store filament properties
+#                 filament_props[i_filament] = FilamentProperties(Vi/ref.V, Fbi/(q*ref.S))
+#
+#                 # --- Calculate forces on the left bound vortex --- #
+#
+#                 # bound vortex location
+#                 i_filament += 1
+#                 i_probe += 1
+#                 filament = filaments[i_filament]
+#                 r = filament.xc
+#
+#                 # freestream velocity
+#                 Veff = freestream_velocity(fs)
+#
+#                 # rotational velocity
+#                 Veff += rotational_velocity(r, fs, ref)
+#
+#                 # additional velocity field
+#                 if !isnothing(additional_velocity)
+#                     Veff += additional_velocity(r)
+#                 end
+#
+#                 # velocity due to surface motion
+#                 if !isnothing(Vv)
+#                     Veff += Vv[isurf][i,j]
+#                 end
+#
+#                 # NOTE: We don't include induced velocity in the effective velocity
+#                 # for the vertical segments because its influence is likely negligible
+#                 # once we take the cross product with the bound vortex vector. This
+#                 # is also assumed in AVL. This could change in the future.
+#                 # BUT.... if we did, and we wanted to use fast multipole acceleration,
+#                 # this is what it would look like:
+#                 # ACTUALLY: We DO include induced velocity in the effective velocity IF THE FMM IS USED
+#                 # as its cost is small at this point, and it provides greater generality.
+#
+#                 if vertical_segments
+#                     Veff += probes.velocity[i_probe]
+#                 end
+#
+#                 # steady part of Kutta-Joukowski theorem
+#                 Γi = filament.γ
+#                 Δs = filament.x2 - filament.x1
+#                 tmp = cross(Veff, Δs)
+#                 Fbi = rho*Γi*tmp
+#
+#                 # unsteady part of Kutta-Joukowski theorem
+#
+#                 #TODO: decide whether to divide by perpindicular velocity like
+#                 # Drela does in ASWING?
+#
+#                 dΓdti = filament.dγdt
+#                 # c = receiving[I].chord
+#                 c = abs(dot(Δs, Veff))
+#                 Fbi += rho*dΓdti*c*tmp
+#
+#                 # store filament properties
+#                 filament_props[i_filament] = FilamentProperties(Veff/ref.V, Fbi/(q*ref.S))
+#
+#             end
+#
+#             # --- Calculate forces on the trailing edge vortex --- #
+#
+#             # bound vortex location
+#             i_filament += 1
+#             i_probe += 1
+#             filament = filaments[i_filament]
+#             r = filament.xc
+#
+#             # freestream velocity
+#             Veff = freestream_velocity(fs)
+#
+#             # rotational velocity
+#             Veff += rotational_velocity(r, fs, ref)
+#
+#             # additional velocity field
+#             if !isnothing(additional_velocity)
+#                 Veff += additional_velocity(r)
+#             end
+#
+#             # velocity due to surface motion
+#             if !isnothing(Vh)
+#                 Veff += Vh[isurf][nr1+1,j]
+#             end
+#
+#             # NOTE: We don't include induced velocity in the effective velocity
+#             # for the vertical segments because its influence is likely negligible
+#             # once we take the cross product with the bound vortex vector. This
+#             # is also assumed in AVL. This could change in the future.
+#             # BUT.... if we did, and we wanted to use fast multipole acceleration,
+#             # this is what it would look like:
+#             # ACTUALLY: We DO include induced velocity in the effective velocity IF THE FMM IS USED
+#             # as its cost is small at this point, and it provides greater generality.
+#
+#             Veff += probes.velocity[i_probe]
+#
+#             # steady part of Kutta-Joukowski theorem
+#             Γi = filament.γ
+#             Δs = filament.x2 - filament.x1
+#             tmp = cross(Veff, Δs)
+#             Fbi = rho*Γi*tmp
+#
+#             # unsteady part of Kutta-Joukowski theorem
+#
+#             #TODO: decide whether to divide by perpindicular velocity like
+#             # Drela does in ASWING?
+#
+#             dΓdti = filament.dγdt
+#             # c = receiving[I].chord
+#             c = abs(dot(Δs, Veff))
+#             Fbi += rho*dΓdti*c*tmp
+#
+#             # store filament properties
+#             filament_props[i_filament] = FilamentProperties(Veff/ref.V, Fbi/(q*ref.S))
+#
+#         end
+#
+#         #--- starboard edge filaments ---#
+#         for i in 1:nr1
+#
+#             # bound vortex location
+#             i_filament += 1
+#             i_probe += 1
+#             filament = filaments[i_filament]
+#             r = filament.xc
+#
+#             # freestream velocity
+#             Veff = freestream_velocity(fs)
+#
+#             # rotational velocity
+#             Veff += rotational_velocity(r, fs, ref)
+#
+#             # additional velocity field
+#             if !isnothing(additional_velocity)
+#                 Veff += additional_velocity(r)
+#             end
+#
+#             # velocity due to surface motion
+#             if !isnothing(Vh)
+#                 Veff += Vv[isurf][i,nr2+1]
+#             end
+#
+#             # NOTE: We don't include induced velocity in the effective velocity
+#             # for the vertical segments because its influence is likely negligible
+#             # once we take the cross product with the bound vortex vector. This
+#             # is also assumed in AVL. This could change in the future.
+#             # BUT.... if we did, and we wanted to use fast multipole acceleration,
+#             # this is what it would look like:
+#             # ACTUALLY: We DO include induced velocity in the effective velocity IF THE FMM IS USED
+#             # as its cost is small at this point, and it provides greater generality.
+#
+#             if vertical_segments
+#                 Veff += probes.velocity[i_probe]
+#             end
+#
+#             # steady part of Kutta-Joukowski theorem
+#             Γi = filament.γ
+#             Δs = filament.x2 - filament.x1
+#             tmp = cross(Veff, Δs)
+#             Fbi = rho*Γi*tmp
+#
+#             # unsteady part of Kutta-Joukowski theorem
+#
+#             #TODO: decide whether to divide by perpindicular velocity like
+#             # Drela does in ASWING?
+#
+#             dΓdti = filament.dγdt
+#             # c = receiving[I].chord
+#             c = abs(dot(Δs, Veff))
+#             Fbi += rho*dΓdti*c*tmp
+#
+#             # store filament properties
+#             filament_props[i_filament] = FilamentProperties(Veff/ref.V, Fbi/(q*ref.S))
+#
+#         end
+#
+#     end
+#
+#     return filament_props
+# end
+
+
 """
     near_field_forces!(properties, surfaces, wakes, reference, freestream, Γ;
         dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
@@ -5,7 +265,7 @@
 
 Calculate local panel forces in the body frame.
 """
-@inline function near_field_forces!(props, surfaces, wakes, ref, fs, Γ, probes=nothing;
+function near_field_forces!(props::Vector{<:Matrix{<:PanelProperties}}, surfaces, wakes, ref, fs, Γ, probes=nothing;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
 
@@ -24,7 +284,6 @@ Calculate local panel forces in the body frame.
     end
 
     for isurf = 1:nsurf
-
         receiving = surfaces[isurf]
         nr = length(receiving)
         nr1, nr2 = size(receiving)
@@ -56,8 +315,6 @@ Calculate local panel forces in the body frame.
             if !isnothing(Vh)
                 Vi += Vh[isurf][i]
             end
-
-            this_Vind = zero(SVector{3,Float64})
 
             # induced velocity from surfaces and wakes
             if isnothing(probes) # no fast multipole acceleration
@@ -110,12 +367,14 @@ Calculate local panel forces in the body frame.
                             nc = nwake[jsurf],
                             trailing_vortices = trailing_vortices[jsurf],
                             xhat = xhat)
+
                     end
 
                     jΓ += Ns # increment Γ index for sending panels
                 end
             else # fast multipole acceleration
                 Vi += probes.velocity[i_probe]
+                @assert isapprox(probes.position[i_probe], rc) "probe position doesn't match"
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -168,6 +427,7 @@ Calculate local panel forces in the body frame.
 
             if !isnothing(probes) && vertical_segments
                 Veff += probes.velocity[i_probe + 1] # left bound vortex is always 1 index ahead of the bound vortex
+                @assert isapprox(probes.position[i_probe + 1], rc) "probe position doesn't match"
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -209,6 +469,7 @@ Calculate local panel forces in the body frame.
                 I[2] == nr2 && (i_probe_right -= I[1]) # nr2 is the number of spanwise panels of the receiving surface
                 Veff += probes.velocity[i_probe_right] # right bound vortex is always 2*nc+1 indices ahead of the bound vortex
                                                        # unless we are in the final column, in which case it is I[1] less
+                @assert isapprox(probes.position[i_probe_right], rc) "probe position doesn't match"
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -218,7 +479,6 @@ Calculate local panel forces in the body frame.
 
             # store panel circulation, velocity, and forces
             q = 1/2*rho*ref.V^2
-
             props[isurf][i] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
                 Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S))
 
@@ -247,7 +507,7 @@ the local panel forces with respect to the freestream variables.
 """
 near_field_forces_derivatives!
 
-@inline function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
+function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ, probes=nothing; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, vertical_segments=false)
 
@@ -597,6 +857,59 @@ function body_forces(system::System{TF}; frame = Body()) where TF
     return body_forces(surfaces, properties, ref, fs, symmetric, frame)
 end
 
+# function body_forces(filaments::Vector{<:VortexFilament}, filament_properties::Vector{<:FilamentProperties}, surfaces::Vector{<:Matrix{<:SurfacePanel}}, ref::Reference, fs, symmetric, frame; convention_change=[-1.0,1.0,-1.0])
+#     TF = eltype(eltype(filament_properties))
+#
+#     # initialize force coefficients
+#     CF = @SVector zeros(TF, 3)
+#     CM = @SVector zeros(TF, 3)
+#
+#     # loop over all filaments
+#     i_filament = 0
+#     for (isurf, surface) in enumerate(surfaces)
+#
+#         # initialize surface force coefficients
+#         CFi = @SVector zeros(TF, 3)
+#         CMi = @SVector zeros(TF, 3)
+#
+#         nc, ns = size(surface)
+#
+#         for _ in 1:2*nc*ns+nc+ns
+#             i_filament += 1
+#             filament = filaments[i_filament]
+#             prop = filament_properties[i_filament]
+#             r = filament.xc
+#             Δr = r - ref.r
+#             cf = prop.cf
+#             CFi += cf
+#             CMi += cross(Δr, cf)
+#         end
+#
+#         # adjust forces from this surface to account for symmetry
+#         if symmetric[isurf]
+#             CFi = SVector(2*CFi[1], 0.0, 2*CFi[3])
+#             CMi = SVector(0.0, 2*CMi[2], 0.0)
+#         end
+#
+#         # update body force coefficients
+#         CF += CFi
+#         CM += CMi
+#
+#     end
+#
+#     # add reference length in moment normalization
+#     reference_length = SVector(ref.b, ref.c, ref.b)
+#     CM = CM ./ reference_length
+#
+#     # positive Mx corresponds to negative roll, and positive Mz corresponds to negative yaw
+#     CM = CM .* convention_change
+#
+#     # switch to specified frame
+#     CF, CM = body_to_frame(CF, CM, ref, fs, frame)
+#
+#     return CF, CM
+# end
+
 """
     body_forces(surfaces, properties, reference, freestream, symmetric; kwargs...)
 
@@ -698,7 +1011,7 @@ performed to obtain the panel forces.
 # Arguments:
  - `system`: Object of type `System` which holds system properties
 """
-@inline function body_forces_derivatives(system::System)
+function body_forces_derivatives(system::System)
 
     # float number type
     TF = eltype(system)

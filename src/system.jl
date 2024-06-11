@@ -1,4 +1,32 @@
 """
+    FilamentProperties
+
+Filament specific properties calculated during the vortex lattice method analysis.
+
+**Fields**
+ - `velocity`: Local velocity at the filament's center, normalized by
+    the reference velocity
+ - `cf`: Net force on the filament, as calculated using the
+    Kutta-Joukowski theorem, normalized by the reference dynamic pressure and area
+"""
+struct FilamentProperties{TF}
+    velocity::SVector{3, TF}
+    cf::SVector{3, TF}
+end
+
+# constructor
+function FilamentProperties(velocity, cf)
+
+    TF = promote_type(typeof(velocity), eltype(cf))
+
+    return FilamentProperties{TF}(velocity, cf)
+end
+
+Base.eltype(::Type{FilamentProperties{TF}}) where TF = TF
+Base.eltype(::FilamentProperties{TF}) where TF = TF
+Base.zero(::Type{FilamentProperties{TF}}) where TF = FilamentProperties(zero(SVector{3,TF}), zero(SVector{3,TF}))
+
+"""
     PanelProperties
 
 Panel specific properties calculated during the vortex lattice method analysis.
@@ -49,6 +77,7 @@ Contains pre-allocated storage for internal system variables.
  - `V`: Velocity at the wake vertices for each surface (includes velocity at wake-shed locations)
  - `surfaces`: Surfaces, represented by matrices of surface panels
  - `properties`: Surface panel properties for each surface
+ - `filament_properties`: Vortex filament properties for surface filaments
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
  - `reference`: Pointer to reference parameters associated with the system (see [`Reference`](@ref))
@@ -88,6 +117,7 @@ struct System{TF}
     V::Vector{Matrix{SVector{3,TF}}}
     surfaces::Vector{Matrix{SurfacePanel{TF}}}
     properties::Vector{Matrix{PanelProperties{TF}}}
+    filament_properties::Vector{FilamentProperties{TF}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
     reference::Array{Reference{TF}, 0}
@@ -209,6 +239,8 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     surfaces = [Matrix{SurfacePanel{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     properties = [Matrix{PanelProperties{TF}}(undef, nc[i], ns[i]) for i = 1:nsurf]
     _reset!(properties)
+    filament_properties = Vector{FilamentProperties{TF}}(undef, 2*sum(nc .* ns) + sum(nc) + sum(ns))
+    _reset!(filament_properties)
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
     reference = Array{Reference{TF}}(undef)
@@ -236,15 +268,33 @@ function System(TF::Type, nc, ns; nw = zero(nc),
     if fmm_toggle
         sizehint!(filaments, max(sum(nc .* ns .+ nc .+ 2 .* ns), sum(nw .* ns .+ nw .+ ns)))
     end
-    n_velocity_probes = fmm_toggle ? N + sum((nw .+1) .* (ns .+1)) + sum(ns .+1) : 0 # surface control points + wake corners + wake shedding locations
-    fmm_velocity_probes = FastMultipole.ProbeSystem(n_velocity_probes, TF; velocity=true)
+    # n_velocity_probes = fmm_toggle ? N + sum((nw .+1) .* (ns .+1)) + sum(ns .+1) : 0 # surface control points + wake corners + wake shedding locations
+    n_probes = count_probes(surfaces, wakes, nw)
+    fmm_velocity_probes = FastMultipole.ProbeSystem(n_probes, TF; velocity=true)
+    update_probes!(fmm_velocity_probes, surfaces, wakes, nwake)
     FastMultipole.reset!(fmm_velocity_probes)
 
-    return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
+    return System{TF}(AIC, w, Γ, V, surfaces, properties, filament_properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
         Vv, Vte, dΓdt, fmm_toggle, filaments, fmm_velocity_probes, fmm_p, fmm_ncrit, fmm_theta)
+end
+
+function count_probes(surfaces, wakes, nw)
+    n_probes = 0
+
+    for surface in surfaces
+        nc, ns = size(surface)
+        n_probes += nc*ns # control points
+        n_probes += 2*nc*ns + nc + ns # bound vortices
+    end
+
+    for (wake, w) in zip(wakes, nw)
+        n_probes += (size(wake,2) +1) * (w+1)
+    end
+
+    return n_probes
 end
 
 """
@@ -261,6 +311,12 @@ function _reset!(properties::Vector{Matrix{PanelProperties{TF}}}) where TF
         for i in eachindex(property)
             property[i] = zero(PanelProperties{TF})
         end
+    end
+end
+
+function _reset!(filament_properties::Vector{FilamentProperties{TF}}) where TF
+    for i in eachindex(filament_properties)
+        filament_properties[i] = zero(FilamentProperties{TF})
     end
 end
 

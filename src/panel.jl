@@ -641,7 +641,7 @@ function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}
                     x1 = panel.rtl
                     x2 = panel.rtr
                     i_filament += 1
-                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_above, core_size)
+                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_above, zero(TF), core_size)
                     Γ_above = Γ
 
                     # left filament
@@ -649,7 +649,7 @@ function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}
                     x1 = panel.rbl
                     Γ_left = j > 1 ? wake[i,j-1].gamma : zero(TF)
                     i_filament += 1
-                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
+                    filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, zero(TF), core_size)
 
                 end
 
@@ -660,7 +660,7 @@ function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}
                 x2 = panel.rbl
                 core_size = panel.core_size
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+                filaments[i_filament] = VortexFilament(x1, x2, Γ, zero(TF), core_size)
 
             end
 
@@ -676,7 +676,7 @@ function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}
                 x1 = panel.rtr
                 x2 = panel.rbr
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+                filaments[i_filament] = VortexFilament(x1, x2, Γ, zero(TF), core_size)
 
             end
         end
@@ -686,32 +686,34 @@ function update_filaments!(filaments, wake_panels::Vector{Matrix{WakePanel{TF}}}
     return filaments
 end
 
-function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel{TF1}}}, wake_shedding_locations, gamma::Vector{TF2}; transition_panels=true) where {TF1,TF2}
+function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel{TF1}}}, wake_shedding_locations, Γ::Vector{TF2}, dΓdt; trailing_edge=true, trailing_vortices) where {TF1,TF2}
 
     TF = promote_type(TF1,TF2)
 
     # clear space for filaments
     n_filaments = 0
-    extra_rows = transition_panels ? 1 : 0
+    extra_rows = isnothing(wake_shedding_locations) ? 0 : 1
     for surface in surface_panels
         nc, ns = size(surface)
         n_filaments += 2*nc*ns + nc + ns
-        transition_panels && (n_filaments += 2*ns + 1)
+        n_filaments += extra_rows * (2*ns + 1)
     end
     resize!(filaments, n_filaments)
 
     # convert surface panels to filaments
     i_filament = 0
     i_Γ = 0
-    for surface in surface_panels
+    for (isurf, surface) in enumerate(surface_panels)
         nc, ns = size(surface)
         for j in 1:ns
-            Γ_above = zero(TF)
+            γ_above = zero(TF)
+            dγdt_above = zero(TF)
             for i in 1:nc
                 # get panel
                 panel = surface[i,j]
                 i_Γ += 1
-                Γ = gamma[i_Γ]
+                γ = Γ[i_Γ]
+                dγdt = isnothing(dΓdt) ? zero(TF) : dΓdt[i_Γ]
 
                 # top bound vortex
                 x1 = panel.rtl
@@ -719,47 +721,56 @@ function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel
                 xc = panel.rtc
                 core_size = panel.core_size
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, xc, Γ - Γ_above, core_size)
-                Γ_above = Γ
+                filaments[i_filament] = VortexFilament(x1, x2, xc, γ - γ_above, dγdt - dγdt_above, core_size)
+                γ_above = γ
+                dγdt_above = dγdt
 
                 # left vertical vortex
                 x1 = panel.rbl
                 x2 = panel.rtl
-                Γ_left = j > 1 ? gamma[i_Γ - nc] : zero(TF)
+                γ_left = j > 1 ? Γ[i_Γ - nc] : zero(TF)
+                dγdt_left = (j > 1) && !isnothing(dΓdt) ? dΓdt[i_Γ - nc] : zero(TF)
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
+                filaments[i_filament] = VortexFilament(x1, x2, γ - γ_left, dγdt - dγdt_left, core_size)
             end
 
             # trailing edge vortex
             panel = surface[nc,j]
-            Γ = transition_panels ? zero(TF) : gamma[i_Γ]
+            γ = !isnothing(wake_shedding_locations) || !trailing_edge || trailing_vortices[isurf] ? zero(TF) : Γ[i_Γ]
+            dγdt = !isnothing(wake_shedding_locations) || !trailing_edge || isnothing(dΓdt) || trailing_vortices[isurf] ? zero(TF) : dΓdt[i_Γ]
             core_size = panel.core_size
 
             x1 = panel.rbr
             x2 = panel.rbl
             i_filament += 1
-            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+            filaments[i_filament] = VortexFilament(x1, x2, γ, dγdt, core_size)
         end
 
-        # right size vortices
+        # starboard edge vortices
         i_Γ -= nc
         for i in 1:nc
             # get panel
             panel = surface[i,end]
             i_Γ += 1
-            Γ = gamma[i_Γ]
+            γ = Γ[i_Γ]
+            dγdt = isnothing(dΓdt) ? zero(TF) : dΓdt[i_Γ]
             core_size = panel.core_size
 
             # right vertical vortex
             x1 = panel.rtr
             x2 = panel.rbr
             i_filament += 1
-            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+            filaments[i_filament] = VortexFilament(x1, x2, γ, dγdt, core_size)
         end
     end
 
     # add wake transition panels
-    if transition_panels
+    if !isnothing(wake_shedding_locations)
+
+        if true in trailing_vortices
+            @error "wake_shedding_locations are provided, but semi-infinite vortices are used"
+        end
+
         i_Γ = 0
         for (wake_shedding_location,surface) in zip(wake_shedding_locations,surface_panels)
 
@@ -767,27 +778,30 @@ function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel
             nc, ns = size(surface)
 
             # loop over transition panels
-            Γ_left = zero(TF)
+            γ_left = zero(TF)
+            dγdt_left = zero(TF)
             for j in 1:ns
 
                 # get panel
                 panel = surface[end,j]
                 core_size = panel.core_size
                 i_Γ += nc
-                Γ = gamma[i_Γ]
+                γ = Γ[i_Γ]
+                dγdt = isnothing(dΓdt) ? zero(TF) : dΓdt[i_Γ]
 
                 # left vertical filament
                 x1 = wake_shedding_location[j]
                 x2 = panel.rbl
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, Γ - Γ_left, core_size)
-                Γ_left = Γ
+                filaments[i_filament] = VortexFilament(x1, x2, γ - γ_left, dγdt - dγdt_left, core_size)
+                γ_left = γ
+                dγdt_left = dγdt
 
                 # bottom filament
                 x2 = x1
                 x1 = wake_shedding_location[j+1]
                 i_filament += 1
-                filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+                filaments[i_filament] = VortexFilament(x1, x2, γ, dγdt, core_size)
 
             end
 
@@ -796,9 +810,10 @@ function update_filaments!(filaments, surface_panels::Vector{Matrix{SurfacePanel
             x1 = panel.rbr
             x2 = wake_shedding_location[end]
             core_size = panel.core_size
-            Γ = Γ_left
+            γ = γ_left
+            dγdt = dγdt_left
             i_filament += 1
-            filaments[i_filament] = VortexFilament(x1, x2, Γ, core_size)
+            filaments[i_filament] = VortexFilament(x1, x2, γ, dγdt, core_size)
 
         end
     end
@@ -818,7 +833,8 @@ Represents a vortex filament.
 * `x1::SVector{3,Float64}`: the first endpoint
 * `x2::SVector{3,Float64}`: the second endpoint
 * `xc::SVector{3,Float64}`: midpoint of the filament
-* `gamma::Float64`: the strength of this vortex filament
+* `γ::Float64`: the strength of this vortex filament
+* `dγdt::Float64`: the time derivative of the strength of this vortex filament
 * `core_size::Flaot64`: used when applying the finite core model
 
 """
@@ -826,10 +842,13 @@ struct VortexFilament{TF}
     x1::SVector{3,TF}
     x2::SVector{3,TF}
     xc::SVector{3,TF}
-    gamma::TF
+    γ::TF
+    dγdt::TF
     core_size::TF
 end
 
-function VortexFilament(x1, x2, gamma, core_size)
-    return VortexFilament(x1, x2, (x1+x2)/2, gamma, core_size)
+function VortexFilament(x1, x2, γ, dγdt, core_size)
+    return VortexFilament(x1, x2, (x1+x2)/2, γ, dγdt, core_size)
 end
+
+Base.zero(::Type{VortexFilament{TF}}) where TF = VortexFilament{TF}(zero(SVector{3,TF}), zero(SVector{3,TF}), zero(SVector{3,TF}), zero(TF), zero(TF), zero(TF))
