@@ -915,6 +915,46 @@ function lifting_line_coefficients(system, r, c; frame=Body())
 end
 
 """
+    lifting_line_coefficients(system, surfaces; frame=Body())
+
+Return the force and moment coefficients (per unit span) for each spanwise segment
+of a lifting line representation of the geometry.
+
+This function requires that a near-field analysis has been performed on `system`
+to obtain panel forces.
+
+# Arguments
+ - `system`: Object of type [`System`](@ref) that holds precalculated
+    system properties.
+ - `surfaces`: Vector with of surfaces in the system.
+
+# Keyword Arguments
+ - `frame`: frame in which to return `cf` and `cm`, possible options are
+    [`Body()`](@ref) (default), [`Stability()`](@ref), and [`Wind()`](@ref)`
+
+# Return Arguments:
+ - `cf`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z direction
+    force coefficients (per unit span) for each spanwise segment.
+ - `cm`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns) which contains the x, y, and z direction
+    moment coefficients (per unit span) for each spanwise segment.
+"""
+function lifting_line_coefficients(system, surfaces; frame=Body())
+    r, c = lifting_line_geometry(surfaces)
+    TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
+    nsurf = length(system.surfaces)
+    cf = Vector{Matrix{TF}}(undef, nsurf)
+    cm = Vector{Matrix{TF}}(undef, nsurf)
+    for isurf = 1:nsurf
+        ns = size(system.surfaces[isurf], 2)
+        cf[isurf] = Matrix{TF}(undef, 3, ns)
+        cm[isurf] = Matrix{TF}(undef, 3, ns)
+    end
+    return lifting_line_coefficients!(cf, cm, system, r, c; frame)
+end
+
+"""
     lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
 
 In-place version of [`lifting_line_coefficients`](@ref)
