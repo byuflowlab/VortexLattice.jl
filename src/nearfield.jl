@@ -915,7 +915,7 @@ function lifting_line_coefficients(system, r, c; frame=Body())
 end
 
 """
-    lifting_line_coefficients(system, surfaces; frame=Body())
+    lifting_line_coefficients(system; frame=Body())
 
 Return the force and moment coefficients (per unit span) for each spanwise segment
 of a lifting line representation of the geometry.
@@ -926,7 +926,6 @@ to obtain panel forces.
 # Arguments
  - `system`: Object of type [`System`](@ref) that holds precalculated
     system properties.
- - `surfaces`: Vector with of surfaces in the system.
 
 # Keyword Arguments
  - `frame`: frame in which to return `cf` and `cm`, possible options are
@@ -940,8 +939,8 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, surfaces; frame=Body())
-    r, c = lifting_line_geometry(surfaces)
+function lifting_line_coefficients(system; frame=Body())
+    lifting_line_geometry!(system)
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -951,7 +950,7 @@ function lifting_line_coefficients(system, surfaces; frame=Body())
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c; frame)
+    return lifting_line_coefficients!(cf, cm, system; frame)
 end
 
 """
@@ -960,6 +959,75 @@ end
 In-place version of [`lifting_line_coefficients`](@ref)
 """
 function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
+
+    # number of surfaces
+    nsurf = length(system.surfaces)
+
+    # check that a near field analysis has been performed
+    @assert system.near_field_analysis[] "Near field analysis required"
+
+    # extract reference properties
+    ref = system.reference[]
+    fs = system.freestream[]
+
+    # iterate through each lifting surface
+    for isurf = 1:nsurf
+        nc, ns = size(system.surfaces[isurf])
+        # extract current surface panels and panel properties
+        panels = system.surfaces[isurf]
+        properties = system.properties[isurf]
+        # loop through each chordwise set of panels
+        for j = 1:ns
+            # calculate segment length
+            rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
+            rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
+            ds = norm(rrs - rls)
+            # calculate reference location
+            rs = (rls + rrs)/2
+            # calculate reference chord
+            cs = (c[isurf][j] + c[isurf][j+1])/2
+            # calculate section force and moment coefficients
+            cfj = @SVector zeros(eltype(cf[isurf]), 3)
+            cmj = @SVector zeros(eltype(cm[isurf]), 3)
+            for i = 1:nc
+                # add influence of bound vortex
+                rb = top_center(panels[i,j])
+                cfb = properties[i,j].cfb
+                cfj += cfb
+                cmj += cross(rb - rs, cfb)
+                # add influence of left vortex leg
+                rl = left_center(panels[i,j])
+                cfl = properties[i,j].cfl
+                cfj += cfl
+                cmj += cross(rl - rs, cfl)
+                # add influence of right vortex leg
+                rr = right_center(panels[i,j])
+                cfr = properties[i,j].cfr
+                cfj += cfr
+                cmj += cross(rr - rs, cfr)
+            end
+            # update normalization
+            cfj *= ref.S/(ds*cs)
+            cmj *= ref.S/(ds*cs^2)
+            # change coordinate frame
+            cfj, cmj = body_to_frame(cfj, cmj, ref, fs, frame)
+            # save coefficients
+            cf[isurf][:,j] = cfj
+            cm[isurf][:,j] = cmj
+        end
+    end
+
+    return cf, cm
+end
+
+"""
+    lifting_line_coefficients!(cf, cm, system; frame=Body())
+
+In-place version of [`lifting_line_coefficients`](@ref)
+"""
+function lifting_line_coefficients!(cf, cm, system; frame=Body())
+    r = system.lifting_line_r
+    c = system.lifting_line_c
 
     # number of surfaces
     nsurf = length(system.surfaces)

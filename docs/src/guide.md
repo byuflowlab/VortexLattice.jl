@@ -128,10 +128,10 @@ r, c = lifting_line_geometry(grids)
 cf, cm = lifting_line_coefficients(system, r, c; frame=Body())
 nothing #hide
 ```
-Alternatively, this block of code can be simplified by calling the single overloaded `lifting_line_coefficients` function with the `systems` array created earlier.
+Alternatively, this block of code can be simplified by calling the single overloaded `lifting_line_coefficients` function with the `system` object.
 ```
 # lifting line geometry and lifting line coefficients are also combined in the single overloaded function
-cf, cm = lifting_line_coefficients(system, surfaces; frame=Body())
+cf, cm = lifting_line_coefficients(system; frame=Body())
 nothing #hide
 ```
 These coefficients are defined as ``c_f = \frac{F'}{q_\infty c}`` and ``c_m = \frac{M'}{q_\infty c^2}``, respectively, where ``F'`` is the force per unit length

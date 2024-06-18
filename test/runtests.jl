@@ -913,7 +913,7 @@ end
     cf, cm = lifting_line_coefficients(system, r_ll, c_ll; frame=Stability())
 
     # new overloaded function that calls lifting_line_geometry
-    alt_cf, alt_cm = lifting_line_coefficients(system, surfaces; frame=Stability())
+    alt_cf, alt_cm = lifting_line_coefficients(system; frame=Stability())
 
     cl_avl = [0.2618, 0.2646, 0.2661, 0.2664, 0.2654, 0.2628, 0.2584, 0.2513,
         0.2404, 0.2233, 0.1952, 0.1434]

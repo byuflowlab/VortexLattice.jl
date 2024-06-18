@@ -904,12 +904,12 @@ function lifting_line_geometry!(r, c, grids, xc=0.25)
 end
 
 """
-    lifting_line_geometry(surfaces, xc=0.25)
-Construct a lifting line representation of the surfaces in `grids` at the
+    lifting_line_geometry(system, xc=0.25)
+Construct a lifting line representation of the surfaces in `system` at the
 normalized chordwise location `xc`.  Return the lifting line coordinates
 and chord lengths.
 # Arguments
- - `surfaces`: Vector of the surfaces to create lifting line from.
+ - `system`: System containing the surfaces
  - `xc`: Normalized chordwise location of the lifting line from the leading edge.
     Defaults to the quarter chord
 # Return Arguments:
@@ -920,7 +920,8 @@ and chord lengths.
     being a vector of length `ns+1` which contains the chord lengths at each
     lifting line coordinate.
 """
-function lifting_line_geometry(surfaces::Vector{Matrix{SurfacePanel{TF}}}, xc=0.25) where TF
+function lifting_line_geometry!(system::System, xc=0.25) where TF
+    surfaces = system.surfaces
     nsurf = length(surfaces)
     r = Vector{Matrix{TF}}(undef, nsurf)
     c = Vector{Vector{TF}}(undef, nsurf)
@@ -929,14 +930,17 @@ function lifting_line_geometry(surfaces::Vector{Matrix{SurfacePanel{TF}}}, xc=0.
         r[isurf] = Matrix{TF}(undef, 3, ns+1)
         c[isurf] = Vector{TF}(undef, ns+1)
     end
-    return lifting_line_geometry!(r, c, surfaces, xc)
+    system.lifting_line_r = r
+    system.lifting_line_c = c
+    return lifting_line_geometry!(r, c, system, xc)
 end
 
 """
     lifting_line_geometry!(r, c, surfaces, xc=0.25)
 In-place version of [`lifting_line_geometry`](@ref)
 """
-function lifting_line_geometry!(r, c, surfaces::Vector{Matrix{SurfacePanel{TF}}}, xc=0.25) where TF
+function lifting_line_geometry!(r, c, system::System, xc=0.25) where TF
+    surfaces = system.surfaces
     nsurf = length(surfaces)
     # iterate through each lifting surface
     for isurf = 1:nsurf

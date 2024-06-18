@@ -103,6 +103,8 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
+    lifting_line_r::Vector{Matrix{TF}}
+    lifting_line_c::Vector{Vector{TF}}
 end
 
 @inline Base.eltype(::Type{System{TF}}) where TF = TF
