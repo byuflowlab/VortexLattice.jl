@@ -357,8 +357,8 @@ end
         fcore = (c, Δs) -> 1e-3,
         spacing_s = Cosine(),
         spacing_c = Uniform(),
-        interp_s = (x, y, xpt) -> linear_interpolation(x, y)(xpt),
-        interp_c = (x, y, xpt) -> linear_interpolation(x, y)(xpt))
+        interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
+        interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
 Discretize a potentially curved lifting surface defined by a grid with dimensions
 (3, i, j) where `i` corresponds to the chordwise direction (ordered from leading
@@ -392,8 +392,8 @@ function grid_to_surface_panels(xyz, ns, nc;
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
-    interp_s = (x, y, xpt) -> linear_interpolation(x, y)(xpt),
-    interp_c = (x, y, xpt) -> linear_interpolation(x, y)(xpt))
+    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
+    interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
     TF = eltype(xyz)
 
@@ -494,7 +494,7 @@ end
         fcore = (c, Δs) -> 1e-3,
         spacing_s = Cosine(),
         spacing_c = Uniform(),
-        interp_s = (x, y, xpt) -> linear_interpolation(x, y)(xpt))
+        interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
 Discretize a wing into `ns` spanwise and `nc` chordwise panels with associated
 vortex rings according to the spanwise discretization scheme `spacing_s` and
@@ -530,7 +530,7 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
-    interp_s = (x, y, xpt) -> linear_interpolation(x, y)(xpt))
+    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
