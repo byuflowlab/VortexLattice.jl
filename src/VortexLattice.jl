@@ -2,7 +2,8 @@ module VortexLattice
 
 using LinearAlgebra
 using StaticArrays
-using Interpolations
+# using Interpolations
+using FLOWMath
 using WriteVTK
 using VSPGeom
 
