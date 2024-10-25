@@ -65,8 +65,8 @@ function SurfacePanel(rtl, rtc, rtr, rbl, rbc, rbr, rcp, ncp, core_size, chord)
 end
 
 
-@inline Base.eltype(::Type{SurfacePanel{TF}}) where TF = TF
-@inline Base.eltype(::SurfacePanel{TF}) where TF = TF
+Base.eltype(::Type{SurfacePanel{TF}}) where TF = TF
+Base.eltype(::SurfacePanel{TF}) where TF = TF
 
 SurfacePanel{TF}(p::SurfacePanel) where TF = SurfacePanel{TF}(p.rtl, p.rtc, p.rtr,
     p.rbl, p.rbc, p.rbr, p.rcp, p.ncp, p.core_size, p.chord)
@@ -77,56 +77,56 @@ Base.convert(::Type{SurfacePanel{TF}}, p::SurfacePanel) where {TF} = SurfacePane
 
 Return the top left vertex of the vortex ring associated with `panel`
 """
-@inline top_left(panel::SurfacePanel) = panel.rtl
+top_left(panel::SurfacePanel) = panel.rtl
 
 """
     top_center(panel::SurfacePanel)
 
 Return the top center vertex of the vortex ring associated with `panel`
 """
-@inline top_center(panel::SurfacePanel) = panel.rtc
+top_center(panel::SurfacePanel) = panel.rtc
 
 """
     top_right(panel::SurfacePanel)
 
 Return the top right vertex of the vortex ring associated with `panel`
 """
-@inline top_right(panel::SurfacePanel) = panel.rtr
+top_right(panel::SurfacePanel) = panel.rtr
 
 """
     bottom_left(panel::SurfacePanel)
 
 Return the bottom left vertex of the vortex ring associated with `panel`
 """
-@inline bottom_left(panel::SurfacePanel) = panel.rbl
+bottom_left(panel::SurfacePanel) = panel.rbl
 
 """
     bottom_center(panel::SurfacePanel)
 
 Return the bottom center vertex of the vortex ring associated with `panel`
 """
-@inline bottom_center(panel::SurfacePanel) = panel.rbc
+bottom_center(panel::SurfacePanel) = panel.rbc
 
 """
     bottom_right(panel::SurfacePanel)
 
 Return the bottom right vertex of the vortex ring associated with `panel`
 """
-@inline bottom_right(panel::SurfacePanel) = panel.rbr
+bottom_right(panel::SurfacePanel) = panel.rbr
 
 """
     controlpoint(panel::SurfacePanel)
 
 Return the control point of `panel` (typically located at the 3/4 chord)
 """
-@inline controlpoint(panel::SurfacePanel) = panel.rcp
+controlpoint(panel::SurfacePanel) = panel.rcp
 
 """
     normal(panel::SurfacePanel)
 
 Return the normal vector of `panel` at the panel control point
 """
-@inline normal(panel::SurfacePanel) = panel.ncp
+normal(panel::SurfacePanel) = panel.ncp
 
 """
     get_core_size(panel::SurfacePanel)
@@ -134,14 +134,14 @@ Return the normal vector of `panel` at the panel control point
 Return the core size (smoothing parameter) corresponding to the vortex ring
 associated with `panel`
 """
-@inline get_core_size(panel::SurfacePanel) = panel.core_size
+get_core_size(panel::SurfacePanel) = panel.core_size
 
 """
     translate(panel::SurfacePanel, r)
 
 Return a copy of `panel` translated the distance specified by vector `r`
 """
-@inline function translate(panel::SurfacePanel, r)
+function translate(panel::SurfacePanel, r)
 
     rtl = panel.rtl + r
     rtc = panel.rtc + r
@@ -204,7 +204,7 @@ end
 
 Return a copy of `panel` rotated about point `r` using the rotation matrix `R`
 """
-@inline function rotate(panel::SurfacePanel, R, r = (@SVector zeros(3)))
+function rotate(panel::SurfacePanel, R, r = (@SVector zeros(3)))
 
     rtl = R*(panel.rtl - r) + r
     rtc = R*(panel.rtc - r) + r
@@ -269,7 +269,7 @@ end
 
 Reflect `panel` across the X-Z plane.
 """
-@inline function reflect(panel::SurfacePanel)
+function reflect(panel::SurfacePanel)
 
     rtl = flipy(panel.rtr)
     rtc = flipy(panel.rtc)
@@ -297,7 +297,7 @@ reflect(surface::AbstractMatrix) = reflect.(reverse(surface, dims=2))
 
 Return a copy of `panel` with the new normal vector `ncp`
 """
-@inline set_normal(panel::SurfacePanel, ncp) = SurfacePanel(panel.rtl, panel.rtc,
+set_normal(panel::SurfacePanel, ncp) = SurfacePanel(panel.rtl, panel.rtc,
     panel.rtr, panel.rbl, panel.rbc, panel.rbr, panel.rcp, ncp, panel.core_size,
     panel.chord)
 
@@ -306,42 +306,42 @@ Return a copy of `panel` with the new normal vector `ncp`
 
 Return the center of the left bound vortex of the vortex ring associated with `panel`
 """
-@inline left_center(panel::SurfacePanel) = (top_left(panel) + bottom_left(panel))/2
+left_center(panel::SurfacePanel) = (top_left(panel) + bottom_left(panel))/2
 
 """
     right_center(panel::SurfacePanel)
 
 Return the center of the right bound vortex of the vortex ring associated with `panel`
 """
-@inline right_center(panel::SurfacePanel) = (top_right(panel) + bottom_right(panel))/2
+right_center(panel::SurfacePanel) = (top_right(panel) + bottom_right(panel))/2
 
 """
     top_vector(panel::SurfacePanel)
 
 Return the path of the top bound vortex of the vortex ring associated with `panel`
 """
-@inline top_vector(panel::SurfacePanel) = top_right(panel) - top_left(panel)
+top_vector(panel::SurfacePanel) = top_right(panel) - top_left(panel)
 
 """
     left_vector(panel)
 
 Return the path of the left bound vortex of the vortex ring associated with `panel`
 """
-@inline left_vector(panel::SurfacePanel) = top_left(panel) - bottom_left(panel)
+left_vector(panel::SurfacePanel) = top_left(panel) - bottom_left(panel)
 
 """
     right_vector(panel)
 
 Return the path of the right bound vortex of the vortex ring associated with `panel`
 """
-@inline right_vector(panel::SurfacePanel) = bottom_right(panel) - top_right(panel)
+right_vector(panel::SurfacePanel) = bottom_right(panel) - top_right(panel)
 
 """
     bottom_vector(panel)
 
 Return the path of the bottom bound vortex of the vortex ring associated with `panel`
 """
-@inline bottom_vector(panel::SurfacePanel) = bottom_left(panel) - bottom_right(panel)
+bottom_vector(panel::SurfacePanel) = bottom_left(panel) - bottom_right(panel)
 
 """
     WakePanel{TF}
@@ -387,35 +387,35 @@ function WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
     return WakePanel{TF}(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
-@inline Base.eltype(::Type{WakePanel{TF}}) where TF = TF
-@inline Base.eltype(::WakePanel{TF}) where TF = TF
+Base.eltype(::Type{WakePanel{TF}}) where TF = TF
+Base.eltype(::WakePanel{TF}) where TF = TF
 
 WakePanel{TF}(p::WakePanel) where TF = WakePanel{TF}(p.rtl, p.rtr, p.rbl, p.rbr, p.core_size, p.gamma)
 Base.convert(::Type{WakePanel{TF}}, p::WakePanel) where {TF} = WakePanel{TF}(p)
 
-@inline top_left(panel::WakePanel) = panel.rtl
+top_left(panel::WakePanel) = panel.rtl
 
-@inline top_right(panel::WakePanel) = panel.rtr
+top_right(panel::WakePanel) = panel.rtr
 
-@inline bottom_left(panel::WakePanel) = panel.rbl
+bottom_left(panel::WakePanel) = panel.rbl
 
-@inline bottom_right(panel::WakePanel) = panel.rbr
+bottom_right(panel::WakePanel) = panel.rbr
 
-@inline get_core_size(panel::WakePanel) = panel.core_size
+get_core_size(panel::WakePanel) = panel.core_size
 
 """
     circulation_strength(panel::WakePanel)
 
 Return the circulation strength of the wake panel.
 """
-@inline circulation_strength(panel::WakePanel) = panel.gamma
+circulation_strength(panel::WakePanel) = panel.gamma
 
 """
     set_circulation_strength(panel::WakePanel, gamma)
 
 Return a copy of `panel` with the circulation strength `gamma`
 """
-@inline function set_circulation_strength(panel::WakePanel, gamma)
+function set_circulation_strength(panel::WakePanel, gamma)
 
     rtl = panel.rtl
     rtr = panel.rtr
@@ -426,7 +426,7 @@ Return a copy of `panel` with the circulation strength `gamma`
     return WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
-@inline function translate(panel::WakePanel, r)
+function translate(panel::WakePanel, r)
 
     rtl = panel.rtl + r
     rtr = panel.rtr + r
@@ -438,7 +438,7 @@ end
     return WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
 end
 
-@inline function reflect(panel::WakePanel)
+function reflect(panel::WakePanel)
 
     rtl = flipy(panel.rtr)
     rtr = flipy(panel.rtl)
@@ -462,15 +462,15 @@ struct TrefftzPanel{TF}
     Γ::TF
 end
 
-@inline Base.eltype(::Type{TrefftzPanel{TF}}) where TF = TF
-@inline Base.eltype(::TrefftzPanel{TF}) where TF = TF
+Base.eltype(::Type{TrefftzPanel{TF}}) where TF = TF
+Base.eltype(::TrefftzPanel{TF}) where TF = TF
 
 """
     normal(panel::TrefftzPanel)
 
 Return the normal vector of `panel`, including magnitude
 """
-@inline function normal(panel::TrefftzPanel)
+function normal(panel::TrefftzPanel)
 
     rl = panel.rl
     rr = panel.rr
@@ -578,7 +578,7 @@ Induced drag on `receiving` panel induced by `sending` panel.
  - `symmetric`: Flag indicating whether a mirror image of `sending` should be
     used when calculating the induced drag
 """
-@inline function trefftz_panel_induced_drag(receiving::TrefftzPanel,
+function trefftz_panel_induced_drag(receiving::TrefftzPanel,
     sending::TrefftzPanel; symmetric)
 
     rl = sending.rl
@@ -604,7 +604,7 @@ end
 
 Return induced drag from vortex `j` induced on panel `i`
 """
-@inline function vortex_induced_drag(rj, Γj, ri, Γi, ni)
+function vortex_induced_drag(rj, Γj, ri, Γi, ni)
 
     rij = ri - rj
     Vthetai = SVector(0, -Γj*rij[3], Γj*rij[2]) / (2*pi*(rij[2]^2 + rij[3]^2))

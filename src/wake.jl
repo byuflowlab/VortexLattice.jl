@@ -23,7 +23,7 @@ to account for the new wake shedding location
  - `eta`: Time step fraction used to define separation between trailing
     edge and wake shedding location.  Typical values range from 0.2-0.3.
 """
-@inline function update_wake_shedding_locations!(wakes, wake_shedding_locations,
+function update_wake_shedding_locations!(wakes, wake_shedding_locations,
     surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
 
     # get number of surfaces
@@ -130,7 +130,7 @@ end
     `true` for each surface
  - `xhat`: Direction in which to shed trailing vortices, defaults to [1, 0, 0]
 """
-@inline function get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
+function get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
     additional_velocity, Vte, symmetric, repeated_points, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
 
@@ -306,7 +306,7 @@ Return a translated copy of the wake panel `panel` given the wake corner velocit
     of `panel`
  - `dt`: Time step (seconds)
 """
-@inline function translate_wake(panel::WakePanel, wake_velocities, dt)
+function translate_wake(panel::WakePanel, wake_velocities, dt)
 
     # extract corners
     rtl = top_left(panel)
@@ -361,7 +361,7 @@ and the time step `dt`.
  - `nwake`: Number of chordwise wake panels to use from `wake`, defaults to all
     provided wake panels
 """
-@inline function translate_wake!(wake, wake_velocities, dt; nwake = size(wake, 1))
+function translate_wake!(wake, wake_velocities, dt; nwake = size(wake, 1))
 
     nw = nwake
     ns = size(wake, 2)
@@ -401,7 +401,7 @@ wake panels.
  - `nwake`: Number of chordwise wake panels to use from `wake`, defaults to all
     provided wake panels
 """
-@inline function shed_wake!(wake::AbstractMatrix, wake_shedding_locations,
+function shed_wake!(wake::AbstractMatrix, wake_shedding_locations,
     wake_velocities, dt, surface, Γ, nwake)
 
     nc, ns = size(surface)
@@ -460,7 +460,7 @@ wake panels.
  - `nwake`: Number of chordwise wake panels to use from each wake in `wakes`,
     defaults to all provided wake panels
 """
-@inline function shed_wake!(wakes::AbstractVector{<:AbstractMatrix}, wake_shedding_locations,
+function shed_wake!(wakes::AbstractVector{<:AbstractMatrix}, wake_shedding_locations,
     wake_velocities, dt, surfaces, Γ, nwake)
 
     iΓ = 0

@@ -30,12 +30,12 @@ Base.eltype(::Freestream{TF}) where TF = TF
 
 Construct a rotation matrix from the body axis to the stability axis.
 """
-@inline function body_to_stability(fs::Freestream)
+function body_to_stability(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     return body_to_stability(sa, ca)
 end
 
-@inline body_to_stability(sa, ca) = @SMatrix [ca 0 sa; 0 1 0; -sa 0 ca]
+body_to_stability(sa, ca) = @SMatrix [ca 0 sa; 0 1 0; -sa 0 ca]
 
 """
     body_to_stability_alpha(freestream)
@@ -45,12 +45,12 @@ derivative with respect to `alpha`
 """
 body_to_stability_alpha
 
-@inline function body_to_stability_alpha(fs::Freestream)
+function body_to_stability_alpha(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     return body_to_stability_alpha(sa, ca)
 end
 
-@inline function body_to_stability_alpha(sa, ca)
+function body_to_stability_alpha(sa, ca)
 
     R = body_to_stability(sa, ca)
 
@@ -64,12 +64,12 @@ end
 
 Construct a rotation matrix from the stability axis to the body axis
 """
-@inline function stability_to_body(fs::Freestream)
+function stability_to_body(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     return stability_to_body(sa, ca)
 end
 
-@inline stability_to_body(sa, ca) = body_to_stability(sa, ca)'
+stability_to_body(sa, ca) = body_to_stability(sa, ca)'
 
 """
     stability_to_body(freestream)
@@ -77,12 +77,12 @@ end
 Construct a rotation matrix from the stability axis to the body axis and its
 derivative with respect to `alpha`
 """
-@inline function stability_to_body_alpha(fs::Freestream)
+function stability_to_body_alpha(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     return stability_to_body_alpha(sa, ca)
 end
 
-@inline function stability_to_body_alpha(sa, ca)
+function stability_to_body_alpha(sa, ca)
 
     R, R_a = body_to_stability_alpha(sa, ca)
 
@@ -96,12 +96,12 @@ Construct a rotation matrix from the stability axis to the wind axis
 """
 stability_to_wind
 
-@inline function stability_to_wind(fs::Freestream)
+function stability_to_wind(fs::Freestream)
     sb, cb = sincos(fs.beta)
     return stability_to_wind(sb, cb)
 end
 
-@inline stability_to_wind(sb, cb) = @SMatrix [cb -sb 0; sb cb 0; 0 0 1]
+stability_to_wind(sb, cb) = @SMatrix [cb -sb 0; sb cb 0; 0 0 1]
 
 """
     stability_to_wind_beta(freestream)
@@ -111,12 +111,12 @@ derivative with respect to `beta`
 """
 stability_to_wind_beta
 
-@inline function stability_to_wind_beta(fs::Freestream)
+function stability_to_wind_beta(fs::Freestream)
     sb, cb = sincos(fs.beta)
     return stability_to_wind_beta(sb, cb)
 end
 
-@inline function stability_to_wind_beta(sb, cb)
+function stability_to_wind_beta(sb, cb)
 
     R = stability_to_wind(sb, cb)
 
@@ -130,12 +130,12 @@ end
 
 Construct a rotation matrix from the wind axis to the stability axis
 """
-@inline function wind_to_stability(fs::Freestream)
+function wind_to_stability(fs::Freestream)
     sb, cb = sincos(fs.beta)
     return wind_to_stability(sb, cb)
 end
 
-@inline wind_to_stability(sb, cb) = stability_to_wind(sb, cb)'
+wind_to_stability(sb, cb) = stability_to_wind(sb, cb)'
 
 """
     wind_to_stability_beta(freestream)
@@ -143,12 +143,12 @@ end
 Construct a rotation matrix from the wind axis to the stability axis and its
 derivative with respect to `beta`
 """
-@inline function wind_to_stability_beta(fs::Freestream)
+function wind_to_stability_beta(fs::Freestream)
     sb, cb = sincos(fs.beta)
     return wind_to_stability_beta(sb, cb)
 end
 
-@inline function wind_to_stability_beta(sb, cb)
+function wind_to_stability_beta(sb, cb)
 
     R, R_b = stability_to_wind_beta(sb, cb)
 
@@ -160,13 +160,13 @@ end
 
 Construct a rotation matrix from the body axis to the wind axis
 """
-@inline function body_to_wind(fs::Freestream)
+function body_to_wind(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     sb, cb = sincos(fs.beta)
     return body_to_wind(sa, ca, sb, cb)
 end
 
-@inline function body_to_wind(sa, ca, sb, cb)
+function body_to_wind(sa, ca, sb, cb)
 
     Ra = body_to_stability(sa, ca)
 
@@ -181,13 +181,13 @@ end
 Construct a rotation matrix from the body axis to the wind axis and its
 derivatives with respect to `alpha` and `beta`
 """
-@inline function body_to_wind_derivatives(fs::Freestream)
+function body_to_wind_derivatives(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     sb, cb = sincos(fs.beta)
     return body_to_wind_derivatives(sa, ca, sb, cb)
 end
 
-@inline function body_to_wind_derivatives(sa, ca, sb, cb)
+function body_to_wind_derivatives(sa, ca, sb, cb)
 
     Ra, Ra_a = body_to_stability_alpha(sa, ca)
 
@@ -205,13 +205,13 @@ end
 
 Construct a rotation matrix from the wind axis to the body axis
 """
-@inline function wind_to_body(fs::Freestream)
+function wind_to_body(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     sb, cb = sincos(fs.beta)
     return wind_to_body(sa, ca, sb, cb)
 end
 
-@inline wind_to_body(sa, ca, sb, cb) = body_to_wind(sa, ca, sb, cb)'
+wind_to_body(sa, ca, sb, cb) = body_to_wind(sa, ca, sb, cb)'
 
 """
     wind_to_body_derivatives(freestream)
@@ -219,13 +219,13 @@ end
 Construct a rotation matrix from the wind axis to the body axis and its derivatives
 with respect to `alpha` and `beta`
 """
-@inline function wind_to_body_derivatives(fs::Freestream)
+function wind_to_body_derivatives(fs::Freestream)
     sa, ca = sincos(fs.alpha)
     sb, cb = sincos(fs.beta)
     return wind_to_body_derivatives(sa, ca, sb, cb)
 end
 
-@inline function wind_to_body_derivatives(sa, ca, sb, cb)
+function wind_to_body_derivatives(sa, ca, sb, cb)
 
     R, R_a, R_b = body_to_wind_derivatives(sa, ca, sb, cb)
 
@@ -237,7 +237,7 @@ end
 
 Computes the freestream velocity
 """
-@inline function freestream_velocity(fs)
+function freestream_velocity(fs)
 
     Vinf = fs.Vinf
     sa, ca = sincos(fs.alpha)
@@ -246,14 +246,14 @@ Computes the freestream velocity
     return freestream_velocity(Vinf, sa, ca, sb, cb)
 end
 
-@inline freestream_velocity(Vinf, sa, ca, sb, cb) = Vinf*SVector(ca*cb, -sb, sa*cb)
+freestream_velocity(Vinf, sa, ca, sb, cb) = Vinf*SVector(ca*cb, -sb, sa*cb)
 
 """
     freestream_velocity_derivatives(freestream)
 
 Computes the freestream velocity
 """
-@inline function freestream_velocity_derivatives(fs)
+function freestream_velocity_derivatives(fs)
 
     Vinf = fs.Vinf
     sa, ca = sincos(fs.alpha)
@@ -262,7 +262,7 @@ Computes the freestream velocity
     return freestream_velocity_derivatives(Vinf, sa, ca, sb, cb)
 end
 
-@inline function freestream_velocity_derivatives(Vinf, sa, ca, sb, cb)
+function freestream_velocity_derivatives(Vinf, sa, ca, sb, cb)
 
     V = Vinf*SVector(ca*cb, -sb, sa*cb)
 
@@ -281,9 +281,9 @@ Compute the velocity due to body rotations about the reference center
 """
 rotational_velocity
 
-@inline rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
+rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
 
-@inline function rotational_velocity(r, Omega, rref) 
+function rotational_velocity(r, Omega, rref) 
     Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
     return cross(r - rref, Ω)
 end
@@ -296,9 +296,9 @@ derivatives with respect to (p, q, r)
 """
 rotational_velocity_derivatives
 
-@inline rotational_velocity_derivatives(r, fs::Freestream, ref::Reference) = rotational_velocity_derivatives(r, fs.Omega, ref.r)
+rotational_velocity_derivatives(r, fs::Freestream, ref::Reference) = rotational_velocity_derivatives(r, fs.Omega, ref.r)
 
-@inline function rotational_velocity_derivatives(r, Omega, rref)
+function rotational_velocity_derivatives(r, Omega, rref)
 
     tmp = r - rref
     Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention

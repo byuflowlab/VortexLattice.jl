@@ -7,7 +7,7 @@ Compute the induced velocity (per unit circulation) for a bound vortex, at a
 control point located at `r1` relative to the start of the bound vortex and `r2`
 relative to the end of the bound vortex
 """
-@inline function bound_induced_velocity(r1, r2, finite_core, core_size)
+function bound_induced_velocity(r1, r2, finite_core, core_size)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
@@ -34,7 +34,7 @@ Compute the induced velocity (per unit circulation) for a vortex trailing in
 the `xhat` direction, at a control point located at `r` relative to the start of the
 trailing vortex.
 """
-@inline function trailing_induced_velocity(r, xhat, finite_core, core_size)
+function trailing_induced_velocity(r, xhat, finite_core, core_size)
 
     nr = norm(r)
 
@@ -67,7 +67,7 @@ Also returns the induced velocity resulting from shared edges with panels
 on the top, bottom, left, and right sides of the panel described by `r11`,
 `r12`, `r21`, and `r22`.
 """
-@inline function ring_induced_velocity(rcp, r11, r12, r21, r22;
+function ring_induced_velocity(rcp, r11, r12, r21, r22;
     finite_core = false, core_size = 0.0, symmetric = false, xhat = SVector(1, 0, 0),
     top = true, bottom = true, left = true, right = true, left_trailing = false,
     right_trailing = false, reflected_top=true, reflected_bottom = true,
@@ -215,7 +215,7 @@ located at `rcp`
 Also returns the velocity induced by the shared edges of adjacent panels
 on the top, bottom, left, and right sides of `panel`.
 """
-@inline function ring_induced_velocity(rcp, panel; kwargs...)
+function ring_induced_velocity(rcp, panel; kwargs...)
 
     r11 = top_left(panel)
     r12 = top_right(panel)
@@ -246,7 +246,7 @@ Construct the aerodynamic influence coefficient matrix for a single surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
+influence_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
     influence_coefficients!(AIC, surface, surface; kwargs..., finite_core = false)
 
 """
@@ -272,7 +272,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
     symmetric = fill(false, length(surfaces)),
     surface_id = 1:length(surfaces),
     wake_shedding_locations = fill(nothing, length(surfaces)),
@@ -340,7 +340,7 @@ Compute the AIC coefficients corresponding to the influence of the panels in
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function influence_coefficients!(AIC, receiving, sending;
+function influence_coefficients!(AIC, receiving, sending;
     finite_core = true,
     symmetric = false,
     wake_shedding_locations = nothing,
@@ -634,7 +634,7 @@ Construct the aerodynamic influence coefficient matrix for a single surface.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline update_trailing_edge_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
+update_trailing_edge_coefficients!(AIC, surface::AbstractMatrix; kwargs...) =
     update_trailing_edge_coefficients!(AIC, surface, surface; kwargs..., finite_core = false)
 
 """
@@ -660,7 +660,7 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
+function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix};
     symmetric = fill(false, length(surfaces)),
     wake_shedding_locations = fill(nothing, length(surfaces)),
     surface_id = 1:length(surfaces),
@@ -727,7 +727,7 @@ panels in `sending` on the panels in `receiving`.
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
-@inline function update_trailing_edge_coefficients!(AIC, receiving, sending;
+function update_trailing_edge_coefficients!(AIC, receiving, sending;
     finite_core = true,
     symmetric = false,
     wake_shedding_locations = nothing,
@@ -948,7 +948,7 @@ induced_velocity(rcp, surface::AbstractMatrix{<:SurfacePanel}, Γ; kwargs...)
 Compute the velocity induced by the grid of panels in `surface` on the top bound
 vortex of panel `I` in `surface`.
 """
-@inline function induced_velocity(I::CartesianIndex, surface::AbstractMatrix{<:SurfacePanel}, Γ;
+function induced_velocity(I::CartesianIndex, surface::AbstractMatrix{<:SurfacePanel}, Γ;
     kwargs...)
 
     # extract the control point of interest
@@ -967,7 +967,7 @@ end
 Compute the velocity induced by the grid of panels in `surface` at the trailing
 edge vertex corresponding to index `is`
 """
-@inline function induced_velocity(is::Integer, surface::AbstractMatrix{<:SurfacePanel}, Γ;
+function induced_velocity(is::Integer, surface::AbstractMatrix{<:SurfacePanel}, Γ;
     nc = size(surface, 1), ns = size(surface, 2), kwargs...)
 
     # extract the control point of interest
@@ -994,7 +994,7 @@ end
 Compute the velocity induced by the grid of panels in `surface` at control point
 `rcp` and its derivatives with respect to the freestream variables
 """
-@inline function induced_velocity_derivatives(rcp,
+function induced_velocity_derivatives(rcp,
     surface::AbstractMatrix{<:SurfacePanel}, Γ, dΓ; kwargs...)
 
     return induced_velocity(rcp, surface, Γ, dΓ; kwargs...)
@@ -1006,7 +1006,7 @@ end
 Compute the velocity induced by the grid of panels in `surface` on the top bound
 of panel `I` in `surface` and its derivatives with respect to the freestream variables
 """
-@inline function induced_velocity_derivatives(I::CartesianIndex,
+function induced_velocity_derivatives(I::CartesianIndex,
     surface::AbstractMatrix{<:SurfacePanel}, Γ, dΓ; kwargs...)
 
     # extract the control point of interest
@@ -1033,7 +1033,7 @@ induced_velocity(rcp, wake::AbstractMatrix{<:WakePanel}; kwargs...)
 Compute the induced velocity from the grid of wake panels in `wake` at the
 vertex corresponding to index `I`
 """
-@inline function induced_velocity(I::CartesianIndex, wake::AbstractMatrix{<:WakePanel};
+function induced_velocity(I::CartesianIndex, wake::AbstractMatrix{<:WakePanel};
     nc = size(wake, 1), ns = size(wake, 2), kwargs...)
 
     if iszero(nc)
@@ -1102,7 +1102,7 @@ the circulation strengths provided in Γ.
  - `skip_right_trailing`: Tuple containing panel indices whose right trailing vortex
     is coincident with `rcp` and should therefore be skipped.
 """
-@inline function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
+function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
     nc = size(surface, 1), ns = size(surface, 2),
     symmetric = false, finite_core = true,
     wake_shedding_locations = nothing,

@@ -5,7 +5,7 @@
 
 Calculate local panel forces in the body frame.
 """
-@inline function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
+function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
 
@@ -204,7 +204,7 @@ the local panel forces with respect to the freestream variables.
 """
 near_field_forces_derivatives!
 
-@inline function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
+function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
 
@@ -622,7 +622,7 @@ performed to obtain the panel forces.
 # Arguments:
  - `system`: Object of type `System` which holds system properties
 """
-@inline function body_forces_derivatives(system::System)
+function body_forces_derivatives(system::System)
 
     # float number type
     TF = eltype(system)
@@ -989,14 +989,14 @@ specified in `frame`
 """
 body_to_frame
 
-@inline body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
+body_to_frame(CF, CM, ref, fs, ::Body) = CF, CM
 
-@inline function body_to_frame(CF, CM, ref, fs, ::Stability)
+function body_to_frame(CF, CM, ref, fs, ::Stability)
     R = body_to_stability(fs)
     return R*CF, R*CM
 end
 
-@inline function body_to_frame(CF, CM, ref, fs, ::Wind)
+function body_to_frame(CF, CM, ref, fs, ::Wind)
     # remove reference lengths
     reflen = SVector(ref.b, ref.c, ref.b)
     CM = CM .* reflen

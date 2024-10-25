@@ -48,7 +48,7 @@ induced velocity from the wake panels.
 
 This forms the right hand side of the circulation linear system solve.
 """
-@inline function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
+function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
     Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat)
 
     nsurf = length(surfaces)
@@ -122,7 +122,7 @@ respect to the freestream parameters.
 
 This forms the right hand side of the circulation linear system solve (and its derivatives).
 """
-@inline function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
+function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
     additional_velocity, Vcp, symmetric, nwake, surface_id, wake_finite_core,
     trailing_vortices, xhat)
 

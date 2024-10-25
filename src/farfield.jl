@@ -46,7 +46,7 @@ plane analysis.
  - `symmetric`: Flag indicating whether a mirror image of the panels in `surface`,
     should be used when calculating induced velocities
 """
-@inline function far_field_drag(receiving, sending, ref, symmetric)
+function far_field_drag(receiving, sending, ref, symmetric)
 
     # get float type
     TF = promote_type(eltype(eltype(receiving)), eltype(eltype(sending)), eltype(ref))

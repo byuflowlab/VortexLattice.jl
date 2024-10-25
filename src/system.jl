@@ -105,8 +105,8 @@ struct System{TF}
     dΓdt::Vector{TF}
 end
 
-@inline Base.eltype(::Type{System{TF}}) where TF = TF
-@inline Base.eltype(::System{TF}) where TF = TF
+Base.eltype(::Type{System{TF}}) where TF = TF
+Base.eltype(::System{TF}) where TF = TF
 
 """
     System([TF], surfaces; kwargs...)

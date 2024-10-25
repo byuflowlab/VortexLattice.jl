@@ -1014,7 +1014,7 @@ end
 
 Flip sign of y-component of vector `r` (used for symmetry)
 """
-@inline flipy(r) = SVector{3}(r[1], -r[2], r[3])
+flipy(r) = SVector{3}(r[1], -r[2], r[3])
 
 """
     on_symmetry_plane(args...; tol=eps())
@@ -1025,7 +1025,7 @@ on_symmetry_plane
 
 on_symmetry_plane(r; tol=eps()) = isapprox(r[2], 0.0, atol=tol)
 
-@inline function on_symmetry_plane(r, args...; tol=eps())
+function on_symmetry_plane(r, args...; tol=eps())
     return on_symmetry_plane(r; tol=tol) && on_symmetry_plane(args...; tol=tol)
 end
 
