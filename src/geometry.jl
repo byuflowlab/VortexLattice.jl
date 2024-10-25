@@ -135,30 +135,45 @@ Interpolates the grid `xyz` along direction `dir`
  - `ydir`: Dependent variable direction `xyz` (`i=1`, `j=2`)
 """
 function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
-
+    
     y = nothing
-    z = nothing
 
     ydim = ydir + 1
 
     ni = size(xyz, ydim)
 
-    xyz = mapslices(xyz; dims=[1,ydim]) do xyz_i
+    if ydir == 2
+        xyz_new = Array{eltype(xyz)}(undef, size(xyz,1), size(xyz,2), length(eta))
+    elseif ydir == 1
+        xyz_new = Array{eltype(xyz)}(undef, size(xyz,1), length(eta), size(xyz,3))
+    else
+        error("ydir must be 1 or 2")
+    end
 
-        # get distance between each grid location
+    if ydir == 1
+        dim = 3
+    else
+        dim = 2
+    end
+
+    for i in axes(xyz_new, dim)
+        if ydir == 2
+            xyz_i = xyz[:,i,:]
+        elseif ydir == 1
+            xyz_i = xyz[:,:,i]
+        end
+
         if xdir == 0
             ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
         else
             ds = [xyz_i[xdir,k] - xyz_i[xdir,max(1,k-1)] for k = 1:ni]
         end
-
         # create interpolation vector
         t = cumsum(ds)
 
         # normalize interpolation vector
         t /= t[end]
 
-        # interpolate x, y, and z
         x = interp(t, xyz_i[1,:], eta)
         if !isnothing(y) && ydir==2
         else
@@ -166,10 +181,14 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
         end
             z = interp(t, xyz_i[3,:], eta)
 
-        vcat(x',y',z')
+        if ydir == 2
+            xyz_new[:,i,:] = vcat(x',y',z')
+        else
+            xyz_new[:,:,i] = vcat(x',y',z')
+        end 
     end
 
-    return xyz
+    return xyz_new
 end
 
 """
