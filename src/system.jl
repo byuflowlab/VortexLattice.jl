@@ -15,6 +15,8 @@ Panel specific properties calculated during the vortex lattice method analysis.
  - `cfr`: Force on the right bound vortex from this panel's vortex ring, as
     calculated by the Kutta-Joukowski theorem, normalized by the reference
     dynamic pressure and area
+ - `velocity_from_streamwise`: Local velocity at the panel's bound vortex center
+    excluding the induced velocity from the bound vorticies, not normalized
 """
 struct PanelProperties{TF}
     gamma::TF
@@ -22,15 +24,16 @@ struct PanelProperties{TF}
     cfb::SVector{3, TF}
     cfl::SVector{3, TF}
     cfr::SVector{3, TF}
+    velocity_from_streamwise::SVector{3, TF}
 end
 
 # constructor
-function PanelProperties(gamma, velocity, cfb, cfl, cfr)
+function PanelProperties(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 
     TF = promote_type(typeof(gamma), typeof(velocity), eltype(cfb), eltype(cfl),
-        eltype(cfr))
+        eltype(cfr), eltype(velocity_from_streamwise))
 
-    return PanelProperties{TF}(gamma, velocity, cfb, cfl, cfr)
+    return PanelProperties{TF}(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 end
 
 Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
