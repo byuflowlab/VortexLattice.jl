@@ -5,6 +5,7 @@ using StaticArrays
 using FLOWMath
 using WriteVTK
 using VSPGeom
+using CCBlade
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -58,5 +59,8 @@ export body_derivatives, stability_derivatives
 
 include("visualization.jl")
 export write_vtk
+
+include("nonlinear.jl")
+export SectionProperties
 
 end # module
