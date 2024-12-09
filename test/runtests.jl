@@ -54,9 +54,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -80,9 +81,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -136,9 +138,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -192,9 +195,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -263,6 +267,7 @@ end
         surface[ip] = set_normal(p, ncp)
     end
 
+    grids = [grid]
     surfaces = [surface]
 
     system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
@@ -335,9 +340,10 @@ end
         surface[ip] = set_normal(p, ncp)
     end
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -445,6 +451,7 @@ end
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
+    grids = [wgrid, hgrid, vgrid]
     surfaces = [wing, htail, vtail]
     surface_id = [1, 1, 1]
 
@@ -553,6 +560,7 @@ end
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
+    grids = [wgrid, hgrid, vgrid]
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
@@ -611,9 +619,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -668,6 +677,7 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
     system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
@@ -727,9 +737,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -780,9 +791,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     dCF, dCM = stability_derivatives(system)
 
@@ -849,9 +861,10 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -906,7 +919,7 @@ end
     grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
 
     r_ll, c_ll = lifting_line_geometry(grids)
 
@@ -1438,6 +1451,7 @@ end
     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
+    grids = [grid]
     surfaces = [surface]
 
     # run analysis
@@ -1522,6 +1536,7 @@ end
         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
     translate!(vtail, [4.0, 0.0, 0.0])
 
+    grids = [wgrid, hgrid, vgrid]
     surfaces = [wing, htail, vtail]
     surface_id = [1, 2, 3]
 
@@ -1552,9 +1567,10 @@ end
     grid, surface = import_vsp(comp[1]; mirror=true)
 
     symmetric = false
+    grids = [grid]
     surfaces = [surface]
 
-    system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+    system = steady_analysis(grids, ref, fs; symmetric=symmetric)
     CF, CM = body_forces(system; frame=Wind())
 
     CF_true = [2.41223539e-3, 0.0, 2.37009019e-1]

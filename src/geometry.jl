@@ -107,7 +107,7 @@ function chordwise_spacing(n, ::Sine)
     eta_qtr = linearinterp(0.25, eta[1:end-1], eta[2:end])
     eta_thrqtr = linearinterp(0.75, eta[1:end-1], eta[2:end])
 
-    return eta, eta_qtr, etq_thrqtr
+    return eta, eta_qtr, eta_thrqtr
 end
 
 # cosine
@@ -211,6 +211,7 @@ with dimensions (i, j) containing the generated panels.
        Defaults to `(c, Δs) -> 1e-3`
 """
 function grid_to_surface_panels(xyz;
+    ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
     mirror = false,
     fcore = (c, Δs) -> 1e-3)
 
@@ -262,7 +263,7 @@ function grid_to_surface_panels(xyz;
             rtr = linearinterp(0.25, r2, r4)
 
             # center of top bound vortex
-            rtc = (rtl + rtr)/2
+            rtc = linearinterp(ratios[1,i,j], rtl, rtr)
 
             # bottom left corner of ring vortex
             rbl = linearinterp(0.25, r1n, r3n)
@@ -271,12 +272,12 @@ function grid_to_surface_panels(xyz;
             rbr = linearinterp(0.25, r2n, r4n)
 
             # center of bottom bound vortex
-            rbc = (rbl + rbr)/2
+            rbc = linearinterp(ratios[1,i,j], rbl, rbr)
 
             # control point
-            rtop = linearinterp(0.5, r1, r2)
-            rbot = linearinterp(0.5, r3, r4)
-            rcp = linearinterp(0.75, rtop, rbot)
+            rtop = linearinterp(ratios[1,i,j], r1, r2)
+            rbot = linearinterp(ratios[1,i,j], r3, r4)
+            rcp = linearinterp(ratios[2,i,j], rtop, rbot)
 
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
@@ -308,7 +309,7 @@ function grid_to_surface_panels(xyz;
         rtr = linearinterp(0.25, r2, r4)
 
         # center of top bound vortex
-        rtc = (rtl + rtr)/2
+        rtc = linearinterp(ratios[1,nc,j], rtl, rtr)
 
         # bottom left corner of ring vortex
         rbl = r3
@@ -317,12 +318,12 @@ function grid_to_surface_panels(xyz;
         rbr = r4
 
         # center of bottom bound vortex
-        rbc = (rbl + rbr)/2
+        rbc = linearinterp(ratios[1,nc,j], rbl, rbr)
 
         # control point
-        rtop = linearinterp(0.5, r1, r2)
-        rbot = linearinterp(0.5, r3, r4)
-        rcp = linearinterp(0.75, rtop, rbot)
+        rtop = linearinterp(ratios[1,nc,j], r1, r2)
+        rbot = linearinterp(ratios[1,nc,j], r3, r4)
+        rcp = linearinterp(ratios[2,nc,j], rtop, rbot)
 
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
@@ -349,10 +350,12 @@ function grid_to_surface_panels(xyz;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
+            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
+            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
@@ -367,7 +370,7 @@ function grid_to_surface_panels(xyz;
         end
     end
 
-    return xyz_panels, panels
+    return panels
 end
 
 """
@@ -420,6 +423,8 @@ function grid_to_surface_panels(xyz, ns, nc;
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
+    ratios = zeros(2,nc,ns)
+
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
 
@@ -471,6 +476,13 @@ function grid_to_surface_panels(xyz, ns, nc;
             r4 = xyz_panels[:, i+1, j+1] # bottom right
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
+            # calculate ratios for placement of control points for updating surface panels from grids
+            ratios[1,i,j] = norm((rtc - rtl) ./ (rtr - rtl),1)/3
+            rtop = linearinterp(ratios[1,i,j], r1, r2)
+            rbot = linearinterp(ratios[1,i,j], r3, r4)
+            temp = (rcp - rtop) ./ (rbot - rtop)
+            ratios[2,i,j] = (temp[1] + temp[3])/2
+
             ip = i
             jp = mirror*right_side*ns + j
             panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
@@ -485,10 +497,12 @@ function grid_to_surface_panels(xyz, ns, nc;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
+            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
+            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
@@ -503,7 +517,7 @@ function grid_to_surface_panels(xyz, ns, nc;
         end
     end
 
-    return xyz_panels, panels
+    return panels
 end
 
 """
@@ -542,7 +556,7 @@ with dimensions (i, j) containing the generated panels.
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
 """
-function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),
     reference_line = zeros(length(xle),2),
     mirror = false,
@@ -553,11 +567,11 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
-    N = (1+mirror)*nc*ns
-
     # get spanwise and chordwise spacing
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
+
+    ratios = zeros(2,nc,ns)
 
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
@@ -702,6 +716,13 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             r4 = xyz_panels[:,i+1, j+1] # bottom right
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
+            # calculate ratios for placement of control points for updating surface panels from grids
+            ratios[1,i,j] = norm((rtc - rtl) ./ (rtr - rtl),1)/3
+            rtop = linearinterp(ratios[1,i,j], r1, r2)
+            rbot = linearinterp(ratios[1,i,j], r3, r4)
+            temp = (rcp - rtop) ./ (rbot - rtop)
+            ratios[2,i,j] = (temp[1] + temp[3])/2
+
             ip = i
             jp = mirror*right_side*ns + j
             panels[ip, jp] = SurfacePanel{TF}(rtl, rtc, rtr, rbl, rbc, rbr, rcp,
@@ -716,10 +737,12 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
+            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
+            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
@@ -734,7 +757,7 @@ function wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
         end
     end
 
-    return xyz_panels, panels
+    return xyz_panels, ratios
 end
 
 """
@@ -743,7 +766,9 @@ end
 Updates the surface panels in `surface` to correspond to the grid coordinates in
 `grid`.
 """
-function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
+function update_surface_panels!(surface, grid; 
+    ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75], 
+    fcore = (c, Δs) -> 1e-3)
 
     TF = eltype(eltype(surface))
 
@@ -784,7 +809,7 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
             rtr = linearinterp(0.25, r2, r4)
 
             # center of top bound vortex
-            rtc = (rtl + rtr)/2
+            rtc = linearinterp(ratios[1,i,j], rtl, rtr)
 
             # bottom left corner of ring vortex
             rbl = linearinterp(0.25, r1n, r3n)
@@ -793,12 +818,12 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
             rbr = linearinterp(0.25, r2n, r4n)
 
             # center of bottom bound vortex
-            rbc = (rbl + rbr)/2
+            rbc = linearinterp(ratios[1,i,j], rbl, rbr)
 
             # control point
-            rtop = linearinterp(0.5, r1, r2)
-            rbot = linearinterp(0.5, r3, r4)
-            rcp = linearinterp(0.75, rtop, rbot)
+            rtop = linearinterp(ratios[1,i,j], r1, r2)
+            rbot = linearinterp(ratios[1,i,j], r3, r4)
+            rcp = linearinterp(ratios[2,i,j], rtop, rbot)
 
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
@@ -828,7 +853,7 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
         rtr = linearinterp(0.25, r2, r4)
 
         # center of top bound vortex
-        rtc = (rtl + rtr)/2
+        rtc = linearinterp(ratios[1,nc,j], rtl, rtr)
 
         # bottom left corner of ring vortex
         rbl = r3
@@ -837,12 +862,12 @@ function update_surface_panels!(surface, grid; fcore = (c, Δs) -> 1e-3)
         rbr = r4
 
         # center of bottom bound vortex
-        rbc = (rbl + rbr)/2
+        rbc = linearinterp(ratios[1,nc,j], rbl, rbr)
 
         # control point
-        rtop = linearinterp(0.5, r1, r2)
-        rbot = linearinterp(0.5, r3, r4)
-        rcp = linearinterp(0.75, rtop, rbot)
+        rtop = linearinterp(ratios[1,nc,j], r1, r2)
+        rbot = linearinterp(ratios[1,nc,j], r3, r4)
+        rcp = linearinterp(ratios[2,nc,j], rtop, rbot)
 
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
