@@ -22,7 +22,7 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 """
 
 
-function write_vtk(name::String, system; write_surfaces = true, write_wakes = false, kwargs...)
+function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, kwargs...)
 
     if write_surfaces && write_wakes
         write_vtk(name, system.surfaces, system.wakes, system.properties; symmetric=system.symmetric, kwargs...)
