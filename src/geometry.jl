@@ -201,7 +201,8 @@ corresponds to the spanwise direction (ordered from left to right).  The leading
 edge of each ring vortex will be placed at the 1/4 chord and the control point
 will be placed at the 3/4 chord of each panel.
 
-Return a grid with dimensions (3, i, j) containing the panel corners and a matrix
+Return a grid with dimensions (3, i, j) containing the panel corners, a vector 
+of ratios to place control points when converting to surface panels, and a matrix
 with dimensions (i, j) containing the generated panels.
 
 # Keyword Arguments
@@ -390,8 +391,9 @@ rings according to the spanwise discretization scheme `spacing_s` and chordwise
 discretization scheme `spacing_c`.  The bound vortex will be placed at the
 1/4 chord and the control point will be placed at the 3/4 chord of each panel.
 
-Return a grid with dimensions (3, i, j) containing the interpolated panel corners
-and a matrix with dimensions (i, j) containing the generated panels.
+Return a grid with dimensions (3, i, j) containing the panel corners, a vector 
+of ratios to place control points when converting to surface panels, and a matrix
+with dimensions (i, j) containing the generated panels.
 
 # Arguments
  - `xyz`: grid of dimensions (3, i, j) where where `i` corresponds to the
@@ -532,8 +534,8 @@ Discretize a wing into `ns` spanwise and `nc` chordwise panels with associated
 vortex rings according to the spanwise discretization scheme `spacing_s` and
 chordwise discretization scheme `spacing_c`.
 
-Return a grid with dimensions (3, i, j) containing the panel corners and a matrix
-with dimensions (i, j) containing the generated panels.
+Return a grid with dimensions (3, i, j) containing the panel corners, a vector 
+of ratios to place control points when converting to surface panels.
 
 # Arguments
  - `xle`: leading edge x-coordinate of each airfoil section
