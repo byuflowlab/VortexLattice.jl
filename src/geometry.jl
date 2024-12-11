@@ -564,8 +564,7 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
-    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
-    return_surface = false)
+    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -758,11 +757,7 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
         end
     end
 
-    if return_surface
-        return xyz_panels, ratios, panels
-    else
-        return xyz_panels, ratios
-    end
+    return xyz_panels, ratios
 end
 
 """
