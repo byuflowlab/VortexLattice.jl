@@ -370,7 +370,7 @@ function grid_to_surface_panels(xyz;
         end
     end
 
-    return panels
+    return xyz_panels, ratios, panels
 end
 
 """
@@ -477,11 +477,10 @@ function grid_to_surface_panels(xyz, ns, nc;
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = norm((rtc - rtl) ./ (rtr - rtl),1)/3
+            ratios[1,i,j] = mean_nan_safe((rtc - rtl) ./ (rtr - rtl))
             rtop = linearinterp(ratios[1,i,j], r1, r2)
             rbot = linearinterp(ratios[1,i,j], r3, r4)
-            temp = (rcp - rtop) ./ (rbot - rtop)
-            ratios[2,i,j] = (temp[1] + temp[3])/2
+            ratios[2,i,j] = mean_nan_safe((rcp - rtop) ./ (rbot - rtop))
 
             ip = i
             jp = mirror*right_side*ns + j
@@ -517,11 +516,11 @@ function grid_to_surface_panels(xyz, ns, nc;
         end
     end
 
-    return panels
+    return xyz_panels, ratios, panels
 end
 
 """
-    wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
         fc = fill(x -> 0, length(xle)),
         mirror = false,
         fcore = (c, Δs) -> 1e-3,
@@ -717,11 +716,10 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = norm((rtc - rtl) ./ (rtr - rtl),1)/3
+            ratios[1,i,j] = mean_nan_safe((rtc - rtl) ./ (rtr - rtl))
             rtop = linearinterp(ratios[1,i,j], r1, r2)
             rbot = linearinterp(ratios[1,i,j], r3, r4)
-            temp = (rcp - rtop) ./ (rbot - rtop)
-            ratios[2,i,j] = (temp[1] + temp[3])/2
+            ratios[2,i,j] = mean_nan_safe((rcp - rtop) ./ (rbot - rtop))
 
             ip = i
             jp = mirror*right_side*ns + j
@@ -767,7 +765,7 @@ Updates the surface panels in `surface` to correspond to the grid coordinates in
 `grid`.
 """
 function update_surface_panels!(surface, grid; 
-    ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75], 
+    ratios = zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
     fcore = (c, Δs) -> 1e-3)
 
     TF = eltype(eltype(surface))
@@ -1060,3 +1058,16 @@ end
 Test whether and of the points in `args` are not on the symmetry plane (y = 0)
 """
 not_on_symmetry_plane(args...; tol=eps()) = !on_symmetry_plane(args...; tol=tol)
+
+
+function mean_nan_safe(x)
+    sum = 0
+    count = 0
+    for i in eachindex(x)
+        if !isnan(x[i]) && !isinf(x[i])
+            sum += x[i]
+            count += 1
+        end
+    end
+    return sum/count
+end

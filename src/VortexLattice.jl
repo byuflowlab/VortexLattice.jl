@@ -19,7 +19,7 @@ export Wake
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
-export grid_to_surface_panels, wing_to_surface_panels
+export grid_to_surface_panels, wing_to_grid
 export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
 
