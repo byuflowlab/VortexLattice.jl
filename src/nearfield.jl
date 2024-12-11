@@ -961,6 +961,11 @@ function lifting_line_coefficients(system, r, c; frame=Body())
     return lifting_line_coefficients!(cf, cm, system, r, c; frame)
 end
 
+function lifting_line_coefficients(system; frame=Body())
+    r, c = lifting_line_geometry(system.grids)
+    return lifting_line_coefficients(system, r, c; frame)
+end
+
 """
     lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
 

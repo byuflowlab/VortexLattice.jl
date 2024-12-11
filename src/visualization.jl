@@ -1,4 +1,41 @@
 # TODO: Add grid based visualization
+"""
+    write_vtk(name, system; write_surfaces = true, write_wakes = false, kwargs...)
+
+Write geometry from surfaces and/or wakes to Paraview files for visualization.
+
+# Arguments
+ - `name`: Base name for the generated files
+ - `system`: System object containing surfaces and/or wakes
+
+# Keyword Arguments:
+    - `write_surfaces = true`: Flag indicating whether to write surface geometry
+    - `write_wakes = false`: Flag indicating whether to write wake geometry
+    - `symmetric`: (required if `surface_properties` is provided) Flags indicating whether a
+        mirror image (across the X-Z plane) was used when calculating induced velocities
+        for each surface.
+    - `trailing_vortices`: Flag indicating whether the model uses trailing vortices.
+        Defaults to `true` when wake panels are absent, `false` otherwise
+    - `xhat`: Direction in which trailing vortices extend if used. Defaults to [1, 0, 0].
+    - `wake_length`: Distance to extend trailing vortices. Defaults to 10
+    - `metadata`: Dictionary of metadata to include in generated files
+"""
+
+
+function write_vtk(name::String, system; write_surfaces = true, write_wakes = false, kwargs...)
+
+    if write_surfaces && write_wakes
+        write_vtk(name, system.surfaces, system.wakes, system.properties; symmetric=system.symmetric, kwargs...)
+    elseif write_surfaces
+        write_vtk(name, system.surfaces, system.properties;symmetric=system.symmetric, kwargs...)
+    elseif write_wakes
+        write_vtk(name, system.wakes; symmetric=system.symmetric, kwargs...)
+    else
+        error("At least one of `write_surfaces` or `write_wakes` must be true")
+    end
+
+    return nothing
+end
 
 """
     write_vtk(name, surfaces, [surface_properties]; kwargs...)

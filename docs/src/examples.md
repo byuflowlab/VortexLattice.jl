@@ -49,18 +49,22 @@ beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 fs = Freestream(Vinf, alpha, beta, Omega)
 
-# construct surface
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+# construct grid
+grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-# create vector containing all surfaces
-surfaces = [surface]
+# create vector containing all grids
+grids=[grid]
+ratios=[ratio]
+
+# Construct the system
+system = System(grids; ratios)
 
 # we can use symmetry since the geometry and flow conditions are symmetric about the X-Z axis
 symmetric = true
 
 # perform steady state analysis
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -106,9 +110,7 @@ Markdown.parse(str) # hide
 We can also generate files to visualize the results in Paraview using the function `write_vtk`.
 
 ```julia
-properties = get_surface_properties(system)
-
-write_vtk("symmetric-planar-wing", surfaces, properties; symmetric)
+write_vtk("symmetric-planar-wing", system)
 ```
 
 ![](symmetric-planar-wing.png)
@@ -118,17 +120,21 @@ For asymmetric flow conditions and/or to obtain accurate asymmetric stability de
 ```@example planar-wing
 
 # construct geometry with mirror image
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc=fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 
 # symmetry is not used in the analysis
 symmetric = false
 
-# create vector containing all surfaces
-surfaces = [surface]
+# create vector containing all grids
+grids=[grid]
+ratios=[ratio]
+
+# Construct the system
+system = System(grids; ratios)
 
 # perform steady state analysis
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -263,9 +269,7 @@ Markdown.parse(str) # hide
 Visualizing the geometry now shows the circulation distribution across the entire wing.
 
 ```julia
-properties = get_surface_properties(system)
-
-write_vtk("mirrored-planar-wing", surfaces, properties; symmetric)
+write_vtk("mirrored-planar-wing", system)
 ```
 
 ![](mirrored-planar-wing.png)
@@ -308,14 +312,15 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 symmetric = true
 
 # construct surface
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-# create vector containing all surfaces
-surfaces = [surface]
+# create vector containing all grids and ratios
+grids = [grid]
+ratios = [ratio]
 
 # perform steady state analysis
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -391,14 +396,11 @@ ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/18
 
 # overwrite normal vector for each panel
 for i = 1:length(surface)
-    surface[i] = set_normal(surface[i], ncp)
+    system.surface[i] = set_normal(system.surface[i], ncp)
 end
 
-# create vector containing all surfaces
-surfaces = [surface]
-
 # perform steady state analysis
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -440,9 +442,7 @@ Markdown.parse(str) # hide
 ```
 
 ```julia
-properties = get_surface_properties(system)
-
-write_vtk("wing-with-dihedral", surfaces, properties; symmetric)
+write_vtk("wing-with-dihedral", system)
 ```
 
 ![](wing-with-dihedral.png)
@@ -511,26 +511,26 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 symmetric = [true, true, false]
 
 # generate surface panels for wing
-wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+wgrid, wratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, fc = fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
-hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+hgrid, hratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
     mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(hgrid, [4.0, 0.0, 0.0])
-translate!(htail, [4.0, 0.0, 0.0])
 
 # generate surface panels for vertical tail
-vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+vgrid, vratio = wing_to_grid(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
     mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vgrid, [4.0, 0.0, 0.0])
-translate!(vtail, [4.0, 0.0, 0.0])
 
 grids = [wgrid, hgrid, vgrid]
-surfaces = [wing, htail, vtail]
+ratios = [wratio, hratio, vratio]
 surface_id = [1, 2, 3]
 
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+system = System(grids; ratios)
+
+steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
 CF, CM = body_forces(system; frame=Wind())
 
@@ -604,12 +604,12 @@ ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/18
 
 # overwrite normal vector for each wing panel
 for i = 1:length(wing)
-    wing[i] = set_normal(wing[i], ncp)
+    system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
 surfaces[1] = wing
 
 # perform steady state analysis
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, fs; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -712,32 +712,32 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 symmetric = [true, true, false]
 
 # generate surface panels for wing
-wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+wgrid, wratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
-hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+hgrid, hratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
     mirror=mirror_h, fc=fc_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
 translate!(hgrid, [4.0, 0.0, 0.0])
-translate!(htail, [4.0, 0.0, 0.0])
 
 # generate surface panels for vertical tail
-vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
+vgrid, vratio = wing_to_grid(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
     mirror=mirror_v, fc=fc_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
 translate!(vgrid, [4.0, 0.0, 0.0])
-translate!(vtail, [4.0, 0.0, 0.0])
 
 # now set normal vectors manually
 ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
+grids = [wgrid, hgrid, vgrid]
+ratios = [wratio, hratio, vratio]
+surface_id = [1, 2, 3]
+
+system = System(grids; ratios)
+
 # overwrite normal vector for each wing panel
 for i = 1:length(wing)
-    wing[i] = set_normal(wing[i], ncp)
+    system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
-
-grids = [wgrid, hgrid, vgrid]
-surfaces = [wing, htail, vtail]
-surface_id = [1, 2, 3]
 
 system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
@@ -783,14 +783,12 @@ Markdown.parse(str) # hide
 By comparing these results with previous results we can see exactly how much restricting surface panels in the X-Y plane changes the results from the vortex lattice method.
 
 ```julia
-properties = get_surface_properties(system)
-
-write_vtk("wing-tail", surfaces, properties; symmetric)
+write_vtk("wing-tail", system)
 ```
 
 ![](wing-tail.png)
 
-## Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight
+<!-- ## Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight
 
 This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.
 
@@ -858,11 +856,12 @@ for i = 1:length(AR)
     fs = Freestream(Vinf, alpha, beta, Omega)
 
     # create vortex rings
-    grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    # create vector containing surfaces
-    surfaces = [surface]
+    # create vector containing grids
+    grids = [grid]
+    ratios = [ratio]
 
     # run analysis
     system[i], surface_history[i], property_history[i], wake_history[i] =
@@ -1351,7 +1350,7 @@ nothing # hide
 
 Visualizing the `k=0.5` case in ParaView yields the following animation.
 
-![](heaving-rectangular-wing.gif)
+![](heaving-rectangular-wing.gif) -->
 
 ## OpenVSP Geometry Import
 This example shows how to import a wing geometry created using OpenVSP into VortexLattice for analysis. We'll make use of the default swept wing inside OpenVSP with a few minor changes.
@@ -1385,14 +1384,16 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 comp = read_degengeom("samplewing.csv")
 
 # Use the first (and only) imported component to create the lifting surface
-grid, surface = import_vsp(comp[1]; mirror=true)
+grid, ratio, surface = import_vsp(comp[1]; mirror=true)
 
 symmetric = false
-surfaces = [surface]
+ratios = [ratio]
+grids = [grid]
 
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric)
-properties = get_surface_properties(system)
-write_vtk("samplewing", surfaces, properties; symmetric)
+system = System(grids; ratios)
+
+steady_analysis!(system, ref, fs; symmetric=symmetric)
+write_vtk("samplewing", system)
 ```
 
 ![](samplewing-result.png)

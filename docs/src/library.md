@@ -19,7 +19,7 @@ SurfacePanel()
 WakePanel
 WakePanel()
 grid_to_surface_panels
-wing_to_surface_panels
+wing_to_grid
 lifting_line_geometry
 lifting_line_geometry!
 read_degengeom
