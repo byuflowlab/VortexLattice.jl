@@ -479,10 +479,10 @@ function grid_to_surface_panels(xyz, ns, nc;
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = find_correct_ratio((rtc - rtl) , (rtr - rtl))
+            ratios[1,i,j] = sqrt((rtc[2] - rtl[2])^2 + (rtc[3] - rtl[3])^2) / sqrt((rtr[2] - rtl[2])^2 + (rtr[3] - rtl[3])^2)
             rtop = linearinterp(ratios[1,i,j], r1, r2)
             rbot = linearinterp(ratios[1,i,j], r3, r4)
-            ratios[2,i,j] = find_correct_ratio((rcp - rtop) , (rbot - rtop))
+            ratios[2,i,j] = sqrt((rcp[1] - rtop[1])^2 + (rcp[3] - rtop[3])^2) / sqrt((rbot[1] - rtop[1])^2 + (rbot[3] - rtop[3])^2)
 
             ip = i
             jp = mirror*right_side*ns + j
@@ -718,10 +718,10 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
             # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = find_correct_ratio((rtc - rtl), (rtr - rtl))
+            ratios[1,i,j] = sqrt((rtc[2] - rtl[2])^2 + (rtc[3] - rtl[3])^2) / sqrt((rtr[2] - rtl[2])^2 + (rtr[3] - rtl[3])^2)
             rtop = linearinterp(ratios[1,i,j], r1, r2)
             rbot = linearinterp(ratios[1,i,j], r3, r4)
-            ratios[2,i,j] = find_correct_ratio((rcp - rtop), (rbot - rtop))
+            ratios[2,i,j] = sqrt((rcp[1] - rtop[1])^2 + (rcp[3] - rtop[3])^2) / sqrt((rbot[1] - rtop[1])^2 + (rbot[3] - rtop[3])^2)
 
             ip = i
             jp = mirror*right_side*ns + j
@@ -1060,10 +1060,3 @@ end
 Test whether and of the points in `args` are not on the symmetry plane (y = 0)
 """
 not_on_symmetry_plane(args...; tol=eps()) = !on_symmetry_plane(args...; tol=tol)
-
-
-function find_correct_ratio(num, den)
-    _, I = findmax(num)
-
-    return num[I]/den[I]
-end
