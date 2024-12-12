@@ -4,8 +4,8 @@ struct SectionProperties{TF}
     α::Array{TF,0}
     cl::Array{TF,0}
     cd::Array{TF,0}
-    panels::Vector{CartesianIndex}
-    gammas::Vector{CartesianIndex}
+    panels::Vector{CartesianIndex{2}}
+    gammas::Vector{CartesianIndex{1}}
     area::TF
     force::Vector{TF}
     airfoil::CCBlade.AlphaAF{TF, String, Akima{Vector{TF}, Vector{TF}, TF}}
@@ -21,12 +21,13 @@ end
 function grid_to_sections(grid, airfoils; ratios, contours)
     _, _, surface = grid_to_surface_panels(grid; ratios)
     ns = size(surface, 2)
-    sections = Vector{SectionProperties{TF}}(undef, ns)
-    if length(airfoils != ns)
+    nc = size(surface, 1)
+    sections = Vector{SectionProperties{typeof(surface[1].chord)}}(undef, ns)
+    if length(airfoils) != ns
         error("Number of airfoils must match number of spanwise panels")
     end
 
-    rows = collect(1:size(surface, 1))
+    rows = collect(1:nc)
     cols = zeros(Int, size(rows))
     gamma_vec = zeros(Int, size(rows))
     gamma_start = 1
@@ -37,8 +38,14 @@ function grid_to_sections(grid, airfoils; ratios, contours)
         gammas = CartesianIndex.(gamma_vec)
         gamma_start = gamma_vec[end] + 1
 
-        area = 
-        sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contour[i])
+        chord = 0.0
+        span = norm(surface[panels[1]].rtl - surface[panels[1]].rtr)
+        for j in 1:nc 
+            chord += surface[panels[j]].chord
+        end
+        area = chord*span
+
+        sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i])
     end
     return sections
 end

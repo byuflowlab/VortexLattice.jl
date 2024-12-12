@@ -14,7 +14,7 @@ include("subsystem.jl")
 export Subsystem
 
 include("nonlinear.jl")
-export SectionProperties
+export SectionProperties, grid_to_sections
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
