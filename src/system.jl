@@ -53,7 +53,6 @@ Contains pre-allocated storage for internal system variables.
  - `ratios`: Ratios of the locations of each control point on each panel
  - `surfaces`: Surfaces, represented by matrices of surface panels
  - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
- - `subsystems`: Subsystems in the system
  - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
@@ -90,7 +89,6 @@ struct System{TF}
     ratios::Vector{Array{TF,3}}
     surfaces::Vector{Matrix{SurfacePanel{TF}}}
     sections::Vector{Vector{SectionProperties{TF}}}
-    subsystems::Vector{SubSystem{TF}}
     properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
@@ -189,7 +187,7 @@ variables
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
 """
-function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, subsystems = nothing, sections = nothing)
+function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -207,11 +205,6 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
         for i = 1:nsurf
             ratios[i] = ratios[i] .+ [0.5;0.75]
         end
-    end
-    if isnothing(subsystems)
-        subsystems = Vector{SubSystem{TF}}(undef, 1)
-        subsystems[1] = SubSystem{TF}(collect(1:nsurf), SVector{3,TF}(0,0,0), SMatrix{3,3,TF}(I), 
-            SVector{3,TF}(0,0,0), SVector{3,TF}(0,0,0))
     end
 
     if isnothing(sections)
@@ -247,7 +240,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, sections, subsystems, properties, wakes, trefftz,
+    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, sections, properties, wakes, trefftz,
         reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
         trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,

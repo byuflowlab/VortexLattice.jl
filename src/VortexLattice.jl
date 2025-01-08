@@ -10,9 +10,6 @@ using CCBlade
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
 
-include("subsystem.jl")
-export Subsystem
-
 include("nonlinear.jl")
 export SectionProperties, grid_to_sections
 
