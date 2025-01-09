@@ -209,6 +209,8 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
 
     if isnothing(sections)
         sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
+    else
+        redefine_gamma_index!(sections)
     end
 
     AIC = zeros(TF, N, N)

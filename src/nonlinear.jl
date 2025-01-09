@@ -30,6 +30,7 @@ function grid_to_sections(grid, airfoils; ratios, contours)
     rows = collect(1:nc)
     cols = zeros(Int, size(rows))
     gamma_vec = zeros(Int, size(rows))
+
     gamma_start = 1
     for i in 1:ns
         cols .= i
@@ -48,4 +49,31 @@ function grid_to_sections(grid, airfoils; ratios, contours)
         sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i])
     end
     return sections
+end
+
+function redefine_gamma_index!(sections)
+    gamma_start = 1
+    for i in eachindex(sections)
+        for j in eachindex(sections[i])
+            sections[i][j].gammas .= CartesianIndex.(collect(gamma_start:gamma_start + size(sections[i][j].panels, 1) - 1))
+            gamma_start += size(sections[i][j].panels, 1) - 1
+        end
+    end
+end
+
+function nonlinear_analysis!(system)
+    vel = zeros(3)
+    n_hat = zeros(3)
+    c_hat = zeros(3)
+    v = zeros(3)
+
+    for i in eachindex(system.surfaces)
+        surface = system.surfaces[i]
+        properties = system.properties[i]
+        sections = system.sections[i]
+        for j in eachindex(sections)
+            total_chord = 0.0
+
+        end
+    end
 end
