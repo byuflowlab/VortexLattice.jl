@@ -6,12 +6,16 @@ using FLOWMath
 using WriteVTK
 using VSPGeom
 using CCBlade
+using DelimitedFiles
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
 
 include("nonlinear.jl")
 export SectionProperties, grid_to_sections
+
+include("rotors.jl")
+export generate_rotor
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
