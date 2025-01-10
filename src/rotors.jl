@@ -151,7 +151,7 @@ function generate_rotor(Rtip, Rhub, B::Int,
 
     surfaces = Vector{Matrix{SurfacePanel{Float64}}}(undef,B)
     for i = eachindex(grids)
-        grids[i], ratios[i], surfaces[i] = grid_to_surface_panels(grids[i]; ratios = ratio, invert_normals = invert)
+        grids[i], ratios[i], surfaces[i] = grid_to_surface_panels(grids[i]; ratios = ratio)
     end
 
     airfoils = Vector{Tuple{Float64, CCBlade.AlphaAF{Float64, String, Akima{Vector{Float64}, Vector{Float64}, Float64}}}}(undef,length(airfoil_contours))
@@ -174,7 +174,6 @@ function generate_rotor(Rtip, Rhub, B::Int,
     for i = 2:B
         sections[i] = deepcopy(section)
     end
-    
     return grids, ratios, sections, invert_normals
 end
 

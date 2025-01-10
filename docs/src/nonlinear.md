@@ -1,3 +1,3 @@
 # Nonlinear VLM
 
-Some convinence code exists in **VortexLattice** to generate rotors in conjunctino
+A nonlinear vortex lattice analysis is used to account for airfoil polars. 

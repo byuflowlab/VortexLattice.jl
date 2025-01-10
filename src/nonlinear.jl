@@ -22,10 +22,9 @@ end
 
 function grid_to_sections(grid, airfoils; 
                     ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
-                    contours=zeros(1,1), 
-                    invert_normals=false)
+                    contours=zeros(1,1))
                     
-    _, _, surface = grid_to_surface_panels(grid; ratios, invert_normals)
+    _, _, surface = grid_to_surface_panels(grid; ratios)
     ns = size(surface, 2)
     nc = size(surface, 1)
     sections = Vector{SectionProperties{typeof(surface[1].chord)}}(undef, ns)
@@ -103,7 +102,7 @@ function nonlinear_analysis!(system)
                 vel[1] = vx[1]
                 vel[2] = vy[1]
             end
-            section.α[1] = atan(vel[1], vel[2])
+            section.α[1] = atan(vel[1], vel[2]) * (-1)^system.invert_normals[i]
             section.cl .= section.airfoil.clspline(section.α[1])
             section.cd .= section.airfoil.cdspline(section.α[1])
             section.α[1] = rad2deg(section.α[1])

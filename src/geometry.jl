@@ -210,14 +210,11 @@ with dimensions (i, j) containing the generated panels.
 - `fcore`: function for setting the finite core size based on the chord length
        (in the x-direction) and/or the panel width (in the y/z directions).
        Defaults to `(c, Δs) -> 1e-3`
-- 'invert_normals': invert the normals of the surface panels, defaults to `false`.
-        used in generating rotors/turbines
 """
 function grid_to_surface_panels(xyz;
     ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
     mirror = false,
-    fcore = (c, Δs) -> 1e-3,
-    invert_normals = false)
+    fcore = (c, Δs) -> 1e-3)
 
     TF = eltype(xyz)
 
@@ -286,9 +283,6 @@ function grid_to_surface_panels(xyz;
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            if invert_normals
-                ncp = -ncp
-            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -335,9 +329,6 @@ function grid_to_surface_panels(xyz;
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
-        if invert_normals
-            ncp = -ncp
-        end
 
         # set finite core size
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -419,8 +410,6 @@ with dimensions (i, j) containing the generated panels.
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
  - `interp_c`: chordwise interpolation function, defaults to linear interpolation
- - 'invert_normals': invert the normals of the surface panels, defaults to `false`.
-        used in generating rotors/turbines
 """
 function grid_to_surface_panels(xyz, ns, nc;
     mirror = false,
@@ -428,8 +417,7 @@ function grid_to_surface_panels(xyz, ns, nc;
     spacing_s = Cosine(),
     spacing_c = Uniform(),
     interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
-    interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
-    invert_normals = false)
+    interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
 
     TF = eltype(xyz)
 
@@ -478,9 +466,6 @@ function grid_to_surface_panels(xyz, ns, nc;
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            if invert_normals
-                ncp = -ncp
-            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -795,8 +780,7 @@ Updates the surface panels in `surface` to correspond to the grid coordinates in
 """
 function update_surface_panels!(surface, grid; 
     ratios = zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
-    fcore = (c, Δs) -> 1e-3,
-    invert_normals = false)
+    fcore = (c, Δs) -> 1e-3)
 
     TF = eltype(eltype(surface))
 
@@ -856,9 +840,6 @@ function update_surface_panels!(surface, grid;
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
-            if invert_normals
-                ncp = -ncp
-            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -903,9 +884,6 @@ function update_surface_panels!(surface, grid;
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
-        if invert_normals
-            ncp = -ncp
-        end
 
         # set finite core size
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
