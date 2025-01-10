@@ -52,6 +52,8 @@ Contains pre-allocated storage for internal system variables.
  - `grids`: Grids of the surfaces, represented by matrices of vertices
  - `ratios`: Ratios of the locations of each control point on each panel
  - `surfaces`: Surfaces, represented by matrices of surface panels
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+        be inverted (used for the nonlinear VLM)
  - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
  - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
@@ -135,9 +137,14 @@ variables
         where `nc` is the number of chordwise panels and `ns` is the number of
         spanwise panels
 
-# Keyword Arguments:
- - `nw`: Number of chordwise wake panels to initialize for each surface. Defaults to
-    zero wake panels for each surface.
+# Keyword Arguments
+ - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
+    panels on each surface
+ - `grids`: Grids of the surfaces, represented by matrices of vertices
+ - `ratios`: Ratios of the locations of each control point on each panel
+ - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+    be inverted
 """
 System(args...; kwargs...)
 
@@ -187,6 +194,11 @@ variables
 # Keyword Arguments
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
+ - `grids`: Grids of the surfaces, represented by matrices of vertices
+ - `ratios`: Ratios of the locations of each control point on each panel
+ - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+    be inverted
 """
 function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing, invert_normals = nothing)
 

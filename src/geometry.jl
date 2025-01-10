@@ -210,6 +210,8 @@ with dimensions (i, j) containing the generated panels.
 - `fcore`: function for setting the finite core size based on the chord length
        (in the x-direction) and/or the panel width (in the y/z directions).
        Defaults to `(c, Δs) -> 1e-3`
+- 'invert_normals': invert the normals of the surface panels, defaults to `false`.
+        used in generating rotors/turbines
 """
 function grid_to_surface_panels(xyz;
     ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
@@ -417,6 +419,8 @@ with dimensions (i, j) containing the generated panels.
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: spanwise interpolation function, defaults to linear interpolation
  - `interp_c`: chordwise interpolation function, defaults to linear interpolation
+ - 'invert_normals': invert the normals of the surface panels, defaults to `false`.
+        used in generating rotors/turbines
 """
 function grid_to_surface_panels(xyz, ns, nc;
     mirror = false,
@@ -567,6 +571,8 @@ of ratios to place control points when converting to surface panels.
  - `spacing_s`: spanwise discretization scheme, defaults to `Cosine()`
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
+ - 'invert_cambers': invert the camber of the grid, defaults to `false`.
+        used in generating rotors/turbines
 """
 function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),
