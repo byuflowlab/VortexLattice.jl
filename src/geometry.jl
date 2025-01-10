@@ -214,7 +214,8 @@ with dimensions (i, j) containing the generated panels.
 function grid_to_surface_panels(xyz;
     ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
     mirror = false,
-    fcore = (c, Δs) -> 1e-3)
+    fcore = (c, Δs) -> 1e-3,
+    invert_normals = false)
 
     TF = eltype(xyz)
 
@@ -283,6 +284,9 @@ function grid_to_surface_panels(xyz;
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
+            if invert_normals
+                ncp = -ncp
+            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -329,6 +333,9 @@ function grid_to_surface_panels(xyz;
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
+        if invert_normals
+            ncp = -ncp
+        end
 
         # set finite core size
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -417,7 +424,8 @@ function grid_to_surface_panels(xyz, ns, nc;
     spacing_s = Cosine(),
     spacing_c = Uniform(),
     interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
-    interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
+    interp_c = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
+    invert_normals = false)
 
     TF = eltype(xyz)
 
@@ -466,6 +474,9 @@ function grid_to_surface_panels(xyz, ns, nc;
             rcp = SVector(xyz_cp[1,i,j], xyz_cp[2,i,j], xyz_cp[3,i,j])
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
+            if invert_normals
+                ncp = -ncp
+            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -564,7 +575,8 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
-    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt))
+    interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
+    invert_cambers = false)
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -605,6 +617,9 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             # bound vortex location
             xc = etac[i]
             zc = fc[j](xc)
+            if invert_cambers
+                zc = -zc
+            end
 
             # location on airfoil
             r = SVector(xc, 0.0, zc)
@@ -630,6 +645,9 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             # bound vortex location
             xc = eta_qtr[i]
             zc = fc[j](xc)
+            if invert_cambers
+                zc = -zc
+            end
 
             # location on airfoil
             r = SVector(xc, 0, zc)
@@ -655,6 +673,9 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             # bound vortex location
             xc = eta_thrqtr[i]
             zc = fc[j](xc)
+            if invert_cambers
+                zc = -zc
+            end
 
             # location on airfoil
             r = SVector(xc, 0, zc)
@@ -768,7 +789,8 @@ Updates the surface panels in `surface` to correspond to the grid coordinates in
 """
 function update_surface_panels!(surface, grid; 
     ratios = zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
-    fcore = (c, Δs) -> 1e-3)
+    fcore = (c, Δs) -> 1e-3,
+    invert_normals = false)
 
     TF = eltype(eltype(surface))
 
@@ -828,6 +850,9 @@ function update_surface_panels!(surface, grid;
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
+            if invert_normals
+                ncp = -ncp
+            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -872,6 +897,9 @@ function update_surface_panels!(surface, grid;
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
+        if invert_normals
+            ncp = -ncp
+        end
 
         # set finite core size
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)

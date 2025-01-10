@@ -88,7 +88,7 @@ function steady_analysis!(system, ref, fs;
     trailing_vortices = isa(trailing_vortices, Number) ? fill(trailing_vortices, nsurf) : trailing_vortices
 
     for isurf = 1:nsurf
-        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore)
+        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore, invert_normals = system.invert_normals[isurf])
     end
 
     # update other parameters stored in `system`
@@ -347,7 +347,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
     if eltype(initial_surfaces) <: AbstractArray{<:Any, 3}
         # initial surfaces are input as a grid, convert to surface panels
         for isurf = 1:nsurf
-            update_surface_panels!(system.surfaces[isurf], initial_surfaces[isurf]; fcore)
+            update_surface_panels!(system.surfaces[isurf], initial_surfaces[isurf]; fcore, invert_normals = system.invert_normals[isurf], ratios = system.ratios[isurf])
         end
     else
         # initial surfaces are input as matrices of surface panels
@@ -526,7 +526,7 @@ function propagate_system!(system, surfaces, fs, dt;
             # set new surface shape...
             if grid_input
                 # ...based on grid inputs
-                update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore)
+                update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore, invert_normals = system.invert_normals[isurf], ratios = system.ratios[isurf])
             else
                 # ...based on surface panels
                 current_surfaces[isurf] .= surfaces[isurf]

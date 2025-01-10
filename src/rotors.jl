@@ -115,40 +115,29 @@ function generate_rotor(Rtip, Rhub, B::Int,
     ns=10, nc=1,
     spacing_s=VortexLattice.Sine(),
     spacing_c=VortexLattice.Uniform(),
-    initial_azimuthal_angle = 0.0, # radians
-    # OUTPUT OPTIONS
-    verbose=false, v_lvl=1)
+    initial_azimuthal_angle = 0.0) # radians
 
-    if verbose; println("\t"^v_lvl*"Generating geometry..."); end;
-
-    turbine_mod = (-1)^turbine_flag # if turbine_flag then -1
-    if turbine_flag
-        if clockwise
-            clockwise = false
-        else
-            clockwise = true
-        end
+    clockwise_mod = (-1)^clockwise
+    if turbine_flag == clockwise
+        invert = false
+    else
+        invert = true
     end
 
     yle = chorddist[:,1] .* Rtip
     chord = chorddist[:,2] .* Rtip
-    theta = deg2rad.(pitchdist[:,2]) * turbine_mod
+    theta = deg2rad.(pitchdist[:,2]) * clockwise_mod
     xle = sweepdist[:,2] .* Rtip
     zle = heightdist[:,2] .* Rtip
+    invert_normals = fill(invert, B)
 
     grid, ratio = wing_to_grid(xle,yle,zle,chord,theta,zeros(length(yle)),
                     ns,nc;reference_line=airfoil_reference,
-                    spacing_s=spacing_s, spacing_c=spacing_c)
+                    spacing_s=spacing_s, spacing_c=spacing_c, invert_cambers=invert)
 
     grids = Vector{typeof(grid)}(undef,B)
     ratios = Vector{typeof(ratio)}(undef,B)
-    Rotate_grid!(grid, -pi/2 * turbine_mod, 2)
-
-    if clockwise
-        reverse!(grid,dims=3)
-        grid[2,:,:] = -grid[2,:,:]
-        Rotate_grid!(grid, pi, 1)
-    end
+    Rotate_grid!(grid, -pi/2 * clockwise_mod, 2)
 
     Rotate_grid!(grid, initial_azimuthal_angle, 1)
     grids[1] = deepcopy(grid)
@@ -162,16 +151,12 @@ function generate_rotor(Rtip, Rhub, B::Int,
 
     surfaces = Vector{Matrix{SurfacePanel{Float64}}}(undef,B)
     for i = eachindex(grids)
-        grids[i], ratios[i], surfaces[i] = grid_to_surface_panels(grids[i]; ratios = ratio)
+        grids[i], ratios[i], surfaces[i] = grid_to_surface_panels(grids[i]; ratios = ratio, invert_normals = invert)
     end
-
-    if verbose; println("\t"^v_lvl*"Generating airfoil data..."); end;
 
     airfoils = Vector{Tuple{Float64, CCBlade.AlphaAF{Float64, String, Akima{Vector{Float64}, Vector{Float64}, Float64}}}}(undef,length(airfoil_contours))
     contours = Vector{Array{Float64,2}}(undef,length(airfoil_contours))
     for (rfli, (pos, contour, file_name)) in enumerate(airfoil_contours)
-
-        if verbose; println("\t"^(v_lvl+1)*"$file_name"); end;
         polar = CCBlade.AlphaAF(joinpath(data_path, "airfoils", file_name); radians=polar_in_radians)
 
         if zero_at_root
@@ -190,7 +175,7 @@ function generate_rotor(Rtip, Rhub, B::Int,
         sections[i] = deepcopy(section)
     end
     
-    return grids, ratios, sections
+    return grids, ratios, sections, invert_normals
 end
 
 function Rotate_grid!(grid::Array{Float64,3}, angle, axis::Int)

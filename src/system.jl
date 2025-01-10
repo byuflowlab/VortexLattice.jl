@@ -88,6 +88,7 @@ struct System{TF}
     grids::Vector{<:AbstractArray{TF, 3}}
     ratios::Vector{Array{TF,3}}
     surfaces::Vector{Matrix{SurfacePanel{TF}}}
+    invert_normals::Vector{Bool}
     sections::Vector{Vector{SectionProperties{TF}}}
     properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
@@ -187,7 +188,7 @@ variables
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
 """
-function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing)
+function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing, invert_normals = nothing)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -211,6 +212,10 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
         sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
     else
         redefine_gamma_index!(sections)
+    end
+
+    if isnothing(invert_normals)
+        invert_normals = fill(false, nsurf)
     end
 
     AIC = zeros(TF, N, N)
@@ -242,9 +247,9 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, sections, properties, wakes, trefftz,
-        reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
-        trailing_vortices, xhat, near_field_analysis, derivatives,
+    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, invert_normals, sections, 
+        properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
+        wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
         Vv, Vte, dΓdt)
 end

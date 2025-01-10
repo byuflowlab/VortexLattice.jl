@@ -13,13 +13,19 @@ struct SectionProperties{TF}
 end
 
 function SectionProperties(panels_indicies, gammas, area, airfoil, contour)
-    α = cl = cd = zeros()
+    α = zeros()
+    cl = zeros()
+    cd = zeros()
     force = zeros(3)
     return SectionProperties(α, cl, cd, panels_indicies, gammas, area, force, airfoil, contour)
 end
 
-function grid_to_sections(grid, airfoils; ratios, contours)
-    _, _, surface = grid_to_surface_panels(grid; ratios)
+function grid_to_sections(grid, airfoils; 
+                    ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
+                    contours=zeros(1,1), 
+                    invert_normals=false)
+                    
+    _, _, surface = grid_to_surface_panels(grid; ratios, invert_normals)
     ns = size(surface, 2)
     nc = size(surface, 1)
     sections = Vector{SectionProperties{typeof(surface[1].chord)}}(undef, ns)
@@ -62,7 +68,7 @@ function redefine_gamma_index!(sections)
 end
 
 function nonlinear_analysis!(system)
-    vel = zeros(3)
+    vel = zeros(2)
     n_hat = zeros(3)
     c_hat = zeros(3)
     v = zeros(3)
@@ -71,9 +77,49 @@ function nonlinear_analysis!(system)
         surface = system.surfaces[i]
         properties = system.properties[i]
         sections = system.sections[i]
+        vx = zeros(size(surface,1))
+        vy = zeros(size(surface,1))
+        x_c = zeros(size(surface,1))
         for j in eachindex(sections)
             total_chord = 0.0
-
+            section = sections[j]
+            for k in eachindex(section.panels)
+                panel = surface[section.panels[k]]
+                total_chord += panel.chord
+                n_hat .= panel.ncp
+                c_hat .= panel.rbc - panel.rcp
+                c_hat ./= norm(c_hat)
+                v .= properties[section.panels[k]].velocity_from_streamwise
+                vx[k] = dot(v, n_hat)
+                vy[k] = dot(v, c_hat)
+            end
+            for k in eachindex(x_c)
+                x_c[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
+            end
+            if length(section.panels) > 1
+                vel[1] = FLOWMath.akima(x_c, vx, 0.5)
+                vel[2] = FLOWMath.akima(x_c, vy, 0.5)
+            else
+                vel[1] = vx[1]
+                vel[2] = vy[1]
+            end
+            section.α[1] = atan(vel[1], vel[2])
+            section.cl .= section.airfoil.clspline(section.α[1])
+            section.cd .= section.airfoil.cdspline(section.α[1])
+            section.α[1] = rad2deg(section.α[1])
         end
     end
+    return system
+end
+
+function get_coefficient_distribution(sections)
+    α = zeros(length(sections))
+    cl = zeros(length(sections))
+    cd = zeros(length(sections))
+    for i in eachindex(sections)
+        α[i] = sections[i].α[1]
+        cl[i] = sections[i].cl[1]
+        cd[i] = sections[i].cd[1]
+    end
+    return α, cl, cd
 end

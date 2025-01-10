@@ -1268,145 +1268,149 @@ end
 
 end
 
-# @testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
+@testset "Unsteady Vortex Lattice Method - Rectangular Wing" begin
 
-#     Uinf = 1.0
-#     AR = 4
+    Uinf = 1.0
+    AR = 4
 
-#     # reference parameters
-#     cref = 1.0
-#     bref = AR
-#     Sref = bref*cref
-#     rref = [0.0, 0.0, 0.0]
-#     Vinf = 1.0
-#     ref = Reference(Sref, cref, bref, rref, Vinf)
+    # reference parameters
+    cref = 1.0
+    bref = AR
+    Sref = bref*cref
+    rref = [0.0, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
-#     # freestream parameters
-#     alpha = 5.0*pi/180
-#     beta = 0.0
-#     Omega = [0.0; 0.0; 0.0]
-#     fs = Freestream(Vinf, alpha, beta, Omega)
+    # freestream parameters
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
-#     # geometry
-#     xle = [0.0, 0.0]
-#     yle = [-bref/2, bref/2]
-#     zle = [0.0, 0.0]
-#     chord = [cref, cref]
-#     theta = [0.0, 0.0]
-#     phi = [0.0, 0.0]
-#     ns = 13
-#     nc = 4
-#     spacing_s = Uniform()
-#     spacing_c = Uniform()
-#     mirror = false
-#     symmetric = false
+    # geometry
+    xle = [0.0, 0.0]
+    yle = [-bref/2, bref/2]
+    zle = [0.0, 0.0]
+    chord = [cref, cref]
+    theta = [0.0, 0.0]
+    phi = [0.0, 0.0]
+    ns = 13
+    nc = 4
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
+    symmetric = false
 
-#     # non-dimensional time
-#     t = range(0.0, 10.0, step=0.2)
-#     dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+    # non-dimensional time
+    t = range(0.0, 10.0, step=0.2)
+    dt = [t[i+1]-t[i] for i = 1:length(t)-1]
 
-#     # create vortex rings
-#     grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-#         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    # create vortex rings
+    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
 
-#     grids = [grid]
-#     surfaces = [surface]
+    _, _, surface = grid_to_surface_panels(grid; ratios=ratio)
 
-#     # run analysis
-#     system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt;
-#         symmetric=symmetric)
+    surfaces = [surface]
 
-#     # extract forces at each time step
-#     CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
-# end
+    # run analysis
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt;
+        symmetric=symmetric)
 
-# @testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
+    # extract forces at each time step
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
+end
 
-#     # Unsteady Wing and Tail
+@testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
 
-#     # wing
-#     xle = [0.0, 0.2]
-#     yle = [0.0, 5.0]
-#     zle = [0.0, 1.0]
-#     chord = [1.0, 0.6]
-#     theta = [2.0*pi/180, 2.0*pi/180]
-#     phi = [0.0, 0.0]
-#     ns = 12
-#     nc = 1
-#     spacing_s = Uniform()
-#     spacing_c = Uniform()
-#     mirror = false
+    # Unsteady Wing and Tail
 
-#     # horizontal stabilizer
-#     xle_h = [0.0, 0.14]
-#     yle_h = [0.0, 1.25]
-#     zle_h = [0.0, 0.0]
-#     chord_h = [0.7, 0.42]
-#     theta_h = [0.0, 0.0]
-#     phi_h = [0.0, 0.0]
-#     ns_h = 6
-#     nc_h = 1
-#     spacing_s_h = Uniform()
-#     spacing_c_h = Uniform()
-#     mirror_h = false
+    # wing
+    xle = [0.0, 0.2]
+    yle = [0.0, 5.0]
+    zle = [0.0, 1.0]
+    chord = [1.0, 0.6]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+    mirror = false
 
-#     # vertical stabilizer
-#     xle_v = [0.0, 0.14]
-#     yle_v = [0.0, 0.0]
-#     zle_v = [0.0, 1.0]
-#     chord_v = [0.7, 0.42]
-#     theta_v = [0.0, 0.0]
-#     phi_v = [0.0, 0.0]
-#     ns_v = 5
-#     nc_v = 1
-#     spacing_s_v = Uniform()
-#     spacing_c_v = Uniform()
-#     mirror_v = false
+    # horizontal stabilizer
+    xle_h = [0.0, 0.14]
+    yle_h = [0.0, 1.25]
+    zle_h = [0.0, 0.0]
+    chord_h = [0.7, 0.42]
+    theta_h = [0.0, 0.0]
+    phi_h = [0.0, 0.0]
+    ns_h = 6
+    nc_h = 1
+    spacing_s_h = Uniform()
+    spacing_c_h = Uniform()
+    mirror_h = false
 
-#     # adjust chord lengths to match AVL (which uses chord length in the x-direction)
-#     chord = @. chord/cos(theta)
-#     chord_h = @. chord_h/cos(theta_h)
-#     chord_v = @. chord_v/cos(theta_v)
+    # vertical stabilizer
+    xle_v = [0.0, 0.14]
+    yle_v = [0.0, 0.0]
+    zle_v = [0.0, 1.0]
+    chord_v = [0.7, 0.42]
+    theta_v = [0.0, 0.0]
+    phi_v = [0.0, 0.0]
+    ns_v = 5
+    nc_v = 1
+    spacing_s_v = Uniform()
+    spacing_c_v = Uniform()
+    mirror_v = false
 
-#     Sref = 9.0
-#     cref = 0.9
-#     bref = 10.0
-#     rref = [0.5, 0.0, 0.0]
-#     Vinf = 1.0
-#     ref = Reference(Sref, cref, bref, rref, Vinf)
+    # adjust chord lengths to match AVL (which uses chord length in the x-direction)
+    chord = @. chord/cos(theta)
+    chord_h = @. chord_h/cos(theta_h)
+    chord_v = @. chord_v/cos(theta_v)
 
-#     alpha = 5.0*pi/180
-#     beta = 0.0
-#     Omega = [0.0; 0.0; 0.0]
-#     fs = Freestream(Vinf, alpha, beta, Omega)
+    Sref = 9.0
+    cref = 0.9
+    bref = 10.0
+    rref = [0.5, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
 
-#     symmetric = [true, true, false]
+    alpha = 5.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
 
-#     # horseshoe vortices
-#     wgrid, wing = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
-#         mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    symmetric = [true, true, false]
 
-#     hgrid, htail = wing_to_surface_panels(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
-#         mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
-#     translate!(htail, [4.0, 0.0, 0.0])
+    # horseshoe vortices
+    wgrid, wratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+    _, _, wing = grid_to_surface_panels(wgrid; ratios=wratio)
 
-#     vgrid, vtail = wing_to_surface_panels(xle_v, yle_v, zle_v, chord_v, theta_v, phi_v, ns_v, nc_v;
-#         mirror=mirror_v, spacing_s=spacing_s_v, spacing_c=spacing_c_v)
-#     translate!(vtail, [4.0, 0.0, 0.0])
+    hgrid, hratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(hgrid, [4.0, 0.0, 0.0])
+    _, _, htail = grid_to_surface_panels(hgrid; ratios=hratio)
 
-#     grids = [wgrid, hgrid, vgrid]
-#     surfaces = [wing, htail, vtail]
-#     surface_id = [1, 2, 3]
+    vgrid, vratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
+        mirror=mirror_h, spacing_s=spacing_s_h, spacing_c=spacing_c_h)
+    translate!(vgrid, [4.0, 0.0, 0.0])
+    _, _, vtail = grid_to_surface_panels(vgrid; ratios=vratio)
 
-#     # t
-#     t = range(0.0, 10.0, step=0.2)
-#     dt = t[2:end] - t[1:end-1]
+    grids = [wgrid, hgrid, vgrid]
+    surfaces = [wing, htail, vtail]
+    surface_id = [1, 2, 3]
 
-#     system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
+    # t
+    t = range(0.0, 10.0, step=0.2)
+    dt = t[2:end] - t[1:end-1]
 
-#     # extract forces at each time step
-#     CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
-# end
+    system, surface_history, property_history, wake_history = unsteady_analysis(surfaces, ref, fs, dt; symmetric)
+
+    # extract forces at each time step
+    CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
+end
 
 @testset "OpenVSP Geometry Import" begin
     Sref = 45.0
