@@ -82,12 +82,13 @@ function nonlinear_analysis!(system)
         for j in eachindex(sections)
             total_chord = 0.0
             section = sections[j]
+            c_hat .= surface[section.panels[end]].rbc - surface[section.panels[1]].rtc
+            c_hat ./= norm(c_hat)
+            n_hat .= cross(c_hat, surface[section.panels[end]].rbr - surface[section.panels[1]].rtl)
+            n_hat ./= norm(n_hat)
+
             for k in eachindex(section.panels)
-                panel = surface[section.panels[k]]
-                total_chord += panel.chord
-                n_hat .= panel.ncp
-                c_hat .= panel.rbc - panel.rcp
-                c_hat ./= norm(c_hat)
+                total_chord += surface[section.panels[k]].chord
                 v .= properties[section.panels[k]].velocity_from_streamwise
                 vx[k] = dot(v, n_hat)
                 vy[k] = dot(v, c_hat)
