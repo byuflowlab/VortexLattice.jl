@@ -398,8 +398,8 @@ end
 ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
 # overwrite normal vector for each panel
-for i = 1:length(system.surfaces)
-    system.surfaces[i] = set_normal(system.surfaces[i], ncp)
+for i = 1:length(system.surfaces[1])
+    system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
 
 # perform steady state analysis
@@ -790,7 +790,7 @@ write_vtk("wing-tail", system)
 
 ![](wing-tail.png)
 
-<!-- ## Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight
+## Sudden Acceleration of a Rectangular Wing into a Constant-Speed Forward Flight
 
 This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.
 
@@ -865,7 +865,7 @@ for i = 1:length(AR)
     grids = [grid]
     ratios = [ratio]
 
-    grid, ratio, surface = grid_to_surface_panels(grids; ratios)
+    grid, ratio, surface = grid_to_surface_panels(grid; ratios=ratio)
     surfaces = [surface]
 
     # run analysis
