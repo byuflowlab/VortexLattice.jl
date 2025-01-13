@@ -398,8 +398,8 @@ end
 ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
 # overwrite normal vector for each panel
-for i = 1:length(system.surface)
-    system.surface[i] = set_normal(system.surface[i], ncp)
+for i = 1:length(system.surfaces)
+    system.surfaces[i] = set_normal(system.surfaces[i], ncp)
 end
 
 # perform steady state analysis
@@ -609,7 +609,6 @@ ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/18
 for i = 1:length(system.surfaces[1])
     system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
-surfaces[1] = system.surfaces[1]
 
 # perform steady state analysis
 steady_analysis!(system, ref, fs; symmetric=symmetric)
@@ -742,7 +741,7 @@ for i = 1:length(system.surfaces[1])
     system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
 
-system = steady_analysis(surfaces, ref, fs; symmetric=symmetric, surface_id=surface_id)
+steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
 CF, CM = body_forces(system; frame=Stability())
 
