@@ -23,13 +23,13 @@ Generate a grids, ratios, sections, invert_normals from a rotor file. Explained 
  - `initial_azimuthal_angle`: Initial azimuthal angle of the rotor. Defaults to 0.0.
 """
 function generate_rotor(rotor_file::String, data_path; optargs...)
-    Rtip, Rhub, B, blade_file = read_rotor(rotor_file, data_path)
+    Rtip, Rhub, B, blade_file = _read_rotor(rotor_file, data_path)
 
-    return generate_rotor(Rtip, Rhub, B, blade_file,
+    return _generate_rotor(Rtip, Rhub, B, blade_file,
                             data_path; optargs...)
 end
 
-function read_rotor(rotor_file::String, data_path)
+function _read_rotor(rotor_file::String, data_path)
 
     # Path to rotor files
     rotor_path = joinpath(data_path, "rotors")
@@ -43,7 +43,7 @@ function read_rotor(rotor_file::String, data_path)
     return Rtip, Rhub, B, blade_file
 end
 
-function read_blade(blade_file::String, data_path)
+function _read_blade(blade_file::String, data_path)
 
     # Path to rotor files
     rotor_path = joinpath(data_path, "rotors")
@@ -73,18 +73,18 @@ function read_blade(blade_file::String, data_path)
     return chorddist, pitchdist, sweepdist, heightdist, airfoil_files, airfoil_reference
 end
 
-function generate_rotor(Rtip::Real, Rhub::Real, B::Int, blade_file::String,
+function _generate_rotor(Rtip::Real, Rhub::Real, B::Int, blade_file::String,
     data_path; optargs...)
 
     (chorddist, pitchdist, sweepdist, heightdist,
-    airfoil_files, airfoil_reference) = read_blade(blade_file, data_path)
+    airfoil_files, airfoil_reference) = _read_blade(blade_file, data_path)
 
-    return generate_rotor(Rtip, Rhub, B, chorddist, pitchdist, sweepdist,
+    return _generate_rotor(Rtip, Rhub, B, chorddist, pitchdist, sweepdist,
                             heightdist, airfoil_files, airfoil_reference,
                             data_path; optargs...)
 end
 
-function generate_rotor(Rtip, Rhub, B::Int,
+function _generate_rotor(Rtip, Rhub, B::Int,
     chorddist,
     pitchdist,
     sweepdist,
@@ -111,13 +111,13 @@ function generate_rotor(Rtip, Rhub, B::Int,
         push!(airfoil_contours, (r, rfl, clcurve_file))
     end
 
-    return generate_rotor(Rtip, Rhub, B,
+    return _generate_rotor(Rtip, Rhub, B,
             chorddist, pitchdist, sweepdist, heightdist,
             airfoil_contours, airfoil_reference,
             data_path; optargs...)
 end
 
-function generate_rotor(Rtip, Rhub, B::Int,
+function _generate_rotor(Rtip, Rhub, B::Int,
     chorddist,
     pitchdist,
     sweepdist,
