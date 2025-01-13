@@ -5,8 +5,8 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Getting Started" => "guide.md",
-        "Nonlinear VLM" => "nonlinear.md",
         "Examples" => "examples.md",
+        "Advanced Usage" => "advanced.md",
         "Library" => "library.md",
         "Theory" => "theory.md"
     ],

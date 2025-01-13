@@ -1,17 +1,35 @@
 
 """
-    generate_rotor(rotor_file::String; data_path=".",optargs...)
+    generate_rotor(rotor_file::String, data_path="."; optargs...)
 
-Generate a rotor from a rotor file. The rotor file follows the same format as FLOWUnsteady.jl:
+Generate a grids, ratios, sections, invert_normals from a rotor file. Explained in the docs:
+
+ # Arguments
+ - `rotor_file`: File with rotor parameters
+ - `data_path`: Path to the rotor_file folder
+
+ # Keyword Arguments
+ - `zero_at_root`: If true, the airfoil positions are defined from the root,
+    otherwise from the center of the hub. Defaults to false.
+ - `polar_in_radians`: If true, the airfoil polars are in radians, otherwise in degrees.
+    Defaults to false.
+ - `turbine_flag`: If true, the rotor is a turbine, otherwise a propeller. Defaults to false.
+    If the true then the angle of attack is inverted in the nonlinear solver.
+ - `clockwise`: If true, the rotor is intended to rotate clockwise, otherwise counter-clockwise. Defaults to false.
+ - `ns`: Number of spanwise panels. Defaults to 10.
+ - `nc`: Number of chordwise panels. Defaults to 1.
+ - `spacing_s`: Spanwise spacing. Defaults to `VortexLattice.Sine()`.
+ - `spacing_c`: Chordwise spacing. Defaults to `VortexLattice.Uniform()`.
+ - `initial_azimuthal_angle`: Initial azimuthal angle of the rotor. Defaults to 0.0.
 """
-function generate_rotor(rotor_file::String; data_path=".",optargs...)
-    Rtip, Rhub, B, blade_file = read_rotor(rotor_file; data_path=data_path)
+function generate_rotor(rotor_file::String, data_path; optargs...)
+    Rtip, Rhub, B, blade_file = read_rotor(rotor_file, data_path)
 
-    return generate_rotor(Rtip, Rhub, B, blade_file;
-                            data_path=data_path, optargs...)
+    return generate_rotor(Rtip, Rhub, B, blade_file,
+                            data_path; optargs...)
 end
 
-function read_rotor(rotor_file::String; data_path=".")
+function read_rotor(rotor_file::String, data_path)
 
     # Path to rotor files
     rotor_path = joinpath(data_path, "rotors")
@@ -25,7 +43,7 @@ function read_rotor(rotor_file::String; data_path=".")
     return Rtip, Rhub, B, blade_file
 end
 
-function read_blade(blade_file::String; data_path=def_data_path)
+function read_blade(blade_file::String, data_path)
 
     # Path to rotor files
     rotor_path = joinpath(data_path, "rotors")
@@ -55,15 +73,15 @@ function read_blade(blade_file::String; data_path=def_data_path)
     return chorddist, pitchdist, sweepdist, heightdist, airfoil_files, airfoil_reference
 end
 
-function generate_rotor(Rtip::Real, Rhub::Real, B::Int, blade_file::String;
-    data_path=def_data_path, optargs...)
+function generate_rotor(Rtip::Real, Rhub::Real, B::Int, blade_file::String,
+    data_path; optargs...)
 
     (chorddist, pitchdist, sweepdist, heightdist,
-    airfoil_files, airfoil_reference) = read_blade(blade_file; data_path=data_path)
+    airfoil_files, airfoil_reference) = read_blade(blade_file, data_path)
 
     return generate_rotor(Rtip, Rhub, B, chorddist, pitchdist, sweepdist,
-                            heightdist, airfoil_files, airfoil_reference;
-                            data_path=data_path, optargs...)
+                            heightdist, airfoil_files, airfoil_reference,
+                            data_path; optargs...)
 end
 
 function generate_rotor(Rtip, Rhub, B::Int,
@@ -72,9 +90,10 @@ function generate_rotor(Rtip, Rhub, B::Int,
     sweepdist,
     heightdist,
     airfoil_files::Array{Tuple{TF,String,String},1},
-    airfoil_reference;
+    airfoil_reference,
+    data_path;
     # INPUT OPTIONS
-    data_path=def_data_path, optargs...) where TF
+    optargs...) where TF
 
     # Read airfoil contours
     # Airfoils along the blade as
@@ -94,8 +113,8 @@ function generate_rotor(Rtip, Rhub, B::Int,
 
     return generate_rotor(Rtip, Rhub, B,
             chorddist, pitchdist, sweepdist, heightdist,
-            airfoil_contours, airfoil_reference;
-            data_path=data_path, optargs...)
+            airfoil_contours, airfoil_reference,
+            data_path; optargs...)
 end
 
 function generate_rotor(Rtip, Rhub, B::Int,
@@ -104,11 +123,11 @@ function generate_rotor(Rtip, Rhub, B::Int,
     sweepdist,
     heightdist,
     airfoil_contours,
-    airfoil_reference;
+    airfoil_reference,
+    data_path;
     # INPUT OPTIONS
     zero_at_root=false,
     polar_in_radians=false,
-    data_path=default_database,
     # PROCESSING OPTIONS
     turbine_flag=false,
     clockwise=false,
@@ -125,6 +144,10 @@ function generate_rotor(Rtip, Rhub, B::Int,
     end
 
     yle = chorddist[:,1] .* Rtip
+    if zero_at_root
+        yle = (Rhub .+ yle .* (Rtip-Rhub))
+    end
+
     chord = chorddist[:,2] .* Rtip
     theta = deg2rad.(pitchdist[:,2]) * clockwise_mod
     xle = sweepdist[:,2] .* Rtip

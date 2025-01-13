@@ -23,6 +23,10 @@ end
 function grid_to_sections(grid, airfoils; 
                     ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
                     contours=zeros(1,1))
+
+    display(grid)
+    display(airfoils)
+    error
                     
     _, _, surface = grid_to_surface_panels(grid; ratios)
     ns = size(surface, 2)
