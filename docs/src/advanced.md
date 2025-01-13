@@ -3,13 +3,13 @@
 ## Nonlinear Vortex Lattice (Still under development)
 To incorporate airfoil polars a nonlinear vortex lattice method is used. In order to use this method system.sections must be correctly populated.
 
-```julia
+```
 system = System(grids; sections)
 ```
 
 sections is a vector of vector of SectionProperties objects. The length of grids and sections must be the same, for each grid there is a vector of SectionProperties. These vectors of section properties are created as follows:
 
-```julia
+```
 section = grid_to_sections(grid, airfoils)
 ```
 
@@ -17,7 +17,7 @@ If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each 
 
 To perfrom a nonlinear analysis a steady_analysis with no trailing vorticies must be performed first.
 
-```julia
+```
 system = System(grids; sections)
 trailing_vortices = Vector{Bool}(undef,length(grids))
 fill!(trailing_vortices, false)
@@ -32,7 +32,7 @@ nonlinear_analysis!(system)
 ## Rotors
 For convenience some functionality is provided for generating rotors that are compatible with the nonlinear vortex lattice analysis. **generate_rotor** provides grids, ratios, sections, and invert_normals that can be used to create the rotor in the system.
 
-```julia
+```
 grids, ratios, sections, invert_normals = generate_rotor(rotor_file, data_path)
 system = System(grids; ratios, sections, invert_normals)
 ```
