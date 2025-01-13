@@ -192,7 +192,10 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 end
 
 """
-    grid_to_surface_panels(xyz; mirror = false, fcore = (c, Δs) -> 1e-3)
+    grid_to_surface_panels(xyz;
+        ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
+        mirror = false,
+        fcore = (c, Δs) -> 1e-3)
 
 Construct a set of panels with associated vortex rings given a potentially curved
 lifting surface defined by a grid with dimensions (3, i, j) where `i` corresponds

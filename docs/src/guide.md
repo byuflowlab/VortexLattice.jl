@@ -50,7 +50,7 @@ The last step in defining our geometry is to combine all grids in a single vecto
 
 ```@example guide
 grids = [grid]
-ratios = [ratios]
+ratios = [ratio]
 system = System(grids; ratios)
 nothing #hide
 ```
