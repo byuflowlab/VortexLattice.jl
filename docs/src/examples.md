@@ -1019,7 +1019,7 @@ for i = 1:length(AR)
         mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
     # create vector containing surfaces at each time step
-    _, _, surface = grid_to_surface_panels(grid; ratio)
+    _, _, surface = grid_to_surface_panels(grid; ratios = ratio)
     surfaces = [[VortexLattice.translate(surface,
         -t[it]*[cos(alpha), 0, sin(alpha)])] for it = 1:length(t)]
 
@@ -1159,16 +1159,17 @@ t = range(0.0, 7.0, step=1/8)
 dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
 
 # create vortex rings
-grid, surface = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, _ = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-_, _, surface = grid_to_surface_panels(grid; ratio)
+_, _, surface = grid_to_surface_panels(grid) # Uniform spacing means ratios are not needed
 
-# create vector containing all surfaces
+# create vector containing all surfaces and grids
 surfaces = [surface]
+grids = [grid]
 
 # run steady analysis
-system = steady_analysis(surfaces, ref, fs; symmetric)
+system = steady_analysis(grids, ref, fs; symmetric)
 
 # extract steady forces
 CFs, CMs = body_forces(system; frame=Wind())
@@ -1296,10 +1297,10 @@ for i = 1:length(k)
     fs = trajectory_to_freestream(dt; Xdot, Zdot)
 
     # surface panels
-    grid, surface = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+    grid, _ = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
         mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-    _, _, surface = grid_to_surface_panels(grid; ratio)
+    _, _, surface = grid_to_surface_panels(grid)
 
     # create vector containing all surfaces
     surfaces = [surface]
