@@ -80,6 +80,8 @@ end
 
 """
     nonlinear_analysis!(system)
+
+Perform a nonlinear analysis on the system. This function will calculate the angle of attack, lift, and drag coefficients for each section in the system.
 """
 
 function nonlinear_analysis!(system)
