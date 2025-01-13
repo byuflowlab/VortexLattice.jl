@@ -319,6 +319,9 @@ grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
 grids = [grid]
 ratios = [ratio]
 
+# create the system object
+system = System(grids; ratios)
+
 # perform steady state analysis
 steady_analysis!(system, ref, fs; symmetric=symmetric)
 
