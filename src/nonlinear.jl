@@ -1,5 +1,8 @@
 # This file exists to allow for the nonlinear VLM solver that takes into account airfoil polars
 
+"""
+    SectionProperties
+"""
 struct SectionProperties{TF}
     α::Array{TF,0}
     cl::Array{TF,0}
@@ -20,6 +23,11 @@ function SectionProperties(panels_indicies, gammas, area, airfoil, contour)
     return SectionProperties(α, cl, cd, panels_indicies, gammas, area, force, airfoil, contour)
 end
 
+"""
+    grid_to_sections(grid, airfoils; 
+                    ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
+                    contours=zeros(1,1))
+"""
 function grid_to_sections(grid, airfoils; 
                     ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
                     contours=zeros(1,1))
