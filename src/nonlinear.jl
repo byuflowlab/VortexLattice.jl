@@ -78,6 +78,10 @@ function redefine_gamma_index!(sections)
     end
 end
 
+"""
+    nonlinear_analysis!(system)
+"""
+
 function nonlinear_analysis!(system)
     vel = zeros(2)
     n_hat = zeros(3)
