@@ -6,6 +6,7 @@ makedocs(;
         "Home" => "index.md",
         "Getting Started" => "guide.md",
         "Examples" => "examples.md",
+        "Advanced Usage" => "advanced.md",
         "Library" => "library.md",
         "Theory" => "theory.md"
     ],

@@ -35,21 +35,23 @@ spacing_c = Uniform() # chordwise discretization scheme
 nothing #hide
 ```
 
-We generate our lifting surface using `wing_to_surface_panels`.  We use the keyword argument `mirror` to mirror our geometry across the X-Y plane.  A grid with the panel corners and a matrix of vortex lattice panels representing the surface of the wing is returned from this function.  Only the latter is needed for the analysis. The former is provided primarily for the user's convenience, but may also used to find lifting line properties (as will be shown later in this guide).
+We generate our lifting surface grid using `wing_to_grid`.  We use the keyword argument `mirror` to mirror our geometry across the X-Y plane.  A grid with the panel corners and a vector of ratios for control point placement are returned. The latter is not needed if all spacings are set to `Uniform()`.
 
 ```@example guide
-grid, surface = wing_to_surface_panels(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
 fc = fc, spacing_s=spacing_s, spacing_c=spacing_c, mirror=true)
 nothing #hide
 ```
 
-We could have also generated our lifting surface from a pre-existing grid using
+We can generate the lifting surface from the grid and ratios using
 `grid_to_surface_panels`.
 
-The last step in defining our geometry is to combine all surfaces in a single vector.  Since we only have one surface, we create a vector with a single element.
+The last step in defining our geometry is to combine all grids in a single vector and all our ratios into a single vector.  Since we only have one grid, we create two vectors with single elements. These are loaded into `System`. 
 
 ```@example guide
-surfaces = [surface]
+grids = [grid]
+ratios = [ratio]
+system = System(grids; ratios)
 nothing #hide
 ```
 
@@ -90,11 +92,11 @@ We are now ready to perform a steady state analysis. We do so by calling the `st
    argument `derivatives`
 
 ```@example guide
-system = steady_analysis(surfaces, ref, fs; symmetric)
+steady_analysis!(system, ref, fs; symmetric)
 nothing #hide
 ```
 
-The result of our analysis is an object of type `system` which holds the system state.  Note that the keyword argument `symmetric` is not strictly necessary, since by default it is set to false for each surface.
+The result of our analysis is in the system.  Note that the keyword argument `symmetric` is not strictly necessary, since by default it is set to false for each surface.
 
 Once we have performed our steady state analysis (and associated near field analysis) we can extract the body force/moment coefficients using the function `body_forces`. These forces are returned in the reference frame specified by the keyword argument `frame`, which defaults to the body reference frame.
 
@@ -116,16 +118,10 @@ CDiff = far_field_drag(system)
 nothing #hide
 ```
 
-Sectional coefficients may be calculated using the `lifting_line_properties` function.
+Sectional coefficients may be calculated using the `lifting_line_coefficients` function.
 ```@example guide
-# combine all grid representations of surfaces into a single vector
-grids = [grid]
-
-# calculate lifting line geometry
-r, c = lifting_line_geometry(grids)
-
 # calculate lifting line coefficients
-cf, cm = lifting_line_coefficients(system, r, c; frame=Body())
+cf, cm = lifting_line_coefficients(system; frame=Body())
 nothing #hide
 ```
 These coefficients are defined as ``c_f = \frac{F'}{q_\infty c}`` and ``c_m = \frac{M'}{q_\infty c^2}``, respectively, where ``F'`` is the force per unit length
@@ -177,9 +173,7 @@ nothing #hide
 Visualizing the geometry (and results) may be done in Paraview after writing the associated visualization files using `write_vtk`.
 
 ```julia
-properties = get_surface_properties(system)
-
-write_vtk("simplewing", surfaces, properties)
+write_vtk("simplewing", system)
 ```
 
 ![](simple-guide.png)

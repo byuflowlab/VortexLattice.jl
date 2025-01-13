@@ -15,6 +15,8 @@ Panel specific properties calculated during the vortex lattice method analysis.
  - `cfr`: Force on the right bound vortex from this panel's vortex ring, as
     calculated by the Kutta-Joukowski theorem, normalized by the reference
     dynamic pressure and area
+ - `velocity_from_streamwise`: Local velocity at the panel's bound vortex center
+    excluding the induced velocity from the bound vorticies, not normalized
 """
 struct PanelProperties{TF}
     gamma::TF
@@ -22,15 +24,16 @@ struct PanelProperties{TF}
     cfb::SVector{3, TF}
     cfl::SVector{3, TF}
     cfr::SVector{3, TF}
+    velocity_from_streamwise::SVector{3, TF}
 end
 
 # constructor
-function PanelProperties(gamma, velocity, cfb, cfl, cfr)
+function PanelProperties(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 
     TF = promote_type(typeof(gamma), typeof(velocity), eltype(cfb), eltype(cfl),
-        eltype(cfr))
+        eltype(cfr), eltype(velocity_from_streamwise))
 
-    return PanelProperties{TF}(gamma, velocity, cfb, cfl, cfr)
+    return PanelProperties{TF}(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 end
 
 Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
@@ -46,7 +49,12 @@ Contains pre-allocated storage for internal system variables.
  - `w`: Normal velocity at the control points from external sources and wakes
  - `Γ`: Circulation strength of the surface panels
  - `V`: Velocity at the wake vertices for each surface
+ - `grids`: Grids of the surfaces, represented by matrices of vertices
+ - `ratios`: Ratios of the locations of each control point on each panel
  - `surfaces`: Surfaces, represented by matrices of surface panels
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+        be inverted (used for the nonlinear VLM)
+ - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
  - `properties`: Surface panel properties for each surface
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
@@ -79,7 +87,11 @@ struct System{TF}
     w::Vector{TF}
     Γ::Vector{TF}
     V::Vector{Matrix{SVector{3,TF}}}
+    grids::Vector{<:AbstractArray{TF, 3}}
+    ratios::Vector{Array{TF,3}}
     surfaces::Vector{Matrix{SurfacePanel{TF}}}
+    invert_normals::Vector{Bool}
+    sections::Vector{Vector{SectionProperties{TF}}}
     properties::Vector{Matrix{PanelProperties{TF}}}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
@@ -125,9 +137,14 @@ variables
         where `nc` is the number of chordwise panels and `ns` is the number of
         spanwise panels
 
-# Keyword Arguments:
- - `nw`: Number of chordwise wake panels to initialize for each surface. Defaults to
-    zero wake panels for each surface.
+# Keyword Arguments
+ - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
+    panels on each surface
+ - `grids`: Grids of the surfaces, represented by matrices of vertices
+ - `ratios`: Ratios of the locations of each control point on each panel
+ - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+    be inverted
 """
 System(args...; kwargs...)
 
@@ -143,7 +160,7 @@ function System(TF::Type, grids::AbstractVector{<:AbstractArray{<:Any, 3}}; kwar
     nc = size.(grids, 2) .- 1
     ns = size.(grids, 3) .- 1
 
-    return System(TF, nc, ns; kwargs...)
+    return System(TF, nc, ns; grids=grids, kwargs...)
 end
 
 # surface inputs, no provided type
@@ -177,8 +194,13 @@ variables
 # Keyword Arguments
  - `nw`: Number of chordwise wake panels for each surface. Defaults to zero wake
     panels on each surface
+ - `grids`: Grids of the surfaces, represented by matrices of vertices
+ - `ratios`: Ratios of the locations of each control point on each panel
+ - `sections`: Section properties for each surface (Used as part of nonlinear VLM)
+ - `invert_normals`: Flags indicating whether the normals of each surface should
+    be inverted
 """
-function System(TF::Type, nc, ns; nw = zero(nc))
+function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing, invert_normals = nothing)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -187,6 +209,26 @@ function System(TF::Type, nc, ns; nw = zero(nc))
 
     # number of surface panels
     N = sum(nc .* ns)
+
+    if isnothing(grids)
+        grids = [Array{TF,3}(undef, 3, nc[i]+1, ns[i]+1) for i = 1:nsurf]
+    end
+    if isnothing(ratios)
+        ratios = [Array{TF}(undef, 2, nc[i], ns[i]) for i = 1:nsurf]
+        for i = 1:nsurf
+            ratios[i] = ratios[i] .+ [0.5;0.75]
+        end
+    end
+
+    if isnothing(sections)
+        sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
+    else
+        redefine_gamma_index!(sections)
+    end
+
+    if isnothing(invert_normals)
+        invert_normals = fill(false, nsurf)
+    end
 
     AIC = zeros(TF, N, N)
     w = zeros(TF, N)
@@ -217,9 +259,9 @@ function System(TF::Type, nc, ns; nw = zero(nc))
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    return System{TF}(AIC, w, Γ, V, surfaces, properties, wakes, trefftz,
-        reference, freestream, symmetric, nwake, surface_id, wake_finite_core,
-        trailing_vortices, xhat, near_field_analysis, derivatives,
+    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, invert_normals, sections, 
+        properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
+        wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
         Vv, Vte, dΓdt)
 end

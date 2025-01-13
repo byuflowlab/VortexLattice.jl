@@ -49,12 +49,12 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `derivatives`: Flag indicating whether the derivatives with respect
     to the freestream variables should be calculated. Defaults to `true`.
 """
-function steady_analysis(surfaces, reference, freestream; kwargs...)
+function steady_analysis(grids, reference, freestream; kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces)
+    system = System(grids)
 
-    return steady_analysis!(system, surfaces, reference, freestream; kwargs...,
+    return steady_analysis!(system, reference, freestream; kwargs...,
         calculate_influence_matrix = true)
 end
 
@@ -63,13 +63,13 @@ end
 
 Pre-allocated version of `steady_analysis`.
 """
-function steady_analysis!(system, surfaces, ref, fs;
-    symmetric = fill(false, length(surfaces)),
-    wakes = [Matrix{WakePanel{Float64}}(undef, 0, size(surfaces[i],2)) for i = 1:length(surfaces)],
+function steady_analysis!(system, ref, fs;
+    symmetric = fill(false, length(system.surfaces)),
+    wakes = [Matrix{WakePanel{Float64}}(undef, 0, size(system.surfaces[i],2)) for i = 1:length(system.surfaces)],
     nwake = size.(wakes, 1),
-    surface_id = 1:length(surfaces),
-    wake_finite_core = fill(true, length(surfaces)),
-    trailing_vortices = fill(true, length(surfaces)),
+    surface_id = 1:length(system.surfaces),
+    wake_finite_core = fill(true, length(system.surfaces)),
+    trailing_vortices = fill(true, length(system.surfaces)),
     xhat = SVector(1, 0, 0),
     additional_velocity = nothing,
     fcore = (c, Δs) -> 1e-3,
@@ -78,10 +78,7 @@ function steady_analysis!(system, surfaces, ref, fs;
     derivatives = true)
 
     # number of surfaces
-    nsurf = length(surfaces)
-
-    # check if input is a grid
-    grid_input = typeof(surfaces) <: AbstractVector{<:AbstractArray{<:Any, 3}}
+    nsurf = length(system.surfaces)
 
     # if only one value is provided, use it for all surfaces
     symmetric = isa(symmetric, Number) ? fill(symmetric, nsurf) : symmetric
@@ -90,17 +87,8 @@ function steady_analysis!(system, surfaces, ref, fs;
     wake_finite_core = isa(wake_finite_core, Number) ? fill(wake_finite_core, nsurf) : wake_finite_core
     trailing_vortices = isa(trailing_vortices, Number) ? fill(trailing_vortices, nsurf) : trailing_vortices
 
-    # update surface panels stored in `system`
-    if grid_input
-        # generate and store surface panels
-        for isurf = 1:nsurf
-            update_surface_panels!(system.surfaces[isurf], surfaces[isurf]; fcore)
-        end
-    else
-        # store provided surface panels
-        for isurf = 1:nsurf
-            system.surfaces[isurf] .= surfaces[isurf]
-        end
+    for isurf = 1:nsurf
+        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore)
     end
 
     # update other parameters stored in `system`
@@ -359,7 +347,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
     if eltype(initial_surfaces) <: AbstractArray{<:Any, 3}
         # initial surfaces are input as a grid, convert to surface panels
         for isurf = 1:nsurf
-            update_surface_panels!(system.surfaces[isurf], initial_surfaces[isurf]; fcore)
+            update_surface_panels!(system.surfaces[isurf], initial_surfaces[isurf]; fcore, ratios = system.ratios[isurf])
         end
     else
         # initial surfaces are input as matrices of surface panels
@@ -538,7 +526,7 @@ function propagate_system!(system, surfaces, fs, dt;
             # set new surface shape...
             if grid_input
                 # ...based on grid inputs
-                update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore)
+                update_surface_panels!(current_surfaces[isurf], surfaces[isurf]; fcore, ratios = system.ratios[isurf])
             else
                 # ...based on surface panels
                 current_surfaces[isurf] .= surfaces[isurf]

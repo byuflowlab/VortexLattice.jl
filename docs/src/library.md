@@ -19,7 +19,7 @@ SurfacePanel()
 WakePanel
 WakePanel()
 grid_to_surface_panels
-wing_to_surface_panels
+wing_to_grid
 lifting_line_geometry
 lifting_line_geometry!
 read_degengeom
@@ -30,6 +30,9 @@ translate!
 rotate
 rotate!
 reflect(surface::AbstractMatrix)
+generate_rotor
+SectionProperties
+grid_to_sections
 ```
 
 ### Reference Parameters and Frames
@@ -55,6 +58,7 @@ steady_analysis
 steady_analysis!
 unsteady_analysis
 unsteady_analysis!
+nonlinear_analysis!
 ```
 
 ### Near Field Forces and Moments

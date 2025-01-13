@@ -5,9 +5,17 @@ using StaticArrays
 using FLOWMath
 using WriteVTK
 using VSPGeom
+using CCBlade
+using DelimitedFiles
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
+
+include("nonlinear.jl")
+export SectionProperties, grid_to_sections, nonlinear_analysis!
+
+include("rotors.jl")
+export generate_rotor
 
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
@@ -18,7 +26,7 @@ export Wake
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
-export grid_to_surface_panels, wing_to_surface_panels
+export grid_to_surface_panels, wing_to_grid
 export lifting_line_geometry, lifting_line_geometry!
 export translate, translate!, rotate, rotate!, reflect
 
