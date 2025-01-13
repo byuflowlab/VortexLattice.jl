@@ -58,7 +58,6 @@ steady_analysis
 steady_analysis!
 unsteady_analysis
 unsteady_analysis!
-nonlinear_analysis!
 ```
 
 ### Near Field Forces and Moments

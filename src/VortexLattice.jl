@@ -12,7 +12,7 @@ using DelimitedFiles
 const RHO = 1.0
 
 include("nonlinear.jl")
-export SectionProperties, grid_to_sections, nonlinear_analysis!
+export SectionProperties, grid_to_sections#, nonlinear_analysis!
 
 include("rotors.jl")
 export generate_rotor
