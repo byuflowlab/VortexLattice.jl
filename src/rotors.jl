@@ -9,6 +9,9 @@ Generate a grids, ratios, sections, invert_normals from a rotor file. Explained 
  - `data_path`: Path to the rotor_file folder
 
  # Keyword Arguments
+ - `interpolate_airfoils_linear`: If true, the airfoil polars are interpolated linearly between the airfoils.
+    Defaults to false.
+ - `interpolate_airfoils_akima`: If true, the airfoil polars are interpolated using Akima splines between the airfoils.
  - `zero_at_root`: If true, the airfoil positions are defined from the root,
     otherwise from the center of the hub. Defaults to false.
  - `polar_in_radians`: If true, the airfoil polars are in radians, otherwise in degrees.
@@ -125,6 +128,8 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     airfoil_contours,
     airfoil_reference,
     data_path;
+    interpolate_airfoils_linear=false,
+    interpolate_airfoils_akima=false,
     # INPUT OPTIONS
     zero_at_root=false,
     polar_in_radians=false,
@@ -189,7 +194,7 @@ function _generate_rotor(Rtip, Rhub, B::Int,
         airfoils[rfli] = (pos*Rtip, polar)
         contours[rfli] = contour
     end
-    airfoils, contours = redo_airfoils(airfoils,contours,surfaces[1])
+    airfoils, contours = redo_airfoils(airfoils,contours,surfaces[1]; interpolate_linear=interpolate_airfoils_linear, interpolate_akima=interpolate_airfoils_akima)
 
     section = grid_to_sections(grids[1], airfoils; ratios=ratios[1], contours)
     sections = Vector{typeof(section)}(undef,B)
@@ -239,7 +244,15 @@ function MirrorGrid!(grid::Array{Float64,3}, axis::Int)
     return grid
 end
 
-function redo_airfoils(airfoils, contours, surface)
+function redo_airfoils(airfoils, contours, surface; interpolate_linear=false, interpolate_akima=false)
+    if interpolate_akima
+        return _redo_airfoils_akima(airfoils, contours, surface)
+    else
+        return _redo_airfoils(airfoils, contours, surface; interpolate=interpolate_linear)
+    end
+end
+
+function _redo_airfoils(airfoils, contours, surface; interpolate=false)
     nc, ns = size(surface)
     new_airfoils = Vector{CCBlade.AlphaAF{Float64, String, Akima{Vector{Float64}, Vector{Float64}, Float64}}}(undef,ns)
     new_contours = Vector{eltype(contours)}(undef,ns)
@@ -254,8 +267,12 @@ function redo_airfoils(airfoils, contours, surface)
 
         index = select_airfoil_index(radius, airfoils)
 
-        new_airfoils[i] = airfoils[index][2]
-        new_contours[i] = contours[index]
+        if !interpolate
+            new_airfoils[i] = airfoils[index][2]
+            new_contours[i] = contours[index]
+        else
+            interpolate_airfoil!(new_airfoils, new_contours, airfoils, contours, radius, index, i)
+        end
     end
     return new_airfoils, new_contours
 end
@@ -267,4 +284,85 @@ function select_airfoil_index(radius, airfoils)
         end
     end
     return length(airfoils)
+end
+
+function interpolate_airfoil!(new_airfoils, new_contours, airfoils, contours, r, index, i)
+    if index >= length(airfoils)
+        new_airfoils[i] = airfoils[index][2]
+        new_contours[i] = contours[index]
+        return
+    end
+    rs = [airfoils[index][1], airfoils[index+1][1]]
+    airfoil1 = airfoils[index][2]
+    airfoil2 = airfoils[index+1][2]
+    alpha_l = max(minimum(airfoil1.alpha), minimum(airfoil2.alpha))
+    alpha_h = min(maximum(airfoil1.alpha), maximum(airfoil2.alpha))
+    alpha1 = airfoil1.alpha[alpha_h .>= airfoil1.alpha .>= alpha_l]
+    alpha2 = airfoil2.alpha[alpha_h .>= airfoil2.alpha .>= alpha_l]
+    alpha = sort(unique(union(alpha1,alpha2)))
+    cl = zeros(length(alpha))
+    cd = zeros(length(alpha))
+    coefs = zeros(2)
+
+    for i in eachindex(alpha)
+        coefs[1] = airfoil1.clspline(alpha[i])
+        coefs[2] = airfoil2.clspline(alpha[i])
+        cl[i] = FLOWMath.akima(rs,coefs,r)
+
+        coefs[1] = airfoil1.cdspline(alpha[i])
+        coefs[2] = airfoil2.cdspline(alpha[i])
+        cd[i] = FLOWMath.akima(rs,coefs,r)
+    end
+
+    new_airfoils[i] = CCBlade.AlphaAF(alpha, cl, cd, "Interpolated Airfoil from airfoils $(index) and $(index+1)")
+    new_contours[i] = contours[index]
+end
+
+function _redo_airfoils_akima(airfoils, contours, surface)
+    nc, ns = size(surface)
+    new_airfoils = Vector{CCBlade.AlphaAF{Float64, String, Akima{Vector{Float64}, Vector{Float64}, Float64}}}(undef,ns)
+    new_contours = Vector{eltype(contours)}(undef,ns)
+    alpha, splines = get_splines(airfoils)
+    cl = zeros(length(alpha))
+    cd = zeros(length(alpha))
+
+    r = zeros(3)
+    for i in 1:ns
+        r .= 0.0
+        for j in 1:nc
+            r .+= surface[j,i].rcp
+        end
+        r = r ./ nc
+        radius = norm(r)
+
+        for i in eachindex(alpha)
+            cl[i] = splines[i][1](radius)
+            cd[i] = splines[i][2](radius)
+        end
+        new_airfoils[i] = CCBlade.AlphaAF(alpha, cl, cd, "Interpolated Airfoil")
+        new_contours[i] = contours[select_airfoil_index(radius, airfoils)]
+    end
+    return new_airfoils, new_contours
+end
+
+function get_splines(airfoils)
+    alphas = Vector{Vector{Float64}}(undef,length(airfoils))
+    for i in eachindex(airfoils)
+        alphas[i] = airfoils[i][2].alpha
+    end
+    alpha = sort(unique(vcat(alphas...)))
+
+    splines = Vector{Tuple{Akima{Vector{Float64}, Vector{Float64}, Float64}, Akima{Vector{Float64}, Vector{Float64}, Float64}}}(undef,length(alpha))
+
+    radii = [airfoils[i][1] for i in eachindex(airfoils)]
+    cl = zeros(length(airfoils))
+    cd = zeros(length(airfoils))
+    for i in eachindex(alpha)
+        for j in eachindex(airfoils)
+            cl[j] = airfoils[j][2].clspline(alpha[i])
+            cd[j] = airfoils[j][2].cdspline(alpha[i])
+        end
+        splines[i] = (Akima(radii,cl), Akima(radii,cd))
+    end
+    return alpha, splines
 end
