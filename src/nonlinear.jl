@@ -145,11 +145,6 @@ function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1.0, damping=0.1, 
     return system
 end
 
-"""
-    _nonlinear_analysis!(system)
-
-Perform a nonlinear analysis iteration on the system. This function will calculate the angle of attack, lift, and drag coefficients for each section in the system.
-"""
 function _nonlinear_analysis!(system, r, damping, tol)
     converged = true
     T = eltype(system.Γ)
