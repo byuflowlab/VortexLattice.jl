@@ -15,15 +15,8 @@ section = grid_to_sections(grid, airfoils)
 
 If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each object containing a CCBlade AlphaAF object that contains the polars for the airfoil. For more information see CCBlade.jl.
 
-To perfrom a nonlinear analysis a steady_analysis with no trailing vorticies must be performed first.
-
 ```
 system = System(grids; sections)
-trailing_vortices = Vector{Bool}(undef,length(grids))
-fill!(trailing_vortices, false)
-
-steady_analysis!(system, ref, fs; symmetric, trailing_vortices)
-
 nonlinear_analysis!(system)
 ```
 

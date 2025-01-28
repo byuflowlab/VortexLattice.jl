@@ -287,6 +287,11 @@ function select_airfoil_index(radius, airfoils)
 end
 
 function interpolate_airfoil!(new_airfoils, new_contours, airfoils, contours, r, index, i)
+    if index >= length(airfoils)
+        new_airfoils[i] = airfoils[index][2]
+        new_contours[i] = contours[index]
+        return
+    end
     rs = [airfoils[index][1], airfoils[index+1][1]]
     airfoil1 = airfoils[index][2]
     airfoil2 = airfoils[index+1][2]
