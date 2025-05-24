@@ -64,6 +64,9 @@ export far_field_drag
 include("stability.jl")
 export body_derivatives, stability_derivatives
 
+include("frames.jl")
+export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, ForwardRightDown
+
 include("visualization.jl")
 export write_vtk
 
