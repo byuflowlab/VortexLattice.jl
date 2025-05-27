@@ -33,7 +33,7 @@ function update_wake_shedding_locations!(wakes, wake_shedding_locations,
     for isurf = 1:nsurf
 
         # number of spanwise panels
-        ns = size(wakes[isurf], 2)
+        ns = length(wake_shedding_locations[isurf]) - 1
 
         # update wake shedding location
         for j = 1:ns+1

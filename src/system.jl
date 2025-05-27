@@ -81,6 +81,7 @@ Contains pre-allocated storage for internal system variables.
  - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
+ - `probes`: FastMultipole probe system for FMM interactions
 """
 struct System{TF}
     AIC::Matrix{TF}
@@ -115,6 +116,7 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
+    probes::FastMultipole.ProbeSystem{TF}
 end
 
 Base.eltype(::Type{System{TF}}) where TF = TF
@@ -178,6 +180,27 @@ function System(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePan
     ns = size.(surfaces, 2)
 
     return System(TF, nc, ns; kwargs...)
+end
+
+"""
+Get the number of probes for the given surfaces.
+
+# Arguments
+- `surfaces`: Vector of matrices of surface panels (see [`SurfacePanel`](@ref))
+
+# Returns
+- Number of probes
+"""
+function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}})
+    n = 0
+    for surface in surfaces
+        nc, ns = size(surface)
+        n += nc * ns # Vcp
+        n += (nc + 1) * ns # Vh
+        n += nc * (ns + 1) # Vv
+        n += ns + 1 # Vte
+    end
+    return n
 end
 
 """
@@ -259,11 +282,146 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
+    # get number of probes
+    n_probes = get_n_probes(surfaces)
+    probes = FastMultipole.ProbeSystem{TF}(n_probes, TF)
+
     return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, invert_normals, sections, 
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
         wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt)
+        Vv, Vte, dΓdt, probes)
+end
+
+function update_probes!(system::System{TF}) where TF
+    i_probe = 1
+
+    # Vcp
+    for surface in system.surfaces
+        nc, ns = size(surface)
+        for j in 1:ns
+            for k in 1:nc
+                system.probes.position[i_probe] = surface[k, j].rcp
+                i_probe += 1
+            end
+        end
+    end
+
+    # Vh
+    for surface in system.surfaces
+        nc, ns = size(surface)
+        for j in 1:ns
+            for k in 1:nc
+                system.probes.position[i_probe] = surface[k, j].rtc
+                i_probe += 1
+            end
+            system.probes.position[i_probe] = surface[nc, j].rbc
+            i_probe += 1
+        end
+    end
+
+    # Vv
+    for surface in system.surfaces
+        nc, ns = size(surface)
+        for j in 1:ns+1
+            for k in 1:nc
+                panel = surface[k,j]
+                system.probes.position[i_probe] = (panel.rtl + panel.rbl) * 0.5
+                i_probe += 1
+            end
+        end
+        for k in 1:nc
+            panel = surface[k, ns]
+            system.probes.position[i_probe] = (panel.rtr + panel.rbr) * 0.5
+            i_probe += 1
+        end
+    end
+
+    # Vte
+    for surface in system.surfaces
+        nc, ns = size(surface)
+        for j in 1:ns
+            panel = surface[nc, j]
+            system.probes.position[i_probe] = panel.rtl
+            i_probe += 1
+        end
+        system.probes.position[i_probe] = surface[nc, ns].rtr
+        i_probe += 1
+    end
+
+    return system.probes
+end    
+
+function probes_to_surfaces!(system::System{TF}) where TF
+    i_probe = 1
+    
+    # Vcp
+    for i_surf in 1:length(system.surfaces)
+        surface = system.surfaces[i_surf]
+        vcp = system.Vcp[i_surf]
+        nc, ns = size(surface)
+
+        for j in 1:ns
+            for k in 1:nc
+                v = system.probes.velocity[i_probe]
+                vcp[k, j] += v
+                i_probe += 1
+            end
+        end
+    end
+
+    # Vh
+    for i_surf in 1:length(system.surfaces)
+        surface = system.surfaces[i_surf]
+        vh = system.Vh[i_surf]
+        nc, ns = size(surface)
+        for j in 1:ns
+            for k in 1:nc
+                v = system.probes.velocity[i_probe]
+                vh[k, j] += v
+                i_probe += 1
+            end
+            v = system.probes.velocity[i_probe]
+            vh[nc+1, j] += v
+            i_probe += 1
+        end
+    end
+
+    # Vv
+    for i_surf in 1:length(system.surfaces)
+        surface = system.surfaces[i_surf]
+        vv = system.Vv[i_surf]
+        nc, ns = size(surface)
+        for j in 1:ns
+            for k in 1:nc
+                v = system.probes.velocity[i_probe]
+                vv[k, j] += v
+                i_probe += 1
+            end
+        end
+        for k in 1:nc
+            v = system.probes.velocity[i_probe]
+            vv[k, ns+1] += v
+            i_probe += 1
+        end
+    end
+
+    # Vte
+    for i_surf in 1:length(system.surfaces)
+        surface = system.surfaces[i_surf]
+        vte = system.Vte[i_surf]
+        nc, ns = size(surface)
+        for j in 1:ns
+            v = system.probes.velocity[i_probe]
+            vte[j] += v
+            i_probe += 1
+        end
+        v = system.probes.velocity[i_probe]
+        vte[ns+1] += v
+        i_probe += 1
+    end
+
+    return nothing
 end
 
 """

@@ -22,12 +22,12 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 """
 
 
-function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, kwargs...)
+function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, xhat = system.xhat[], kwargs...)
 
     if write_surfaces && write_wakes
         write_vtk(name, system.surfaces, system.wakes, system.properties; symmetric=system.symmetric, kwargs...)
     elseif write_surfaces
-        write_vtk(name, system.surfaces, system.properties;symmetric=system.symmetric, kwargs...)
+        write_vtk(name, system.surfaces, system.properties;symmetric=system.symmetric, xhat, kwargs...)
     elseif write_wakes
         write_vtk(name, system.wakes; symmetric=system.symmetric, kwargs...)
     else
@@ -784,6 +784,27 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
 
         # circulation strength
         vtkfile["circulation"] = reshape(gamma_t, :)
+    end
+
+    return nothing
+end
+
+#--- reference frames ---#
+
+function write_vtk(name::String, frames::Vector{<:ReferenceFrame}; kwargs...)
+
+    # create paraview file
+    vtk(name) do vtkfile
+
+        # loop through all frames
+        for frame in frames
+
+            # get transformation to global frame
+
+
+            # add paraview file corresponding to the frame
+            write_vtk!(vtkfile, frame; kwargs..., frame_index = i)
+        end
     end
 
     return nothing

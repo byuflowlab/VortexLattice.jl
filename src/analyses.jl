@@ -70,7 +70,7 @@ function steady_analysis!(system, ref, fs;
     surface_id = 1:length(system.surfaces),
     wake_finite_core = fill(true, length(system.surfaces)),
     trailing_vortices = fill(true, length(system.surfaces)),
-    xhat = SVector(1, 0, 0),
+    xhat = system.xhat[],
     additional_velocity = nothing,
     fcore = (c, Δs) -> 1e-3,
     calculate_influence_matrix = true,

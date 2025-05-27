@@ -6,6 +6,8 @@ using FLOWMath
 using WriteVTK
 using VSPGeom
 using CCBlade
+using FastMultipole
+using FLOWVPM
 using DelimitedFiles
 
 # value for dimensionalizing, included just for clarity in the algorithms

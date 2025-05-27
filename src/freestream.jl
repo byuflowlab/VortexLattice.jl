@@ -233,20 +233,20 @@ function wind_to_body_derivatives(sa, ca, sb, cb)
 end
 
 """
-    freestream_velocity(freestream)
+    velocity_to_freestream(V::SVector{3}, Omega::SVector{3}=zeros(3))
 
-Computes the freestream velocity
+Given a freestream velocity vector `V` in body x-y-z coordinates (South-East-Up convention), returns a `Freestream`
+object with computed `Vinf`, `alpha`, and `beta`. Optionally, specify `Omega` (default zeros).
 """
-function freestream_velocity(fs)
-
-    Vinf = fs.Vinf
-    sa, ca = sincos(fs.alpha)
-    sb, cb = sincos(fs.beta)
-
-    return freestream_velocity(Vinf, sa, ca, sb, cb)
+function velocity_to_freestream(V::SVector{3,TF}, Omega=zero(SVector{3,TF})) where TF
+    Vinf = norm(V)
+    if iszero(Vinf)
+        return Freestream(0.0, 0.0, 0, Omega)
+    end
+    α = atan(V[3], V[1])
+    β = -asin(V[2] / Vinf)
+    return Freestream(Vinf, α, β, Omega)
 end
-
-freestream_velocity(Vinf, sa, ca, sb, cb) = Vinf*SVector(ca*cb, -sb, sa*cb)
 
 """
     freestream_velocity_derivatives(freestream)

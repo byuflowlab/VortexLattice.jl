@@ -12,7 +12,7 @@ struct SectionProperties{TF}
     panels::Vector{CartesianIndex{2}}
     gammas::Vector{CartesianIndex{1}}
     area::TF
-    force::Vector{TF}
+    force::Vector{TF} # replace with Array{SVector{TF,3},0} if you want to use StaticArrays
     airfoil::CCBlade.AlphaAF{TF, String, Akima{Vector{TF}, Vector{TF}, TF}}
     contour::Matrix{Float64}
 end
@@ -112,7 +112,9 @@ Perform a nonlinear analysis on the system.
 """
 
 function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1.0, damping=0.1, kwargs...)
-    steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
+    if !system.near_field_analysis[]
+        steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
+    end
 
     r, _ = lifting_line_geometry(system.grids)
     if max_iter < 1
@@ -240,15 +242,15 @@ function call_near_field_forces!(system)
     xhat = system.xhat[]
     
     near_field_forces!(properties, surfaces, wakes, ref, fs, Γ;
-                dΓdt = nothing, # no unsteady forces
+                dΓdt = system.dΓdt,
                 additional_velocity = nothing,
-                Vh = nothing, # no velocity due to surface motion
-                Vv = nothing, # no velocity due to surface motion
+                Vh = system.Vh,
+                Vv = system.Vv,
                 symmetric = symmetric,
                 nwake = nwake,
                 surface_id = surface_id,
                 wake_finite_core = wake_finite_core,
-                wake_shedding_locations = nothing, # shedding location at trailing edge
+                wake_shedding_locations = system.wake_shedding_location,
                 trailing_vortices = trailing_vortices,
                 xhat = xhat)
 end

@@ -1049,15 +1049,30 @@ function repeated_trailing_edge_points(surfaces::AbstractVector{<:AbstractMatrix
     return repeated_points
 end
 
+
 """
-    flipy(r)
+flipy(r)
 
 Flip sign of y-component of vector `r` (used for symmetry)
 """
-flipy(r) = SVector{3}(r[1], -r[2], r[3])
+flipy(r::AbstractVector{<:Real}) = SVector{3}(r[1], -r[2], r[3])
+
+function flipy(g::Array{<:Real, 3})
+    # flip the y-component of each grid point in the matrix
+    newg = similar(g)
+    for i = 1:size(g, 2), j = 1:size(g, 3)
+        newg[:, i, j] = flipy(g[:, i, j])
+    end
+    return newg
+end
+
+function flipy(grids::AbstractVector{<:AbstractMatrix})
+    # flip the y-component of each grid point in each grid
+    return [flipy(g) for g in grids]
+end
 
 """
-    on_symmetry_plane(args...; tol=eps())
+on_symmetry_plane(args...; tol=eps())
 
 Test whether points in `args` are on the symmetry plane (y = 0)
 """
