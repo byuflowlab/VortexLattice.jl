@@ -12,7 +12,9 @@ struct SectionProperties{TF}
     panels::Vector{CartesianIndex{2}}
     gammas::Vector{CartesianIndex{1}}
     area::TF
-    force::Vector{TF}
+    force::Array{SVector{3,TF},0} # replace with Array{SVector{3,TF},0} if you want to use StaticArrays
+    c_hat::Array{SVector{3,TF},0} # unit vector in the direction of the chord
+    n_hat::Array{SVector{3,TF},0} # unit vector normal to the section
     airfoil::CCBlade.AlphaAF{TF, String, Akima{Vector{TF}, Vector{TF}, TF}}
     contour::Matrix{Float64}
 end
@@ -21,10 +23,12 @@ function SectionProperties(panels_indicies, gammas, area, airfoil, contour)
     α = zeros()
     cl = zeros()
     cd = zeros()
-    force = zeros(3)
+    force = fill(SVector{3, eltype(α)}(0, 0, 0))
+    c_hat = fill(SVector{3, eltype(α)}(0, 0, 0))
+    n_hat = fill(SVector{3, eltype(α)}(0, 0, 0))
     Γs = zeros(3)
     λ = ones(length(panels_indicies))
-    return SectionProperties(α, cl, cd, Γs, λ, panels_indicies, gammas, area, force, airfoil, contour)
+    return SectionProperties(α, cl, cd, Γs, λ, panels_indicies, gammas, area, force, c_hat, n_hat, airfoil, contour)
 end
 
 """
@@ -112,7 +116,9 @@ Perform a nonlinear analysis on the system.
 """
 
 function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1.0, damping=0.1, kwargs...)
-    steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
+    if !system.near_field_analysis[]
+        steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
+    end
 
     r, _ = lifting_line_geometry(system.grids)
     if max_iter < 1
@@ -165,10 +171,10 @@ function _nonlinear_analysis!(system, r, damping, tol)
         for j in eachindex(sections)
             total_chord = 0.0
             section = sections[j]
-            c_hat = surface[section.panels[end]].rbc - surface[section.panels[1]].rtc
-            c_hat /= norm(c_hat)
-            n_hat = cross(c_hat, surface[section.panels[end]].rbr - surface[section.panels[1]].rtl)
-            n_hat /= norm(n_hat)
+            section.c_hat[1] = surface[section.panels[end]].rbc - surface[section.panels[1]].rtc
+            section.c_hat[1] /= norm(section.c_hat[1])
+            section.n_hat[1] = cross(section.c_hat[1], surface[section.panels[end]].rbr - surface[section.panels[1]].rtl)
+            section.n_hat[1] /= norm(section.n_hat[1])
 
             for k in eachindex(section.panels)
                 total_chord += surface[section.panels[k]].chord
@@ -186,12 +192,22 @@ function _nonlinear_analysis!(system, r, damping, tol)
                 vel[2] = vy[1]
                 vel[3] = vz[1]
             end
-            section.α[1] = atan(dot(vel, n_hat), dot(vel, c_hat)) * (-1)^system.invert_normals[i]
+            section.α[1] = atan(dot(vel, section.n_hat[1]), dot(vel, section.c_hat[1])) * (-1)^system.invert_normals[i]
             section.cl[1] = section.airfoil.clspline(section.α[1])
             section.cd[1] = section.airfoil.cdspline(section.α[1])
 
-            cr = cross(vel, (r[i][:,j+1] - r[i][:,j]))
-            section.Γs[2] = ((0.5*section.cl[1]*section.area * (dot(vel, n_hat)^2 + dot(vel, c_hat)^2)) / (sqrt(dot(cr, n_hat)^2+dot(cr, c_hat)^2))) * (-1)^system.invert_normals[i]
+            r1 = r[i][1,j+1] - r[i][1,j]
+            r2 = r[i][2,j+1] - r[i][2,j]
+            r3 = r[i][3,j+1] - r[i][3,j]
+            r_vec = SVector{3, eltype(r1)}(r1, r2, r3)
+
+            # cross product
+            cr = SVector{3, eltype(vel)}(
+                vel[2]*r_vec[3] - vel[3]*r_vec[2],
+                vel[3]*r_vec[1] - vel[1]*r_vec[3],
+                vel[1]*r_vec[2] - vel[2]*r_vec[1]
+            )
+            section.Γs[2] = ((0.5*section.cl[1]*section.area * (dot(vel, section.n_hat[1])^2 + dot(vel, section.c_hat[1])^2)) / (sqrt(dot(cr, section.n_hat[1])^2+dot(cr, section.c_hat[1])^2))) * (-1)^system.invert_normals[i]
             section.Γs[3] = section.Γs[1] + damping*(section.Γs[2] - section.Γs[1])
 
             if isnan(section.Γs[2]) || isnan(section.Γs[3])
@@ -210,7 +226,51 @@ function _nonlinear_analysis!(system, r, damping, tol)
         end
     end
     call_near_field_forces!(system)
+    update_section_forces!(system, vel, vx, vy, vz, x_c)
     return converged
+end
+
+function update_section_forces!(system, vel, vx, vy, vz, x_c)
+    for i in eachindex(system.surfaces)
+        surface = system.surfaces[i]
+        nc = size(surface, 1)
+        properties = system.properties[i]
+        sections = system.sections[i]
+        vx_view = view(vx,1:nc)
+        vy_view = view(vy,1:nc)
+        vz_view = view(vz,1:nc)
+        x_c_view = view(x_c,1:nc)
+        for j in eachindex(sections)
+            total_chord = 0.0
+            section = sections[j]
+
+            for k in eachindex(section.panels)
+                total_chord += surface[section.panels[k]].chord
+                vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity * system.reference[1].V
+            end
+
+            for k in eachindex(section.panels)
+                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
+            end
+
+            if length(section.panels) > 1
+                vel[1] = FLOWMath.akima(x_c_view, vx_view, 0.5)
+                vel[2] = FLOWMath.akima(x_c_view, vy_view, 0.5)
+                vel[3] = FLOWMath.akima(x_c_view, vz_view, 0.5)
+            else
+                vel[1] = vx[1]
+                vel[2] = vy[1]
+                vel[3] = vz[1]
+            end
+            
+            v_mag = norm(vel)
+            lift = section.cl[1] * v_mag^2 * RHO / 2 * total_chord
+            drag = section.cd[1] * v_mag^2 * RHO / 2 * total_chord
+            R = transpose([section.n_hat[1] cross(section.n_hat[1], section.c_hat[1]) section.c_hat[1]])
+            section.force[1] = R * SVector{3,eltype(vel)}(lift, 0.0, drag) ./ RHO ./ system.reference[1].V
+        end
+    end
+    return system
 end
 
 function get_coefficient_distribution(sections)
@@ -240,15 +300,15 @@ function call_near_field_forces!(system)
     xhat = system.xhat[]
     
     near_field_forces!(properties, surfaces, wakes, ref, fs, Γ;
-                dΓdt = nothing, # no unsteady forces
+                dΓdt = system.dΓdt,
                 additional_velocity = nothing,
-                Vh = nothing, # no velocity due to surface motion
-                Vv = nothing, # no velocity due to surface motion
+                Vh = system.Vh,
+                Vv = system.Vv,
                 symmetric = symmetric,
                 nwake = nwake,
                 surface_id = surface_id,
                 wake_finite_core = wake_finite_core,
-                wake_shedding_locations = nothing, # shedding location at trailing edge
+                wake_shedding_locations = nothing,#system.wake_shedding_location,
                 trailing_vortices = trailing_vortices,
                 xhat = xhat)
 end
