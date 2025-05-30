@@ -69,6 +69,7 @@ function grid_to_sections(grid, airfoils;
 
         sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i])
     end
+
     return sections
 end
 
@@ -91,12 +92,12 @@ Perform a nonlinear analysis on the system. This assumes that reference and free
 # Arguments
 - `system::System`: The system to perform the analysis on
 - `max_iter`: The maximum number of iterations to perform, default 1
-- `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1
-- `damping`: The damping factor for the iteration default 0.1
+- `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1E-6
+- `damping`: The damping factor for the iteration default 0.01
 - `kwargs...`: Additional keyword arguments for steady analysis
 
 """
-function nonlinear_analysis!(system; max_iter=1, tol=1.0, damping=0.1, kwargs...)
+function nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01, kwargs...)
     ref = system.reference[]
     fs = system.freestream[]
     return nonlinear_analysis!(system, ref, fs; max_iter=max_iter, tol=tol, damping=damping, kwargs...)
@@ -110,12 +111,12 @@ Perform a nonlinear analysis on the system.
 # Arguments
 - `system::System`: The system to perform the analysis on
 - `max_iter`: The maximum number of iterations to perform, default 1
-- `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1
-- `damping`: The damping factor for the iteration default 0.1
+- `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1E-6
+- `damping`: The damping factor for the iteration default 0.01
 - `kwargs...`: Additional keyword arguments for steady analysis
 """
 
-function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1.0, damping=0.1, kwargs...)
+function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01, kwargs...)
     if !system.near_field_analysis[]
         steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
     end
@@ -141,33 +142,43 @@ function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1.0, damping=0.1, 
         end
     end
 
-    for i in 1:max_iter
-        if _nonlinear_analysis!(system, r, damping, tol) # Calculate Γs, α, cl, and cd for each section
+    T = eltype(system.Γ)
+    vel = zeros(T,3)
+    vx = zeros(T, maximum(size.(system.surfaces,1)))
+    vy = similar(vx)
+    vz = similar(vx)
+    x_c = similar(vx)
+
+    for _ in 1:max_iter
+        if _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c) # Calculate Γs, α, cl, and cd for each section
             break
         end
     end
+    update_section_forces!(system, vel, vx, vy, vz, x_c)
     system.near_field_analysis[] = true
     system.derivatives[] = false
     return system
 end
 
-function _nonlinear_analysis!(system, r, damping, tol)
+function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
     converged = true
-    T = eltype(system.Γ)
-    vel = zeros(T,3)
-    vx = zeros(T, maximum(size.(system.surfaces,1)))
-    vy = zeros(T, maximum(size.(system.surfaces,1)))
-    vz = zeros(T, maximum(size.(system.surfaces,1)))
-    x_c = zeros(T, maximum(size.(system.surfaces,1)))
+    vel .= 0.0
+    vx .= 0.0
+    vy .= 0.0
+    vz .= 0.0
+    x_c .= 0.0
     for i in eachindex(system.surfaces)
+        sections = system.sections[i]
+        !isassigned(sections,1) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
+
         surface = system.surfaces[i]
         nc = size(surface, 1)
         properties = system.properties[i]
-        sections = system.sections[i]
         vx_view = view(vx,1:nc)
         vy_view = view(vy,1:nc)
         vz_view = view(vz,1:nc)
         x_c_view = view(x_c,1:nc)
+
         for j in eachindex(sections)
             total_chord = 0.0
             section = sections[j]
@@ -180,18 +191,21 @@ function _nonlinear_analysis!(system, r, damping, tol)
                 total_chord += surface[section.panels[k]].chord
                 vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity_from_streamwise
             end
+
             for k in eachindex(section.panels)
                 x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
             end
+
             if length(section.panels) > 1
-                vel[1] = FLOWMath.akima(x_c_view, vx_view, 0.5)
-                vel[2] = FLOWMath.akima(x_c_view, vy_view, 0.5)
-                vel[3] = FLOWMath.akima(x_c_view, vz_view, 0.5)
+                vel[1] = FLOWMath.linear(x_c_view, vx_view, 0.5)
+                vel[2] = FLOWMath.linear(x_c_view, vy_view, 0.5)
+                vel[3] = FLOWMath.linear(x_c_view, vz_view, 0.5)
             else
                 vel[1] = vx[1]
                 vel[2] = vy[1]
                 vel[3] = vz[1]
             end
+
             section.α[1] = atan(dot(vel, section.n_hat[1]), dot(vel, section.c_hat[1])) * (-1)^system.invert_normals[i]
             section.cl[1] = section.airfoil.clspline(section.α[1])
             section.cd[1] = section.airfoil.cdspline(section.α[1])
@@ -226,7 +240,6 @@ function _nonlinear_analysis!(system, r, damping, tol)
         end
     end
     call_near_field_forces!(system)
-    update_section_forces!(system, vel, vx, vy, vz, x_c)
     return converged
 end
 
@@ -254,9 +267,9 @@ function update_section_forces!(system, vel, vx, vy, vz, x_c)
             end
 
             if length(section.panels) > 1
-                vel[1] = FLOWMath.akima(x_c_view, vx_view, 0.5)
-                vel[2] = FLOWMath.akima(x_c_view, vy_view, 0.5)
-                vel[3] = FLOWMath.akima(x_c_view, vz_view, 0.5)
+                vel[1] = FLOWMath.linear(x_c_view, vx_view, 0.5)
+                vel[2] = FLOWMath.linear(x_c_view, vy_view, 0.5)
+                vel[3] = FLOWMath.linear(x_c_view, vz_view, 0.5)
             else
                 vel[1] = vx[1]
                 vel[2] = vy[1]

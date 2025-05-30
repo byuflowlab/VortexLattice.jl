@@ -1,6 +1,6 @@
 # Advanced Use Cases
 
-## Nonlinear Vortex Lattice (Still under development)
+## Nonlinear Vortex Lattice
 To incorporate airfoil polars a nonlinear vortex lattice method is used. In order to use this method system.sections must be correctly populated.
 
 ```
@@ -17,10 +17,19 @@ If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each 
 
 ```
 system = System(grids; sections)
-nonlinear_analysis!(system)
+nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01)
 ```
 
-**nonlinear_analysis!** populates the sections with angles of attack, and coefficient of lift and drag.
+**nonlinear_analysis!** populates the sections with angles of attack, coefficients of lift and drag, and force-per-unit length normalized by the density (defaulted to 1) and the reference velocity.
+
+### Warnings
+Using a significant number of spanwise panels (more than 75) with non-uniform spacing may result in non-physical behavior at the ends of the surface. In this case it is recommended to use uniform spacing.
+
+Increasing **max_iter** will result in a more accurate solution but may also introduce noise into the solution depending on the surface.
+
+Default **tol** is designed to not be achieved so that **max_iter** determines the length of the nonlinear analysis. If noise is present in the solution the solution may diverge and convergence may be impossible without reducing the **damping**.
+
+Increasing **damping** causes larger step sizes at each iteration. Larger step sizes may accelerate convergence but may also lead to noise solutions. 
 
 ## Rotors
 For convenience some functionality is provided for generating rotors that are compatible with the nonlinear vortex lattice analysis. **generate_rotor** provides grids, ratios, sections, and invert_normals that can be used to create the rotor in the system.

@@ -15,7 +15,7 @@ function bound_induced_velocity(r1, r2, finite_core, core_size)
     if finite_core
         rdot = dot(r1, r2)
         r1s, r2s, εs = nr1^2, nr2^2, core_size^2
-        f1 = cross(r1, r2)/(r1s*r2s - rdot^2 + εs*(r1s + r2s - 2*nr1*nr2))
+        f1 = cross(r1, r2)/(r1s*r2s - rdot*rdot + εs*(r1s + r2s - 2*nr1*nr2))
         f2 = (r1s - rdot)/sqrt(r1s + εs) + (r2s - rdot)/sqrt(r2s + εs)
     else
         f1 = cross(r1, r2)/(nr1*nr2 + dot(r1, r2))

@@ -283,9 +283,20 @@ rotational_velocity
 
 rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
 
-function rotational_velocity(r, Omega, rref) 
-    Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
-    return cross(r - rref, Ω)
+function rotational_velocity(r, Omega, rref)
+    # Compute tmp = r - rref without allocation
+    tmp1 = r[1] - rref[1]
+    tmp2 = r[2] - rref[2]
+    tmp3 = r[3] - rref[3]
+    # Ω = [-Omega[1], Omega[2], -Omega[3]] (standard dynamics convention)
+    Ω1 = -Omega[1]
+    Ω2 =  Omega[2]
+    Ω3 = -Omega[3]
+    # Compute cross product manually to avoid allocations
+    v1 = tmp2 * Ω3 - tmp3 * Ω2
+    v2 = tmp3 * Ω1 - tmp1 * Ω3
+    v3 = tmp1 * Ω2 - tmp2 * Ω1
+    return SVector(v1, v2, v3)
 end
 
 """
