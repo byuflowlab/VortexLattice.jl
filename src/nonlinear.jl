@@ -277,10 +277,28 @@ function update_section_forces!(system, vel, vx, vy, vz, x_c)
             end
             
             v_mag = norm(vel)
+            angle = section.α[1]
+            y_hat = cross(section.n_hat[1], section.c_hat[1])
+            # Rotate n_hat by angle about y_hat to get l_hat
+            c = cos(-angle)
+            s = sin(-angle)
+            t = 1 - c
+            x, y, z = y_hat
+            R_rot = SMatrix{3,3,eltype(vel)}(
+                t*x*x + c,     t*x*y - s*z, t*x*z + s*y,
+                t*x*y + s*z,   t*y*y + c,   t*y*z - s*x,
+                t*x*z - s*y,   t*y*z + s*x, t*z*z + c
+            )
+            l_hat = R_rot * section.n_hat[1]
+            l_hat /= norm(l_hat) # Normalize the lift direction
+            d_hat = R_rot * section.c_hat[1]
+            d_hat /= norm(d_hat) # Normalize the drag direction
+            
+            # Calculate lift and drag forces
             lift = section.cl[1] * v_mag^2 * RHO / 2 * total_chord
             drag = section.cd[1] * v_mag^2 * RHO / 2 * total_chord
-            R = transpose([section.n_hat[1] cross(section.n_hat[1], section.c_hat[1]) section.c_hat[1]])
-            section.force[1] = R * SVector{3,eltype(vel)}(lift, 0.0, drag) ./ RHO ./ system.reference[1].V
+            R = transpose([l_hat d_hat y_hat])
+            section.force[1] = R * SVector{3,eltype(vel)}(lift, drag, 0.0) ./ RHO ./ system.reference[1].V
         end
     end
     return system
