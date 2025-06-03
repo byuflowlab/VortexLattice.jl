@@ -284,7 +284,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
 
     # get number of probes
     n_probes = get_n_probes(surfaces)
-    probes = FastMultipole.ProbeSystem{TF}(n_probes, TF)
+    probes = FastMultipole.ProbeSystem(n_probes, TF)
 
     return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, invert_normals, sections, 
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
@@ -323,7 +323,7 @@ function update_probes!(system::System{TF}) where TF
     # Vv
     for surface in system.surfaces
         nc, ns = size(surface)
-        for j in 1:ns+1
+        for j in 1:ns
             for k in 1:nc
                 panel = surface[k,j]
                 system.probes.position[i_probe] = (panel.rtl + panel.rbl) * 0.5

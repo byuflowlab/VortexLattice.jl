@@ -10,7 +10,7 @@ theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
-nc = 6
+nc = 2
 spacing_s = Uniform()
 spacing_c = Uniform()
 mirror = true
@@ -45,7 +45,7 @@ mirror_v = false
 
 # propeller 1
 xle_p1 = [0.0, 0.1]
-yle_p1 = [0.0, 0.8]
+yle_p1 = [0.1, 0.8]
 zle_p1 = [0.0, 0.0]
 chord_p1 = [0.2, 0.1]
 theta_p1 = [15.0, 3.0] .* pi / 180 # convert to radians
@@ -59,7 +59,7 @@ mirror_p1 = false
 
 # propeller 2
 xle_p2 = [0.0, 0.1]
-yle_p2 = [0.0, -0.8]
+yle_p2 = [-0.1, -0.8]
 zle_p2 = [0.0, 0.0]
 chord_p2 = [0.2, 0.1]
 theta_p2 = [15.0, 3.0] .* pi / 180 # convert to radians
@@ -86,9 +86,9 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 
 # generate surface panels for wing
 w1grid, w1ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=false, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-w2grid = VortexLattice.flipy(w1grid)  # mirror
-w2ratio = w1ratio
+    mirror=true, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+# w2grid, w2ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+#     mirror=false, flip=true, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
 hgrid, hratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -107,12 +107,14 @@ p1grid2, p1ratio2 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi
 mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
 
 # opposite chirality for propeller 2
-p2grid1 = VortexLattice.flipy(p1grid1)
-p2grid2 = VortexLattice.flipy(p1grid1)
+p2grid1, p2ratio1 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
+    mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1, flip=true)
+p2grid2, p2ratio2 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
+mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1, flip=true)
 
 translate!(p1grid1, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
 translate!(p1grid2, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
-R1_b1 = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), pi*0.5)
+R1_b1 = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
 rotate!(p1grid1, R1_b1)
 R1_b2 = VortexLattice.Rodrigues(SVector{3}(1.0,0,0), pi*1.0) * R1_b1
 rotate!(p1grid2, R1_b2)
@@ -121,6 +123,10 @@ translate!(p1grid1, o_p1)
 translate!(p1grid2, o_p1)
 
 # generate surface panels for propeller 2
+# p2grid1, p2ratio1 = wing_to_grid(xle_p2, yle_p2, zle_p2, chord_p2, theta_p2, phi_p2, ns_p2, nc_p2;
+#     mirror=mirror_p2, fc=fc_p2, spacing_s=spacing_s_p2, spacing_c=spacing_c_p2)
+# p2grid2, p2ratio2 = wing_to_grid(xle_p2, yle_p2, zle_p2, chord_p2, theta_p2, phi_p2, ns_p2, nc_p2;
+#     mirror=mirror_p2, fc=fc_p2, spacing_s=spacing_s_p2, spacing_c=spacing_c_p2)
 p2ratio1 = p1ratio1
 p2ratio2 = p1ratio2
 translate!(p2grid1, SVector{3}(-chord_p2[1]*0.5, 0.0, 0.0))
@@ -134,10 +140,11 @@ translate!(p2grid1, o_p2)
 translate!(p2grid2, o_p2)
 
 # create system
-grids = [w1grid, w2grid, hgrid, vgrid, p1grid1, p1grid2, p2grid1, p2grid2]
-ratios = [w1ratio, w2ratio, hratio, vratio, p1ratio1, p1ratio2, p2ratio1, p2ratio2]
-surface_id = [1, 2, 3, 4, 5, 6, 7, 8]
+grids = [w1grid]#, w2grid]#, hgrid, vgrid]#, p1grid1, p1grid2, p2grid1, p2grid2]
+ratios = [w1ratio]#, w2ratio]#, hratio, vratio]#, p1ratio1, p1ratio2, p2ratio1, p2ratio2]
+surface_id = [1]#, 1]#, 3, 4]#, 5, 6, 7, 8]
 system = System(grids; ratios)
+system.reference[] = ref
 symmetric = [false for _ in grids]  # no implied symmetry
 
 # force generation of surface panels
@@ -146,6 +153,10 @@ steady_analysis!(system, ref, fs; symmetric, surface_id=surface_id)
 # change convention to match flight dynamics
 change_convention!(system, system.reference[].r, ForwardRightDown(), BackRightUp())
 steady_analysis!(system, ref, fs; symmetric)
+
+path = "."
+name = "test_vlm"
+write_vtk(joinpath(path, name), system)
 
 # create reference frames
 frames = ReferenceFrame(system;
@@ -160,22 +171,22 @@ frames = ReferenceFrame(system;
 )
 
 # add wing frames
-VortexLattice.add_frame!(frames, "wing1", "vehicle", SVector{3}(0.0, 0.0, -10.0), [1]; 
-    v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = -0.025 * 2 * pi,
-    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+# VortexLattice.add_frame!(frames, "wing1", "vehicle", SVector{3}(0.0, 0.0, -10.0), [1]; 
+#     v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = -0.025 * 2 * pi,
+#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
-VortexLattice.add_frame!(frames, "wing2", "vehicle", SVector{3}(0.0, 0.0, -10.0), [2]; 
-    v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = 0.025 * 2 * pi,
-    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+# VortexLattice.add_frame!(frames, "wing2", "vehicle", SVector{3}(0.0, 0.0, -10.0), [2]; 
+#     v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = 0.025 * 2 * pi,
+#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
 # add propeller and blade frames
-VortexLattice.add_frame!(frames, "propeller1", "wing1", o_p1, [5,6]; 
-    v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = -3.0 * 2 * pi,
-    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+# VortexLattice.add_frame!(frames, "propeller1", "wing1", o_p1, [5,6]; 
+#     v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = -7.0 * 2 * pi,
+#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
-VortexLattice.add_frame!(frames, "propeller2", "wing2", o_p2, [7,8]; 
-    v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = 3.0 * 2 * pi,
-    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+# VortexLattice.add_frame!(frames, "propeller2", "wing2", o_p2, [7,8]; 
+#     v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = 7.0 * 2 * pi,
+#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
 #--- perform maneuver ---#
 
@@ -184,14 +195,14 @@ function maneuver!(frames, system, wake, t)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[2]
         v = SVector{3}(0.0, 0.0, 0.25)
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
-        ω = -0.025 * 2 * pi
+        ω = -0.025 * 2 * pi * 2
         frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
         frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
     elseif 0.25 <= t < 0.5
         v = SVector{3}(0.0, 0.0, 0.25) * -4
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
-        ω = -0.025 * 2 * pi * -8
+        ω = -0.025 * 2 * pi * -8 * 2
         (; x, R, name, parent_index, child_index, dependent_index) = frames[2]
         frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
@@ -199,7 +210,7 @@ function maneuver!(frames, system, wake, t)
     elseif 0.5 <= t
         v = SVector{3}(0.0, 0.0, 0.25) * 3 * 0.5
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
-        ω = -0.025 * 2 * pi * 7 * 0.5
+        ω = -0.025 * 2 * pi * 7 * 0.5 * 2
         (; x, R, name, parent_index, child_index, dependent_index) = frames[2]
         frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
@@ -207,60 +218,28 @@ function maneuver!(frames, system, wake, t)
     end
 end
 
-function test_loop!(system, frames, nt, tf=1.0)
-    write_vtk("test_frames_2_step_0.vtk", system; trailing_vortices=false)
-    dt = tf / nt  # time step for the maneuver
-
-    for (i_step, t) in enumerate(range(0.0, stop=tf, length=nt))
-        println("\nStep $(i_step) at time $(t) s")
-        
-        # perform maneuver
-        maneuver!(frames, system, system.wakes, t)
-        
-        # propagate kinematics
-        propagate_kinematics!(system, frames, dt)
-        
-        # save vtk files
-        write_vtk("test_frames_2_step_$(i_step).vtk", system; trailing_vortices=false)
-    end
-
-    # for i_step in 1:nt
-    #     println("\nStep $(i_step) at time $(i_step * dt) s")
-    #     propagate_kinematics!(system, frames, dt)
-        
-    #     # save vtk files
-    #     write_vtk("test_frames_2_step_$(i_step).vtk", system; trailing_vortices=false)
-    # end
-
-    # # resume motion
-    # (;x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index) = frames[2]
-    # frames[2] = typeof(frames[2])(x, -4*v, ω_axis, -8*ω, R, name, parent_index, child_index, dependent_index)
-    # (;x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index) = frames[3]
-    # frames[3] = typeof(frames[3])(x, -4*v, ω_axis, -8*ω, R, name, parent_index, child_index, dependent_index)
-    
-    # # finish maneuver
-    # for i_step in nt+1:2*nt
-    #     println("\nStep $(i_step) at time $(i_step * dt) s")
-    #     propagate_kinematics!(system, frames, dt)
-    #     write_vtk("test_frames_2_step_$(i_step).vtk", system; trailing_vortices=false)
-    # end
-
-    # # resume motion
-    # (;x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index) = frames[2]
-    # frames[2] = typeof(frames[2])(x, -v/4*3*0.5, ω_axis, -ω/8*7*0.5, R, name, parent_index, child_index, dependent_index)
-    # (;x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index) = frames[3]
-    # frames[3] = typeof(frames[3])(x, -v/4*3*0.5, ω_axis, -ω/8*7*0.5, R, name, parent_index, child_index, dependent_index)
-    
-    # # finish maneuver
-    # for i_step in 2*nt+1:4*nt
-    #     println("\nStep $(i_step) at time $(i_step * dt) s")
-    #     propagate_kinematics!(system, frames, dt)
-    #     write_vtk("test_frames_2_step_$(i_step).vtk", system; trailing_vortices=false)
-    # end
-    
+function constant_maneuver!(frames, system, wake, t)
+    return nothing
+    # (; x, R, name, parent_index, child_index, dependent_index) = frames[2]
+    # v = SVector{3}(0.0, 0.0, 0.0)
+    # ω_axis = SVector{3}(-1.0, 0.0, 0.0)
+    # ω = 0.0
+    # frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
+    # (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
+    # frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
 end
 
-test_loop!(system, frames, 200)
+Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
+t_range = range(0, stop=2.0, length=201)
+# VortexLattice.DEBUG[] = true
+monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
+            VortexLattice.ForcesMonitor(length(t_range)),
+           )
+simulate!(system, frames, constant_maneuver!, Uinf, t_range;
+        name = "test20250527_2", vtk_args=(trailing_vortices=false,),
+        derivatives=true, monitors, eta=0.3)
+
+# test_loop!(system, frames, 200)
 
 #=
 # Define a vector to rotate

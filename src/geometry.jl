@@ -566,11 +566,18 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),
     reference_line = zeros(length(xle),2),
     mirror = false,
+    flip = false,
     fcore = (c, Δs) -> 1e-3,
     spacing_s = Cosine(),
     spacing_c = Uniform(),
     interp_s = (x, y, xpt) -> FLOWMath.linear(x, y, xpt),
     invert_cambers = false)
+
+    if flip
+        return wing_to_grid(reverse(xle), -reverse(yle), reverse(zle), reverse(chord), reverse(theta), reverse(phi), ns, nc;
+                    fc, reference_line, mirror, flip=false, fcore, spacing_s, spacing_c, interp_s, invert_cambers
+                )
+    end
 
     TF = promote_type(eltype(xle), eltype(yle), eltype(zle), eltype(chord), eltype(theta), eltype(phi))
 
@@ -1056,20 +1063,6 @@ flipy(r)
 Flip sign of y-component of vector `r` (used for symmetry)
 """
 flipy(r::AbstractVector{<:Real}) = SVector{3}(r[1], -r[2], r[3])
-
-function flipy(g::Array{<:Real, 3})
-    # flip the y-component of each grid point in the matrix
-    newg = similar(g)
-    for i = 1:size(g, 2), j = 1:size(g, 3)
-        newg[:, i, j] = flipy(g[:, i, j])
-    end
-    return newg
-end
-
-function flipy(grids::AbstractVector{<:AbstractMatrix})
-    # flip the y-component of each grid point in each grid
-    return [flipy(g) for g in grids]
-end
 
 """
 on_symmetry_plane(args...; tol=eps())

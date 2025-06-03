@@ -245,7 +245,28 @@ function velocity_to_freestream(V::SVector{3,TF}, Omega=zero(SVector{3,TF})) whe
     end
     α = atan(V[3], V[1])
     β = -asin(V[2] / Vinf)
+    
     return Freestream(Vinf, α, β, Omega)
+end
+
+"""
+    freestream_velocity(freestream)
+
+Computes the freestream velocity
+"""
+function freestream_velocity(fs)
+
+    Vinf = fs.Vinf
+    sa, ca = sincos(fs.alpha)
+    sb, cb = sincos(fs.beta)
+
+    return freestream_velocity(Vinf, sa, ca, sb, cb)
+end
+
+function freestream_velocity(Vinf, sa, ca, sb, cb) 
+    # println("NON-deriv")
+    # @show Vinf*SVector(ca*cb, -sb, sa*cb)
+    return Vinf*SVector(ca*cb, -sb, sa*cb)
 end
 
 """
@@ -270,6 +291,9 @@ function freestream_velocity_derivatives(Vinf, sa, ca, sb, cb)
     V_b = Vinf*SVector(-ca*sb, -cb, -sa*sb)
 
     dV = (V_a, V_b)
+
+    # println("Deriv:")
+    # @show V
 
     return V, dV
 end

@@ -151,7 +151,7 @@ function kinematic_velocity!(Vcp, Vh, Vv, Vte, surfaces, frames::AbstractVector{
     if skip_top_level
         # begin recursion (skipping the top level frame, which is captured by system.fs)
         for i in frames[1].child_index
-            frame = frames[i]
+            frame = frames[1]
             kinematic_velocity!(Vcp, Vh, Vv, Vte, surfaces, frames, i, frame.x, frame.R)
         end
     else
@@ -172,67 +172,68 @@ function kinematic_velocity!(Vcp, Vh, Vv, Vte, surfaces, frames::AbstractVector{
     ω_global = R_parent_to_global * frame.ω_axis * frame.ω # global angular velocity
     
     # update the kinematic velocity of each dependent surface
-    for i in frame.dependent_index
+    for isurf in frame.dependent_index
         
         # unpack containers
-        surface = surfaces[i]
-        vcp = Vcp[i]
-        vh = Vh[i]  # horizontal velocity
-        vv = Vv[i]  # vertical velocity
-        vte = Vte[i]  # trailing edge velocity
+        surface = surfaces[isurf]
+        vcp = Vcp[isurf]
+        vh = Vh[isurf]  # horizontal velocity
+        vv = Vv[isurf]  # vertical velocity
+        vte = Vte[isurf]  # trailing edge velocity
 
-        # loop over this surface's panels
         nc, ns = size(surface)
-        for j in 1:ns
-            for i in 1:nc
 
+        # velocity at the control points
+        for j = 1:ns, i = 1:nc
+            # unpack panel
+            panel = surface[i,j]
+
+            # control point velocity
+            x = controlpoint(panel)
+            vcp[i,j] -= v_global + cross(ω_global, (x - origin_global))
+        end
+
+        # velocity at the horizontal bound vortices
+        for j = 1:ns
+            for i = 1:nc
                 # unpack panel
                 panel = surface[i,j]
 
-                # control point velocity
-                x = surface[i,j].rcp
-                vcp[i, j] -= v_global + ω_global × (x - origin_global)
-                
-                # horizontal velocity
-                x = panel.rtc
-                vh[i, j] -= v_global + ω_global × (x - origin_global)
-                
-                # vertical velocity
-                x = (panel.rtl + panel.rbl) * 0.5
-                vv[i, j] -= v_global + ω_global × (x - origin_global)
+                # top center velocity
+                x = top_center(panel)
 
+                vh[i, j] -= v_global + cross(ω_global, (x - origin_global))
             end
-            
             # unpack panel
-            panel = surface[nc,j]
+            panel = surface[end,j]
 
-            # horizontal velocity
-            x = panel.rbc
-            vh[nc+1, j] -= v_global + ω_global × (x - origin_global)
+            # bottom center velocity
+            x = bottom_center(panel)
 
-            # trailing edge velocity
-            x = panel.rtl
-            vte[j] -= v_global + ω_global × (x - origin_global)
-            
+            vh[end,j] -= v_global + cross(ω_global, (x - origin_global))
         end
 
-        for i in 1:nc
-
-            # unpack panel
-            panel = surface[i,ns]
-            
-            # vertical velocity
-            x = (panel.rtr + panel.rbr) * 0.5
-            vv[i, ns+1] -= v_global + ω_global × (x - origin_global)
-
+        # velocity at the vertical bound vortices
+        for i = 1:nc
+            for j = 1:ns
+                panel = surface[i,j]
+                x = left_center(panel)
+                vv[i,j] -= v_global + cross(ω_global, (x - origin_global))
+            end
+            panel = surface[i,end]
+            x = right_center(panel)
+            vv[i,end] -= v_global + cross(ω_global, (x - origin_global))
         end
 
-        # unpack panel
-        panel = surface[nc, ns]
-        
-        # trailing edge velocity
-        x = panel.rtr
-        vte[ns+1] -= v_global + ω_global × (x - origin_global)
+        # velocity at the trailing edge vertices
+        for j = 1:ns
+            panel = surface[end,j]
+            x = bottom_left(panel)
+            vte[j] -= v_global + cross(ω_global, (x - origin_global))
+        end
+        panel = surface[end,end]
+        x = bottom_right(panel)
+        vte[end] -= v_global + cross(ω_global, (x - origin_global))
 
     end
 
@@ -255,7 +256,7 @@ function Freestream(frame::ReferenceFrame{TF}, ref::Reference, vinf_ext) where T
     V = vinf_ext - frame.v - ω × dx  # freestream velocity in South-East-Up convention
 
     # create freestream object
-    Omega = frame.ω
+    Omega = frame.ω_axis * frame.ω
     fs = velocity_to_freestream(V, Omega)
 
     return fs
@@ -303,7 +304,6 @@ function change_convention!(system, origin, to::ForwardRightDown, from::BackRigh
     # freestream direction
     x, y, z = system.xhat[]
     system.xhat[] = SVector{3}(-x, y, -z)
-    @show system.xhat[]
 
     return system
 end
@@ -320,7 +320,6 @@ function change_convention!(system, to::BackRightUp, from::ForwardRightDown)
     # freestream direction
     x, y, z = system.xhat[]
     system.xhat[] = SVector{3}(-x, y, -z)
-    @show system.xhat[]
 
     return system
 end

@@ -72,4 +72,12 @@ export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, F
 include("visualization.jl")
 export write_vtk
 
+include("fmm.jl")
+
+include("unsteady.jl")
+export simulate!
+
+const DEBUG = Array{Bool,0}(undef)
+DEBUG[] = false
+
 end # module
