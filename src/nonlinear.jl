@@ -73,9 +73,13 @@ function grid_to_sections(grid, airfoils;
     return sections
 end
 
-function redefine_gamma_index!(sections)
+function redefine_gamma_index!(sections, ns, nc)
     gamma_start = 1
     for i in eachindex(sections)
+        if !isassigned(sections[i],1)
+            gamma_start += ns[i] * nc[i]
+            continue
+        end
         for j in eachindex(sections[i])
             sections[i][j].gammas .= CartesianIndex.(collect(gamma_start:gamma_start + size(sections[i][j].panels, 1) - 1))
             gamma_start += size(sections[i][j].panels, 1)

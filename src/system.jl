@@ -223,7 +223,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     if isnothing(sections)
         sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
     else
-        redefine_gamma_index!(sections)
+        redefine_gamma_index!(sections, ns, nc)
     end
 
     if isnothing(invert_normals)
