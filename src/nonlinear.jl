@@ -98,6 +98,7 @@ Perform a nonlinear analysis on the system. This assumes that reference and free
 - `max_iter`: The maximum number of iterations to perform, default 1
 - `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1E-6
 - `damping`: The damping factor for the iteration default 0.01
+- `print_iters`: Whether to print the number of iterations it took to converge, default false
 - `kwargs...`: Additional keyword arguments for steady analysis
 
 """
@@ -114,13 +115,16 @@ Perform a nonlinear analysis on the system.
 
 # Arguments
 - `system::System`: The system to perform the analysis on
+- `ref::Reference`: The reference object containing the reference values
+- `fs::Freestream`: The freestream object containing the freestream values
 - `max_iter`: The maximum number of iterations to perform, default 1
 - `tol`: The tolerance for convergence (based on absolute difference in Γ), default 1E-6
 - `damping`: The damping factor for the iteration default 0.01
+- `print_iters`: Whether to print the number of iterations it took to converge, default false
 - `kwargs...`: Additional keyword arguments for steady analysis
 """
 
-function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01, kwargs...)
+function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01, print_iters=false, kwargs...)
     if !system.near_field_analysis[]
         steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
     end
@@ -133,6 +137,7 @@ function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01
     for i in eachindex(system.sections)
         surface_properties = system.properties[i]
         for j in eachindex(system.sections[i])
+            !isassigned(system.sections[i],1) && continue
             section = system.sections[i][j]
             Γavg = 0.0
             for k in eachindex(section.panels)
@@ -153,8 +158,9 @@ function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01
     vz = similar(vx)
     x_c = similar(vx)
 
-    for _ in 1:max_iter
+    for i in 1:max_iter
         if _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c) # Calculate Γs, α, cl, and cd for each section
+            print_iters && println("Nonlinear analysis converged after $i iterations")
             break
         end
     end
@@ -219,14 +225,18 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
             r3 = r[i][3,j+1] - r[i][3,j]
             r_vec = SVector{3, eltype(r1)}(r1, r2, r3)
 
-            # cross product
-            cr = SVector{3, eltype(vel)}(
-                vel[2]*r_vec[3] - vel[3]*r_vec[2],
-                vel[3]*r_vec[1] - vel[1]*r_vec[3],
-                vel[1]*r_vec[2] - vel[2]*r_vec[1]
-            )
-            section.Γs[2] = ((0.5*section.cl[1]*section.area * (dot(vel, section.n_hat[1])^2 + dot(vel, section.c_hat[1])^2)) / (sqrt(dot(cr, section.n_hat[1])^2+dot(cr, section.c_hat[1])^2))) * (-1)^system.invert_normals[i]
-            section.Γs[3] = section.Γs[1] + damping*(section.Γs[2] - section.Γs[1])
+            if iszero(section.airfoil.cl)
+                section.Γs[1] = 0.0
+            else
+                # cross product
+                cr = SVector{3, eltype(vel)}(
+                    vel[2]*r_vec[3] - vel[3]*r_vec[2],
+                    vel[3]*r_vec[1] - vel[1]*r_vec[3],
+                    vel[1]*r_vec[2] - vel[2]*r_vec[1]
+                )
+                section.Γs[2] = ((0.5*section.cl[1]*section.area * (dot(vel, section.n_hat[1])^2 + dot(vel, section.c_hat[1])^2)) / (sqrt(dot(cr, section.n_hat[1])^2+dot(cr, section.c_hat[1])^2))) * (-1)^system.invert_normals[i]
+                section.Γs[3] = section.Γs[1] + damping*(section.Γs[2] - section.Γs[1])
+            end
 
             if isnan(section.Γs[2]) || isnan(section.Γs[3])
                 error("NaN detected in _nonlinear_analysis! at the Γs calculation")
@@ -253,12 +263,14 @@ function update_section_forces!(system, vel, vx, vy, vz, x_c)
         nc = size(surface, 1)
         properties = system.properties[i]
         sections = system.sections[i]
+        !isassigned(sections,1) && continue
         vx_view = view(vx,1:nc)
         vy_view = view(vy,1:nc)
         vz_view = view(vz,1:nc)
         x_c_view = view(x_c,1:nc)
         for j in eachindex(sections)
             total_chord = 0.0
+            
             section = sections[j]
 
             for k in eachindex(section.panels)
@@ -279,10 +291,14 @@ function update_section_forces!(system, vel, vx, vy, vz, x_c)
                 vel[2] = vy[1]
                 vel[3] = vz[1]
             end
+
+            section.α[1] = atan(dot(vel, section.n_hat[1]), dot(vel, section.c_hat[1])) * (-1)^system.invert_normals[i]
+            section.cl[1] = section.airfoil.clspline(section.α[1])
+            section.cd[1] = section.airfoil.cdspline(section.α[1])
             
             v_mag = norm(vel)
-            angle = section.α[1]
             y_hat = cross(section.n_hat[1], section.c_hat[1])
+            angle = section.α[1]
             # Rotate n_hat by angle about y_hat to get l_hat
             c = cos(-angle)
             s = sin(-angle)

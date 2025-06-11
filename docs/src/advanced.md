@@ -17,7 +17,7 @@ If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each 
 
 ```
 system = System(grids; sections)
-nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01)
+nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01, print_iters=false)
 ```
 
 **nonlinear_analysis!** populates the sections with angles of attack, coefficients of lift and drag, and force-per-unit length normalized by the density (defaulted to 1) and the reference velocity.
