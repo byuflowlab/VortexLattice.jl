@@ -285,7 +285,7 @@ Save the system to a BSON file.
 # Returns:
  - `nothing`: The function does not return anything, it saves the system to a file
 """
-function save_system_to_bson(system, filename::AbstractString)
+function save_system_to_bson(system::System, filename::AbstractString)
 
     sections = Vector{Vector{SectionProperties{eltype(system)}}}()
     defined_sections = Vector{Int}()
