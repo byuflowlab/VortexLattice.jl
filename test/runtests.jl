@@ -1443,3 +1443,55 @@ end
     @test isapprox(CF, CF_true, atol=1e-5)
     @test isapprox(CM, CM_true, atol=1e-5)
 end
+
+@testset "save/load system" begin
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 1
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    alpha = 1.0*pi/180
+    beta = 0.0
+    Omega = [0.0; 0.0; 0.0]
+    fs = Freestream(Vinf, alpha, beta, Omega)
+
+    # adjust chord length so x-chord length matches AVL
+    chord = @. chord/cos(theta)
+
+    # vortex rings with symmetry
+    mirror = false
+    symmetric = true
+
+    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        mirror=mirror, spacing_s=spacing_s, spacing_c=spacing_c)
+
+    grids = [grid]
+    ratios = [ratio]
+
+    system = System(grids; ratios)
+
+
+    mydir = @__DIR__
+    savepath = joinpath(mydir, "test_system.bson")
+    VortexLattice.save_system_to_bson(system, savepath)
+    loaded_system = VortexLattice.load_system_from_bson("test_system.bson")
+
+    for name in fieldnames(typeof(system))
+        if name != :sections
+            @test getfield(system, name) == getfield(loaded_system, name)
+        end
+    end
+end
