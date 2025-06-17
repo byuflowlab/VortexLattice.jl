@@ -1,7 +1,7 @@
 using Documenter, VortexLattice
 
 makedocs(;
-    format = Documenter.HTML(;size_threshold = 102400, size_threshold_warn = 1020000),
+    format = Documenter.HTML(;size_threshold = 102400, size_threshold_warn = 102000),
     modules = [VortexLattice],
     pages = [
         "Home" => "index.md",
