@@ -286,23 +286,7 @@ Save the system to a BSON file.
  - `nothing`: The function does not return anything, it saves the system to a file
 """
 function save_system_to_bson(system::System, filename::AbstractString)
-    fields = (
-        :TF, :AIC, :w, :Γ, :V, :grids, :ratios, :surfaces, :invert_normals,
-        :sections, :properties, :wakes, :trefftz, :reference,
-        :freestream, :symmetric, :nwake, :surface_id, :wake_finite_core,
-        :trailing_vortices, :xhat, :near_field_analysis, :derivatives, :dw, :dΓ,
-        :dproperties, :wake_shedding_locations, :previous_surfaces, :Vcp, :Vh,
-        :Vv, :Vte, :dΓdt
-    )
-    data = Dict{Symbol,Any}()
-    for f in fields
-        if f === :TF
-            data[:TF] = eltype(system)
-        else
-            data[f] = getfield(system, f)
-        end
-    end
-    BSON.bson(filename, data)
+    JLD2.save_object(filename, system)
     return nothing
 end
 
@@ -316,42 +300,6 @@ Load a system from a BSON file.
  - `system`: The system loaded from the file
 """
 function load_system_from_bson(filename::AbstractString)
-    data = BSON.load(filename)
-    TF = data[:TF]
-
-    system = System{TF}(
-        convert(Matrix{TF}, data[:AIC]),
-        convert(Vector{TF}, data[:w]),
-        convert(Vector{TF}, data[:Γ]),
-        [convert(Matrix{SVector{3,TF}}, v) for v in data[:V]],
-        [convert(Array{TF,3}, g) for g in data[:grids]],
-        [convert(Array{TF,3}, r) for r in data[:ratios]],
-        [convert(Matrix{SurfacePanel{TF}}, s) for s in data[:surfaces]],
-        convert(Vector{Bool}, data[:invert_normals]),
-        [convert(Vector{SectionProperties{TF}}, sec) for sec in data[:sections]],
-        [convert(Matrix{PanelProperties{TF}}, p) for p in data[:properties]],
-        [convert(Matrix{WakePanel{TF}}, w) for w in data[:wakes]],
-        [convert(Vector{TrefftzPanel{TF}}, t) for t in data[:trefftz]],
-        convert(Array{Reference{TF},0}, data[:reference]),
-        convert(Array{Freestream{TF},0}, data[:freestream]),
-        convert(Vector{Bool}, data[:symmetric]),
-        convert(Vector{Int}, data[:nwake]),
-        convert(Vector{Int}, data[:surface_id]),
-        convert(Vector{Bool}, data[:wake_finite_core]),
-        convert(Vector{Bool}, data[:trailing_vortices]),
-        convert(Array{SVector{3,TF},0}, data[:xhat]),
-        convert(Array{Bool,0}, data[:near_field_analysis]),
-        convert(Array{Bool,0}, data[:derivatives]),
-        Tuple(convert(Vector{TF}, d) for d in data[:dw]),
-        Tuple(convert(Vector{TF}, d) for d in data[:dΓ]),
-        Tuple([convert(Matrix{PanelProperties{TF}}, dp) for dp in d] for d in data[:dproperties]),
-        [convert(Vector{SVector{3,TF}}, wsl) for wsl in data[:wake_shedding_locations]],
-        [convert(Matrix{SurfacePanel{TF}}, ps) for ps in data[:previous_surfaces]],
-        [convert(Matrix{SVector{3,TF}}, vcp) for vcp in data[:Vcp]],
-        [convert(Matrix{SVector{3,TF}}, vh) for vh in data[:Vh]],
-        [convert(Matrix{SVector{3,TF}}, vv) for vv in data[:Vv]],
-        [convert(Vector{SVector{3,TF}}, vte) for vte in data[:Vte]],
-        convert(Vector{TF}, data[:dΓdt])
-    )
+    system = JLD2.load_object(filename)
     return system
 end
