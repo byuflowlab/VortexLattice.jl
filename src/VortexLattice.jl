@@ -7,6 +7,7 @@ using WriteVTK
 using VSPGeom
 using CCBlade
 using DelimitedFiles
+using JLD2
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -47,6 +48,7 @@ include("circulation.jl")
 include("system.jl")
 export System
 export PanelProperties, get_surface_properties
+export save_system_to_bson, load_system_from_bson
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!

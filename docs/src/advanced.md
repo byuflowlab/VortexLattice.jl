@@ -20,6 +20,8 @@ system = System(grids; sections)
 nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01, print_iters=false)
 ```
 
+In the above example, leaving sections[2] empty implies that surface[2] does not have airfoils and does not need any nonlinear analysis.
+
 **nonlinear_analysis!** populates the sections with angles of attack, coefficients of lift and drag, and force-per-unit length normalized by the density (defaulted to 1) and the reference velocity.
 
 ### Warnings

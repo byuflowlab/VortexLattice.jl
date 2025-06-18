@@ -221,7 +221,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     end
 
     if isnothing(sections)
-        sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
+        sections = [Vector{SectionProperties{TF}}() for i = 1:nsurf]
     else
         redefine_gamma_index!(sections, ns, nc)
     end
@@ -274,3 +274,32 @@ of panel properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc`
 is the number of chordwise panels and `ns` is the number of spanwise panels
 """
 get_surface_properties(system) = system.properties
+
+
+"""
+    save_system_to_bson(system, filename)
+Save the system to a BSON file.
+# Arguments:
+ - `system`: The system to save
+ - `filename`: The name of the file to save the system to
+# Returns:
+ - `nothing`: The function does not return anything, it saves the system to a file
+"""
+function save_system_to_bson(system::System, filename::AbstractString)
+    JLD2.save_object(filename, system)
+    return nothing
+end
+
+
+"""
+    load_system_from_bson(filename::AbstractString)
+Load a system from a BSON file.
+# Arguments:
+ - `filename`: The name of the file to load the system from
+# Returns:
+ - `system`: The system loaded from the file
+"""
+function load_system_from_bson(filename::AbstractString)
+    system = JLD2.load_object(filename)
+    return system
+end
