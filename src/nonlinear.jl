@@ -76,7 +76,8 @@ end
 function redefine_gamma_index!(sections, ns, nc)
     gamma_start = 1
     for i in eachindex(sections)
-        if !isassigned(sections[i],1)
+        # if !isassigned(sections[i],1)
+        if isempty(sections[i])
             gamma_start += ns[i] * nc[i]
             continue
         end
@@ -137,7 +138,8 @@ function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-6, damping=0.01
     for i in eachindex(system.sections)
         surface_properties = system.properties[i]
         for j in eachindex(system.sections[i])
-            !isassigned(system.sections[i],1) && continue
+            # !isassigned(system.sections[i],1) && continue
+            isempty(system.sections[i]) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
             section = system.sections[i][j]
             Γavg = 0.0
             for k in eachindex(section.panels)
@@ -178,9 +180,8 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
     vz .= 0.0
     x_c .= 0.0
     for i in eachindex(system.surfaces)
+        isempty(system.sections[i]) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
         sections = system.sections[i]
-        !isassigned(sections,1) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
-
         surface = system.surfaces[i]
         nc = size(surface, 1)
         properties = system.properties[i]
@@ -259,11 +260,11 @@ end
 
 function update_section_forces!(system, vel, vx, vy, vz, x_c)
     for i in eachindex(system.surfaces)
+        isempty(system.sections[i]) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
         surface = system.surfaces[i]
         nc = size(surface, 1)
         properties = system.properties[i]
         sections = system.sections[i]
-        !isassigned(sections,1) && continue
         vx_view = view(vx,1:nc)
         vy_view = view(vy,1:nc)
         vz_view = view(vz,1:nc)

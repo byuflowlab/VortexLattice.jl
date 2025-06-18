@@ -221,7 +221,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     end
 
     if isnothing(sections)
-        sections = [Vector{SectionProperties{TF}}(undef, ns[i]) for i = 1:nsurf]
+        sections = [Vector{SectionProperties{TF}}() for i = 1:nsurf]
     else
         redefine_gamma_index!(sections, ns, nc)
     end
@@ -286,18 +286,9 @@ Save the system to a BSON file.
  - `nothing`: The function does not return anything, it saves the system to a file
 """
 function save_system_to_bson(system::System, filename::AbstractString)
-
-    sections = Vector{Vector{SectionProperties{eltype(system)}}}()
-    defined_sections = Vector{Int}()
-    for i in eachindex(system.sections)
-        !isassigned(system.sections[i],1) && continue
-        push!(sections, system.sections[i])
-        push!(defined_sections, i)
-    end
-
     fields = (
         :TF, :AIC, :w, :Γ, :V, :grids, :ratios, :surfaces, :invert_normals,
-        :sections, :defined_sections, :properties, :wakes, :trefftz, :reference,
+        :sections, :properties, :wakes, :trefftz, :reference,
         :freestream, :symmetric, :nwake, :surface_id, :wake_finite_core,
         :trailing_vortices, :xhat, :near_field_analysis, :derivatives, :dw, :dΓ,
         :dproperties, :wake_shedding_locations, :previous_surfaces, :Vcp, :Vh,
@@ -307,10 +298,6 @@ function save_system_to_bson(system::System, filename::AbstractString)
     for f in fields
         if f === :TF
             data[:TF] = eltype(system)
-        elseif f === :sections
-            data[:sections] = sections
-        elseif f === :defined_sections
-            data[:defined_sections] = defined_sections
         else
             data[f] = getfield(system, f)
         end
@@ -331,16 +318,6 @@ Load a system from a BSON file.
 function load_system_from_bson(filename::AbstractString)
     data = BSON.load(filename)
     TF = data[:TF]
-    sections = data[:sections]
-    defined_sections = data[:defined_sections]
-    system_sections = Vector{Vector{SectionProperties{TF}}}(undef, length(sections))
-    for i in eachindex(sections)
-        if i in defined_sections
-            system_sections[i] = sections[i]
-        else
-            system_sections[i] = Vector{SectionProperties{TF}}(undef, 0)
-        end
-    end
 
     system = System{TF}(
         convert(Matrix{TF}, data[:AIC]),
@@ -351,7 +328,7 @@ function load_system_from_bson(filename::AbstractString)
         [convert(Array{TF,3}, r) for r in data[:ratios]],
         [convert(Matrix{SurfacePanel{TF}}, s) for s in data[:surfaces]],
         convert(Vector{Bool}, data[:invert_normals]),
-        system_sections,
+        [convert(Vector{SectionProperties{TF}}, sec) for sec in data[:sections]],
         [convert(Matrix{PanelProperties{TF}}, p) for p in data[:properties]],
         [convert(Matrix{WakePanel{TF}}, w) for w in data[:wakes]],
         [convert(Vector{TrefftzPanel{TF}}, t) for t in data[:trefftz]],
