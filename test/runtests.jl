@@ -1485,9 +1485,10 @@ end
 
 
     mydir = @__DIR__
-    savepath = joinpath(mydir, "test_system.bson")
+    savepath = joinpath(mydir, "test_system.jld2")
     VortexLattice.save_system_to_bson(system, savepath)
-    loaded_system = VortexLattice.load_system_from_bson("test_system.bson")
+    loaded_system = VortexLattice.load_system_from_bson(savepath)
+    rm(savepath; force=true)
 
     for name in fieldnames(typeof(system))
         if name != :sections
