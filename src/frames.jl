@@ -107,6 +107,19 @@ function Rodrigues(axis, angle::TF) where TF
     )
 end
 
+function inverse_Rodrigues(R::SMatrix{3,3,TF,9}) where TF
+    # inverse Rodrigues rotation matrix
+    θ = acos((trace(R) - 1) / 2)
+    if θ == 0.0
+        return SVector{3,TF}(0.0, 0.0, 0.0)
+    end
+    s = sin(θ)
+    x = (R[3,2] - R[2,3]) / (2 * s)
+    y = (R[1,3] - R[3,1]) / (2 * s)
+    z = (R[2,1] - R[1,2]) / (2 * s)
+    return SVector{3,TF}(x, y, z) * θ
+end
+
 function ReferenceFrame(system::System{TF}; 
         # vvv all in global frame vvv
         origin = system.reference.rref,

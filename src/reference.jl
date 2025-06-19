@@ -11,6 +11,7 @@ Reference quantities.
  - `b`: reference span
  - `r`: reference location for all rotations/moments
  - `V`: reference velocity (magnitude)
+ - `R`: basis vectors of the vehicle frame expressed in global coordinates
 """
 struct Reference{TF}
     S::TF

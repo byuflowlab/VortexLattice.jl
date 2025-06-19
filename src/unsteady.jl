@@ -55,7 +55,7 @@ function ForcesMonitor(nt::Int, TF=Float64; frame=Body())
 end
 
 function (monitor::ForcesMonitor)(system::System, wake, i_step::Int)
-    CF, CM = body_forces(system.surfaces, system.properties, 
+    CF, CM = body_forces(system.surfaces, system.properties,
                             system.reference[], system.freestream[], 
                             system.symmetric, monitor.frame)
     monitor.CF[i_step + 1] = CF
@@ -93,8 +93,10 @@ end
 function simulate!(system::System, wake::ParticleField, trailing_edge_particles::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
         vtk_args=(), fmm_wake_args=(), fmm_vehicle_args=(),
-        nonlinear_analysis=false, nonlinear_args=(),
-        eta=0.3, derivatives=false,
+        derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
+        eta=0.3, 
+        particle_overlap_trailing=1.7, particle_sigma_over_chord_trailing=0.1, 
+        particle_overlap_unsteady=1.7, particle_sigma_over_chord_unsteady=0.1,
         trailing_vortices=fill(false, length(system.surfaces)),
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors,
@@ -136,7 +138,7 @@ function simulate!(system::System, wake::ParticleField, trailing_edge_particles:
 
         # update frames based on maneuver
         # (RPMs, tilting systems, prescribed trajectory, etc.)
-        maneuver!(frames, system, wake, t)
+        dynamics_toggle = maneuver!(frames, system, wake, t)
 
         # update kinematic velocity due to rigid body motion
         # (structural deflections should be remembered from the previous step)
@@ -185,7 +187,9 @@ function simulate!(system::System, wake::ParticleField, trailing_edge_particles:
             nwake, eta)
 
         # shed new particles representing unsteady effects
-        n_sheds = shed_wake!(wake, current_surfaces, wake_shedding_locations, Γ)
+        n_sheds = shed_wake!(wake, current_surfaces, wake_shedding_locations, Γ,
+            particle_overlap_trailing, particle_sigma_over_chord_trailing, 
+            particle_overlap_unsteady, particle_sigma_over_chord_unsteady)
 
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
@@ -285,6 +289,11 @@ function simulate!(system::System, wake::ParticleField, trailing_edge_particles:
         end
 
         #------- propagate system -------#
+
+        # dynamics function
+        # if dynamics_toggle
+        #     apply_dynamics!(system, frames)
+        # end
         
         # propagate rigid-body kinematics
         propagate_kinematics!(system, frames, dt)
@@ -316,7 +325,10 @@ function wake_on_all!(wake::ParticleField, system::System; fmm_wake_args...)
     probes_to_surfaces!(system) # update Vv, Vh, Vcp, etc. based on probes
 end
 
-function shed_wake!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedding_locations, Γ)
+function shed_wake!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedding_locations, Γ,
+        overlap_trailing, sigma_trailing, 
+        overlap_unsteady, sigma_unsteady
+    )
     # loop over surfaces
     iΓ = 0
     np = 0
