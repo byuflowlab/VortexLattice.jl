@@ -495,7 +495,6 @@ for i = 1:length(AR)
 
 end</code></pre><p>We can visualize the solution using the <code>write_vtk</code> function.</p><pre><code class="language-julia hljs">write_vtk(&quot;acceleration-AR4&quot;, surface_history[1], property_history[1],
     wake_history[1], dt; symmetric=false)</code></pre><p><img src="../acceleration-AR4.gif" alt/></p><p>The transient lift and drag coefficients are similar to those shown in Figures 13.34 and 13.35 of Low-Speed Aerodynamics by Katz and Plotkin.</p><pre><code class="language-julia hljs">using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -514,7 +513,7 @@ for i = 1:length(AR)
     plot!(t[2:end], CL, label=&quot;AR = $(AR[i])&quot;)
 end
 
-plot!(show=true)</code></pre><p><img src="../rectangular-wing-sudden-acceleration-cl.svg" alt/></p><pre><code class="language-julia hljs"># drag coefficient plot
+plot!(show=true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">GKS: cannot open display - headless operation mode active</code></pre><p><img src="../rectangular-wing-sudden-acceleration-cl.svg" alt/></p><pre><code class="language-julia hljs"># drag coefficient plot
 plot(
     xlim = (0.0, 10.0),
     xticks = 0.0:1.0:10.0,
@@ -612,7 +611,6 @@ for i = 1:length(AR)
         property_history_t[i]; frame=Wind())
 
 end</code></pre><p>As can be seen, the transient lift and drag coefficients for the two setups are identical.</p><pre><code class="language-julia hljs">using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -833,7 +831,6 @@ for i = 1:length(k)
     CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
 
 end</code></pre><p>Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.</p><pre><code class="language-julia hljs">using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -889,4 +886,4 @@ grids = [grid]
 system = System(grids; ratios)
 
 steady_analysis!(system, ref, fs; symmetric=symmetric)
-write_vtk(&quot;samplewing&quot;, system)</code></pre><p><img src="../samplewing-result.png" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../advanced/">Advanced Usage »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Tuesday 15 July 2025 17:18">Tuesday 15 July 2025</span>. Using Julia version 1.6.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+write_vtk(&quot;samplewing&quot;, system)</code></pre><p><img src="../samplewing-result.png" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../guide/">« Getting Started</a><a class="docs-footer-nextpage" href="../advanced/">Advanced Usage »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Monday 18 August 2025 17:46">Monday 18 August 2025</span>. Using Julia version 1.6.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
