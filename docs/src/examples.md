@@ -10,7 +10,6 @@ Depth = 3
 ```@setup examples
 # this is placed here to pre-install matplotlib so the documentation doesn't get cluttered with the installation print statements.
 using Plots
-pyplot()
 ```
 
 ## Steady State Analysis of a Wing
@@ -893,7 +892,6 @@ The transient lift and drag coefficients are similar to those shown in Figures 1
 
 ```@example rectangular-wing-sudden-acceleration
 using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -1040,7 +1038,6 @@ As can be seen, the transient lift and drag coefficients for the two setups are 
 
 ```@example rectangular-wing-sudden-acceleration
 using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -1321,7 +1318,6 @@ Plotting the results reveals that the results are similar to the results in Figu
 
 ```@example heaving-rectangular-wing
 using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
