@@ -151,10 +151,10 @@ function _generate_rotor(Rtip, Rhub, B::Int,
         yle = (Rhub .+ yle .* (Rtip-Rhub))
     end
 
-    chord = chorddist[:,2] .* Rtip
-    theta = deg2rad.(pitchdist[:,2]) * clockwise_mod
-    xle = sweepdist[:,2] .* Rtip
-    zle = heightdist[:,2] .* Rtip
+    chord = FLOWMath.linear(chorddist[:,1] .* Rtip, chorddist[:,2] .* Rtip, yle)
+    theta = FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]) * clockwise_mod, yle)
+    xle = FLOWMath.linear(sweepdist[:,1] .* Rtip, sweepdist[:,2] .* Rtip, yle)
+    zle = FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
     invert_normals = fill(invert, B)
 
     grid, ratio = wing_to_grid(xle,yle,zle,chord,theta,zeros(length(yle)),
