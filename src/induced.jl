@@ -355,7 +355,7 @@ function influence_coefficients!(AIC, receiving, sending;
     reuse_edges = !finite_core
 
     # loop over receiving panels
-    for i in eachindex(receiving)
+    Threads.@threads for i in eachindex(receiving)
 
         # control point location
         rcp = controlpoint(receiving[i])
