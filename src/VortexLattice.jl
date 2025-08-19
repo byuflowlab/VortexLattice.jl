@@ -11,6 +11,7 @@ using JLD2
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
+const MIN_PER_THREAD = 100
 
 include("nonlinear.jl")
 export SectionProperties, grid_to_sections, nonlinear_analysis!

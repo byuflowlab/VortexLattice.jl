@@ -237,7 +237,7 @@ function near_field_forces_multithreaded!(props, surfaces, wakes, ref, fs, Γ;
         panel_offsets[isurf] = panel_offsets[isurf-1] + length(surfaces[isurf-1])
     end
 
-    n_threads = Threads.nthreads()
+    n_threads = min(Threads.nthreads(), div(n_list, MIN_PER_THREAD))
 
     # loop through receiving surfaces
     for isurf = 1:nsurf
@@ -792,7 +792,7 @@ function near_field_forces_derivatives_multithreaded!(props, dprops, surfaces, w
         panel_offsets[isurf] = panel_offsets[isurf-1] + length(surfaces[isurf-1])
     end
 
-    n_threads = Threads.nthreads()
+    n_threads = min(Threads.nthreads(), div(n_list, MIN_PER_THREAD))
 
     # loop through receiving surfaces
     for isurf = 1:nsurf
@@ -803,7 +803,7 @@ function near_field_forces_derivatives_multithreaded!(props, dprops, surfaces, w
         cr = CartesianIndices(receiving)
         iΓ = panel_offsets[isurf] # panel offset for this surface
 
-        n_per_thread, rem = divrem(nr,n_threads)
+        n_per_thread, rem = divrem(nr, n_threads)
         n = n_per_thread + (rem > 0)
         assignments = 1:n:nr
 

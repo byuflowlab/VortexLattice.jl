@@ -641,8 +641,9 @@ function influence_coefficients_multithreaded!(AIC, receiving, sending;
     # determine control flow parameters based on inputs
     reuse_edges = !finite_core
 
+    n_threads = min(Threads.nthreads(), div(n_list, MIN_PER_THREAD))
     n_points = length(receiving)
-    n_per_thread, rem = divrem(n_points,Threads.nthreads())
+    n_per_thread, rem = divrem(n_points,n_threads)
     n = n_per_thread + (rem > 0)
     assignments = 1:n:n_points
 
