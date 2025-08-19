@@ -312,9 +312,15 @@ rotational_velocity_derivatives(r, fs::Freestream, ref::Reference) = rotational_
 function rotational_velocity_derivatives(r, Omega, rref)
 
     tmp = r - rref
-    Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
-
-    Vrot = cross(tmp, Ω)
+    # Swap signs for p and r to follow standard dynamics convention
+    Ω1 = -Omega[1]
+    Ω2 =  Omega[2]
+    Ω3 = -Omega[3]
+    # Compute cross product manually to avoid allocations
+    v1 = tmp[2] * Ω3 - tmp[3] * Ω2
+    v2 = tmp[3] * Ω1 - tmp[1] * Ω3
+    v3 = tmp[1] * Ω2 - tmp[2] * Ω1
+    Vrot = SVector(v1, v2, v3)
     Vrot_p = -SVector(0, tmp[3], -tmp[2])
     Vrot_q = SVector(-tmp[3], 0, tmp[1])
     Vrot_r = -SVector(tmp[2], -tmp[1], 0)
