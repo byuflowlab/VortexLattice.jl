@@ -253,7 +253,7 @@ function near_field_forces_multithreaded!(props, surfaces, wakes, ref, fs, Γ;
         assignments = 1:n:nr
 
         # loop through receiving panels
-        Threads.@threads for i_assignment in eachindex(assignments)
+        Threads.@threads :static for i_assignment in eachindex(assignments)
             i_start = assignments[i_assignment]
             i_end = min(i_start + n - 1, nr)
 
@@ -808,7 +808,7 @@ function near_field_forces_derivatives_multithreaded!(props, dprops, surfaces, w
         assignments = 1:n:nr
 
         # loop through receiving panels
-        Threads.@threads for i_assignment in eachindex(assignments)
+        Threads.@threads :static for i_assignment in eachindex(assignments)
             i_start = assignments[i_assignment]
             i_end = min(i_start + n - 1, nr)
 
