@@ -789,6 +789,8 @@ function update_surface_panels!(surface, grid;
 
     nc, ns = size(surface) # number of chordwise and spanwise panels
 
+    gtmp = similar(grid[:,1,1]) # temporary vector for chord length calculations
+
     # populate each panel
     for j = 1:ns
 
@@ -799,8 +801,15 @@ function update_surface_panels!(surface, grid;
         r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
 
         # also get chord length for setting finite core size
-        @views cl = norm(grid[:,end,j] .- grid[:,1,j])
-        @views cr = norm(grid[:,end,j+1] .- grid[:,1,j+1])
+        g1 = view(grid, :, size(grid,2), j)
+        g2 = view(grid, :, size(grid,2), j+1)
+        g3 = view(grid, :, 1, j)
+        g4 = view(grid, :, 1, j+1)
+
+        gtmp .= g1 .- g3
+        cl = norm(gtmp)
+        gtmp .= g2 .- g4
+        cr = norm(gtmp)
         c = (cl + cr)/2
 
         for i = 1:nc-1
