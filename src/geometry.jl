@@ -963,6 +963,96 @@ function lifting_line_geometry!(r, c, grids, xc=0.25)
 end
 
 """
+    lifting_line_geometry(system, xc=0.25)
+Construct a lifting line representation of the surfaces in `system` at the
+normalized chordwise location `xc`.  Return the lifting line coordinates
+and chord lengths.
+# Arguments
+ - `system`: System containing the surfaces
+ - `xc`: Normalized chordwise location of the lifting line from the leading edge.
+    Defaults to the quarter chord
+# Return Arguments:
+ - `r`: Vector with length equal to the number of surfaces, with each element
+    being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
+    of the resulting lifting line coordinates
+ - `c`: Vector with length equal to the number of surfaces, with each element
+    being a vector of length `ns+1` which contains the chord lengths at each
+    lifting line coordinate.
+"""
+function lifting_line_geometry!(system::System, xc=0.25) where TF
+    surfaces = system.surfaces
+    nsurf = length(surfaces)
+    r = Vector{Matrix{TF}}(undef, nsurf)
+    c = Vector{Vector{TF}}(undef, nsurf)
+    for isurf = 1:nsurf
+        ns = size(surfaces[isurf], 2)
+        r[isurf] = Matrix{TF}(undef, 3, ns+1)
+        c[isurf] = Vector{TF}(undef, ns+1)
+    end
+    system.lifting_line_r = r
+    system.lifting_line_c = c
+    return lifting_line_geometry!(r, c, system, xc)
+end
+
+"""
+    lifting_line_geometry!(r, c, surfaces, xc=0.25)
+In-place version of [`lifting_line_geometry`](@ref)
+"""
+function lifting_line_geometry!(r, c, system::System, xc=0.25) where TF
+    surfaces = system.surfaces
+    nsurf = length(surfaces)
+    # iterate through each lifting surface
+    for isurf = 1:nsurf
+        # extract current grid
+        surface = surfaces[isurf]
+        # dimensions of this surface
+        nc = size(surface, 1)
+        ns = size(surface, 2)
+        # loop through each spanwise section
+        for j = 1:ns
+            # get leading and trailing edges
+            le = zeros(3)
+            le .= surface[end,j].rbl
+            prev_grid = zeros(3)
+            for i = nc:-1:1
+                grid_vec = zeros(3)
+                surface_vec = zeros(3)
+                surface_vec .= surface[i,j].rtl .- surface[i,j].rbl
+                grid_vec .= (surface_vec .- prev_grid * xc) / (1 - xc)
+                prev_grid .= grid_vec
+                le .+= grid_vec
+            end
+            # le = SVector(surface[1,1,j], surface[2,1,j], surface[3,1,j])
+            te = surface[end,j].rbl
+            # get quarter-chord
+            r[isurf][:,j] = linearinterp(xc, le, te)
+            # get chord length
+            c[isurf][j] = norm(le - te)
+        end
+
+        le = zeros(3)
+        le .= surface[end,end].rbr
+        prev_grid = zeros(3)
+        for i = nc:-1:1
+            grid_vec = zeros(3)
+            surface_vec = zeros(3)
+            surface_vec .= surface[i,end].rtr .- surface[i,end].rbr
+            grid_vec .= (surface_vec .- prev_grid * xc) / (1 - xc)
+            prev_grid .= grid_vec
+            le .+= grid_vec
+        end
+        # le = SVector(surface[1,1,end], surface[2,1,end], surface[3,1,end])
+        te = surface[end,end].rbr
+        # get quarter-chord
+        r[isurf][:,end] = linearinterp(xc, le, te)
+        # get chord length
+        c[isurf][end] = norm(le - te)
+        
+    end
+    return r, c
+end
+
+"""
     translate(grid, r)
 
 Return a copy of the grid points in `grid` translated the distance specified by vector `r`
