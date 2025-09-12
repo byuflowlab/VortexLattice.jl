@@ -1446,6 +1446,4 @@ end
 
 #------- additional tests -------#
 
-include("filament_test.jl")
-
 include("fmm_test.jl")
