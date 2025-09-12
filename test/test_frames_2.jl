@@ -10,7 +10,7 @@ theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
-nc = 2
+nc = 1
 spacing_s = Uniform()
 spacing_c = Uniform()
 mirror = true
@@ -229,15 +229,22 @@ function constant_maneuver!(frames, system, wake, t)
     # frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
 end
 
+system.Γ .= zero(eltype(system.Γ))  # reset circulation
 Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
-t_range = range(0, stop=2.0, length=201)
+t_range = range(0, stop=.8, length=160)
 # VortexLattice.DEBUG[] = true
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
            )
-simulate!(system, frames, constant_maneuver!, Uinf, t_range;
-        name = "test20250527_2", vtk_args=(trailing_vortices=false,),
-        derivatives=true, monitors, eta=0.3)
+wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range;
+        name = "test20250619_1", vtk_args=(trailing_vortices=false,),
+        particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
+        # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
+        particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
+        # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
+        derivatives=false, monitors, eta=1.0)
+
+println("Done.")
 
 # test_loop!(system, frames, 200)
 

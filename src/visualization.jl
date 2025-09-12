@@ -22,12 +22,13 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 """
 
 
-function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, xhat = system.xhat[], kwargs...)
+function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, xhat = system.xhat[], 
+    trailing_edge_list=fill(true, length(system.surfaces)), kwargs...)
 
     if write_surfaces && write_wakes
-        write_vtk(name, system.surfaces, system.wakes, system.properties; symmetric=system.symmetric, kwargs...)
+        write_vtk(name, system.surfaces, system.wakes, system.properties; trailing_edge_list, symmetric=system.symmetric, kwargs...)
     elseif write_surfaces
-        write_vtk(name, system.surfaces, system.properties;symmetric=system.symmetric, xhat, kwargs...)
+        write_vtk(name, system.surfaces, system.properties; trailing_edge_list, symmetric=system.symmetric, xhat, kwargs...)
     elseif write_wakes
         write_vtk(name, system.wakes; symmetric=system.symmetric, kwargs...)
     else
@@ -75,14 +76,15 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix}, args...; kwargs...)
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
-    properties=fill(nothing, length(surfaces)); symmetric=fill(nothing, length(surfaces)), kwargs...)
+    properties=fill(nothing, length(surfaces)); symmetric=fill(nothing, length(surfaces)), 
+    trailing_edge_list=fill(true, length(surfaces)), kwargs...)
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile
         # loop through all surfaces
         for i = 1:length(surfaces)
             # add paraview files corresponding to the surface to the multiblock file
-            write_vtk!(vtmfile, surfaces[i], properties[i]; symmetric=symmetric[i], kwargs...)
+            write_vtk!(vtmfile, surfaces[i], properties[i]; trailing_edge=trailing_edge_list[i], symmetric=symmetric[i], kwargs...)
         end
     end
 
@@ -104,7 +106,8 @@ function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; k
 end
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
-    wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=nothing; kwargs...)
+    wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=nothing; 
+        trailing_edge_list=fill(true, length(surfaces)), kwargs...)
 
     # create multiblock file
     vtk_multiblock(name) do vtmfile
@@ -124,7 +127,7 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
 
             # add paraview files corresponding to the surface to the multiblock file
             write_vtk!(vtmfile, surfaces[i], properties[i]; wake_circulation,
-                trailing_edge = isempty(wakes[i]), kwargs..., trailing_vortices = false)
+                trailing_edge = isempty(wakes[i]) && trailing_edge_list[i], kwargs..., trailing_vortices = false)
 
             # add paraview files corresponding to the wake to the multiblock file
             write_vtk!(vtmfile, wakes[i]; surface_circulation, kwargs...)
@@ -809,3 +812,38 @@ function write_vtk(name::String, frames::Vector{<:ReferenceFrame}; kwargs...)
 
     return nothing
 end
+
+# #--- vortex filaments ---#
+
+# function write_vtk(fname, vortex_filaments::VortexFilaments)
+#     # create points
+#     pts = zeros(SVector{3,eltype(vortex_filaments)}, length(vortex_filaments.filaments) * 2)
+#     ic = 1
+#     for i in 1:length(vortex_filaments.filaments)
+#         pts[ic] = vortex_filaments.filaments[i].r1
+#         ic += 1
+#         pts[ic] = vortex_filaments.filaments[i].r2
+#         ic += 1
+#     end
+
+#     # create lines
+#     lines = [MeshCell(PolyData.Lines(), (2*i-1, 2*i)) for i in 1:length(vortex_filaments.filaments)]
+
+#     # save strengths
+#     strengths = Vector{SVector{3,eltype(vortex_filaments)}}(undef, length(vortex_filaments.filaments))
+#     for i in 1:length(vortex_filaments.filaments)
+#         filament = vortex_filaments.filaments[i]
+#         s = filament.r2 - filament.r1
+#         if norm(s) == 0.0
+#             strengths[i] = SVector{3,eltype(vortex_filaments)}(0.0, 0, 0)
+#         else
+#             strengths[i] = filament.strength * s / norm(s)
+#         end
+#     end
+
+#     # save as VTK
+#     vtk_grid(fname, pts, lines) do vtk
+#         vtk["strength"] = strengths
+#         vtk["velocity"] = vortex_filaments.velocity
+#     end
+# end

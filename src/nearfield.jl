@@ -7,7 +7,8 @@ Calculate local panel forces in the body frame.
 """
 function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
-    wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
+    wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
+    calculate_vlm_induced = true)
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -43,85 +44,87 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                 Vi += additional_velocity(rc)
             end
 
-            # velocity due to surface motion
+            # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
                 Vi += Vh[isurf][i]
             end
             V_streamwise = deepcopy(Vi)
 
             # induced velocity from surfaces and wakes
-            jΓ = 0 # index for accessing Γ
-            for jsurf = 1:nsurf
+            if calculate_vlm_induced
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
 
-                # number of panels on sending surface
-                sending = surfaces[jsurf]
-                Ns = length(sending)
+                    # number of panels on sending surface
+                    sending = surfaces[jsurf]
+                    Ns = length(sending)
 
-                # see if wake panels are being used
-                wake_panels = nwake[jsurf] > 0
+                    # see if wake panels are being used
+                    wake_panels = nwake[jsurf] > 0
 
-                # check if we need to shift shedding locations
-                if isnothing(wake_shedding_locations)
-                    shedding_locations = nothing
-                else
-                    shedding_locations = wake_shedding_locations[jsurf]
+                    # check if we need to shift shedding locations
+                    if isnothing(wake_shedding_locations)
+                        shedding_locations = nothing
+                    else
+                        shedding_locations = wake_shedding_locations[jsurf]
+                    end
+
+                    # extract circulation values corresonding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
+
+                    # induced velocity from this surface
+                    if isurf == jsurf
+                        # induced velocity on self
+                        Vi += induced_velocity(I, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                        # streamwise velocity
+                        V_streamwise += induced_velocity(I, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    else
+                        # induced velocity on another surface
+                        Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                        V_streamwise += induced_velocity(rc, surfaces[jsurf], vΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    end
+
+                    # induced velocity from corresponding wake
+                    if wake_panels
+                        Vi += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+
+                        V_streamwise += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    end
+
+                    jΓ += Ns # increment Γ index for sending panels
                 end
-
-                # extract circulation values corresonding to the sending surface
-                vΓ = view(Γ, jΓ+1:jΓ+Ns)
-
-                # induced velocity from this surface
-                if isurf == jsurf
-                    # induced velocity on self
-                    Vi += induced_velocity(I, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-
-                    # streamwise velocity
-                    V_streamwise += induced_velocity(I, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                else
-                    # induced velocity on another surface
-                    Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-
-                    V_streamwise += induced_velocity(rc, surfaces[jsurf], vΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                end
-
-                # induced velocity from corresponding wake
-                if wake_panels
-                    Vi += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-
-                    V_streamwise += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                end
-
-                jΓ += Ns # increment Γ index for sending panels
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -158,15 +161,18 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                 Veff += additional_velocity(rc)
             end
 
-            # velocity due to surface motion
+            # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vv)
                 Veff += Vv[isurf][I[1], I[2]]
             end
 
-            # NOTE: We don't include induced velocity in the effective velocity
+            # NOTE: (previously) We don't include induced velocity in the effective velocity
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # NOTE: now, we DO include induced velocity here IF FMM IS USED
+            # (as in unsteady maneuvers with particle wakes)
+            # (stored in Vv)
 
             # steady part of Kutta-Joukowski theorem
             Γli = Γ[iΓ+i]
@@ -188,15 +194,18 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                 Veff += additional_velocity(rc)
             end
 
-            # velocity due to surface motion
+            # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vv)
                 Veff += Vv[isurf][I[1], I[2]+1]
             end
 
-            # NOTE: We don't include induced velocity in the effective velocity
+            # NOTE: (previously) We don't include induced velocity in the effective velocity
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # NOTE: now, we DO include induced velocity here IF FMM IS USED
+            # (as in unsteady maneuvers with particle wakes)
+            # (stored in Vv)
 
             # steady part of Kutta-Joukowski theorem
             Γri = Γ[iΓ+i]
@@ -229,7 +238,8 @@ near_field_forces_derivatives!
 
 function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
-    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat)
+    surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
+    calculate_vlm_induced = true)
 
     # unpack derivatives
     props_a, props_b, props_p, props_q, props_r = dprops
@@ -269,7 +279,7 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                 Vi += additional_velocity(rc)
             end
 
-            # velocity due to surface motion
+            # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
                 Vi += Vh[isurf][i]
             end
@@ -277,96 +287,98 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             V_streamwise = deepcopy(Vi)
 
             # induced velocity from surfaces and wakes
-            jΓ = 0 # index for accessing Γ
-            for jsurf = 1:nsurf
+            if calculate_vlm_induced
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
 
-                # number of panels on sending surface
-                sending = surfaces[jsurf]
-                Ns = length(sending)
+                    # number of panels on sending surface
+                    sending = surfaces[jsurf]
+                    Ns = length(sending)
 
-                # see if wake panels are being used
-                wake_panels = nwake[jsurf] > 0
+                    # see if wake panels are being used
+                    wake_panels = nwake[jsurf] > 0
 
-                # check if we need to shift shedding locations
-                if isnothing(wake_shedding_locations)
-                    shedding_locations = nothing
-                else
-                    shedding_locations = wake_shedding_locations[jsurf]
+                    # check if we need to shift shedding locations
+                    if isnothing(wake_shedding_locations)
+                        shedding_locations = nothing
+                    else
+                        shedding_locations = wake_shedding_locations[jsurf]
+                    end
+
+                    # extract circulation values corresonding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
+
+                    vΓ_a = view(Γ_a, jΓ+1:jΓ+Ns)
+                    vΓ_b = view(Γ_b, jΓ+1:jΓ+Ns)
+                    vΓ_p = view(Γ_p, jΓ+1:jΓ+Ns)
+                    vΓ_q = view(Γ_q, jΓ+1:jΓ+Ns)
+                    vΓ_r = view(Γ_r, jΓ+1:jΓ+Ns)
+
+                    vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
+
+                    # induced velocity from this surface
+                    if isurf == jsurf
+                        # induced velocity on self
+                        Vind, dVind = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                        Vind_stream, _ = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    else
+                        # induced velocity on another surface
+                        Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat)
+
+                        Vind_stream, _ = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
+                            finite_core = surface_id[isurf] != surface_id[jsurf],
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    end
+
+                    Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
+
+                    Vi += Vind
+                    V_streamwise += Vind_stream
+
+                    Vi_a += Vind_a
+                    Vi_b += Vind_b
+                    Vi_p += Vind_p
+                    Vi_q += Vind_q
+                    Vi_r += Vind_r
+
+                    # induced velocity from corresponding wake
+                    if wake_panels
+                        Vi += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+
+                        V_streamwise += induced_velocity(rc, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                    end
+
+                    jΓ += Ns # increment Γ index for sending panels
                 end
-
-                # extract circulation values corresonding to the sending surface
-                vΓ = view(Γ, jΓ+1:jΓ+Ns)
-
-                vΓ_a = view(Γ_a, jΓ+1:jΓ+Ns)
-                vΓ_b = view(Γ_b, jΓ+1:jΓ+Ns)
-                vΓ_p = view(Γ_p, jΓ+1:jΓ+Ns)
-                vΓ_q = view(Γ_q, jΓ+1:jΓ+Ns)
-                vΓ_r = view(Γ_r, jΓ+1:jΓ+Ns)
-
-                vdΓ = (vΓ_a, vΓ_b, vΓ_p, vΓ_q, vΓ_r)
-
-                # induced velocity from this surface
-                if isurf == jsurf
-                    # induced velocity on self
-                    Vind, dVind = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-
-                    Vind_stream, _ = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                else
-                    # induced velocity on another surface
-                    Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat)
-
-                    Vind_stream, _ = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
-                        finite_core = surface_id[isurf] != surface_id[jsurf],
-                        wake_shedding_locations = shedding_locations,
-                        symmetric = symmetric[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                end
-
-                Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
-
-                Vi += Vind
-                V_streamwise += Vind_stream
-
-                Vi_a += Vind_a
-                Vi_b += Vind_b
-                Vi_p += Vind_p
-                Vi_q += Vind_q
-                Vi_r += Vind_r
-
-                # induced velocity from corresponding wake
-                if wake_panels
-                    Vi += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
-
-                    V_streamwise += induced_velocity(rc, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
-                end
-
-                jΓ += Ns # increment Γ index for sending panels
             end
 
             # steady part of Kutta-Joukowski theorem
@@ -432,15 +444,18 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                 Veff += additional_velocity(rc)
             end
 
-            # velocity due to surface motion
+            # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vv)
                 Veff += Vv[isurf][I[1], I[2]]
             end
 
-            # NOTE: We don't include induced velocity in the effective velocity
+            # NOTE: (previously) We don't include induced velocity in the effective velocity
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # NOTE: now, we DO include induced velocity here IF FMM IS USED
+            # (as in unsteady maneuvers with particle wakes)
+            # (stored in Vv)
 
             # steady part of Kutta-Joukowski theorem
             Γli = Γ[iΓ+i]
@@ -487,10 +502,13 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                 Veff += Vv[isurf][I[1], I[2]+1]
             end
 
-            # NOTE: We don't include induced velocity in the effective velocity
+            # NOTE: (previously) We don't include induced velocity in the effective velocity
             # for the vertical segments because its influence is likely negligible
             # once we take the cross product with the bound vortex vector. This
             # is also assumed in AVL. This could change in the future.
+            # NOTE: now, we DO include induced velocity here IF FMM IS USED
+            # (as in unsteady maneuvers with particle wakes)
+            # (stored in Vv)
 
             # steady part of Kutta-Joukowski theorem
             Γri = Γ[iΓ+i]

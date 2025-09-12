@@ -363,7 +363,7 @@ function probes_to_surfaces!(system::System{TF}) where TF
 
         for j in 1:ns
             for k in 1:nc
-                v = system.probes.velocity[i_probe]
+                v = system.probes.gradient[i_probe]
                 vcp[k, j] += v
                 i_probe += 1
             end
@@ -377,11 +377,11 @@ function probes_to_surfaces!(system::System{TF}) where TF
         nc, ns = size(surface)
         for j in 1:ns
             for k in 1:nc
-                v = system.probes.velocity[i_probe]
+                v = system.probes.gradient[i_probe]
                 vh[k, j] += v
                 i_probe += 1
             end
-            v = system.probes.velocity[i_probe]
+            v = system.probes.gradient[i_probe]
             vh[nc+1, j] += v
             i_probe += 1
         end
@@ -394,13 +394,13 @@ function probes_to_surfaces!(system::System{TF}) where TF
         nc, ns = size(surface)
         for j in 1:ns
             for k in 1:nc
-                v = system.probes.velocity[i_probe]
+                v = system.probes.gradient[i_probe]
                 vv[k, j] += v
                 i_probe += 1
             end
         end
         for k in 1:nc
-            v = system.probes.velocity[i_probe]
+            v = system.probes.gradient[i_probe]
             vv[k, ns+1] += v
             i_probe += 1
         end
@@ -412,11 +412,11 @@ function probes_to_surfaces!(system::System{TF}) where TF
         vte = system.Vte[i_surf]
         nc, ns = size(surface)
         for j in 1:ns
-            v = system.probes.velocity[i_probe]
+            v = system.probes.gradient[i_probe]
             vte[j] += v
             i_probe += 1
         end
-        v = system.probes.velocity[i_probe]
+        v = system.probes.gradient[i_probe]
         vte[ns+1] += v
         i_probe += 1
     end

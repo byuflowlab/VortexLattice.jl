@@ -1443,3 +1443,9 @@ end
     @test isapprox(CF, CF_true, atol=1e-5)
     @test isapprox(CM, CM_true, atol=1e-5)
 end
+
+#------- additional tests -------#
+
+include("filament_test.jl")
+
+include("fmm_test.jl")

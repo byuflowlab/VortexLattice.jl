@@ -7,7 +7,7 @@ Compute the induced velocity (per unit circulation) for a bound vortex, at a
 control point located at `r1` relative to the start of the bound vortex and `r2`
 relative to the end of the bound vortex
 """
-function bound_induced_velocity(r1, r2, finite_core, core_size)
+function bound_induced_velocity_legacy(r1, r2, finite_core, core_size)
 
     nr1 = norm(r1)
     nr2 = norm(r2)
@@ -25,6 +25,42 @@ function bound_induced_velocity(r1, r2, finite_core, core_size)
     Vhat = (f1*f2)/(4*pi)
 
     return Vhat
+end
+
+@inline function get_δ(distance, core_size)
+    δ = distance < core_size ? (distance-core_size) * (distance-core_size) : zero(distance)
+    return δ
+end
+
+function bound_induced_velocity(r1, r2, finite_core, core_size)
+    # intermediate values
+    nr1 = norm(r1)
+    nr2 = norm(r2)
+    num = cross(r1, r2)
+    denom = nr1 * nr2 + dot(r1, r2)
+
+    if finite_core
+        # core size comes into play here
+        δ1 = get_δ(nr1, core_size)
+        δ2 = get_δ(nr2, core_size)
+        nr3 = norm(r1 - r2) # length of the filament
+        distance_3 = sqrt(max(2*nr1*nr1 + 2*nr2*nr2 - nr3*nr3, zero(nr3)))*0.5 # distance to midpoint
+        δ3 = get_δ(distance_3, core_size)
+    else
+        δ1 = zero(nr1)
+        δ2 = zero(nr2)
+        δ3 = zero(nr2)
+    end
+
+    # desingularized terms
+    f1 = num/(denom + max(δ1, δ2, δ3))
+    f2 = 1/(nr1+δ1)
+    f3 = 1/(nr2+δ2)
+
+    # evaluate vector field
+    V = (f1*(f2+f3))/(4*pi)
+
+    return V
 end
 
 """
@@ -226,50 +262,6 @@ function ring_induced_velocity(rcp, panel; kwargs...)
     return ring_induced_velocity(rcp, r11, r12, r21, r22; core_size=core_size, kwargs...)
 end
 
-function filament_to_particle(v1, v2, Γ::Real)
-    dv = v2 - v1
-    sigma = norm(dv) * 1.0
-    Xp = (v1 + v2) * 0.5
-    Γp = Γ * dv
-    return Xp, Γp, sigma
-end
-
-const const4 = 1/(4*pi)
-
-function particle_velocity(rt::AbstractVector{TF}, Xp, Γp, sigmap, g_dgdr) where TF
-    
-    source_x, source_y, source_z = Xp
-    gamma_x, gamma_y, gamma_z = Γp
-    target_x, target_y, target_z = rt
-    
-    dx = target_x - source_x
-    dy = target_y - source_y
-    dz = target_z - source_z
-    r2 = dx*dx + dy*dy + dz*dz
-
-    vhat = zero(SVector{3,TF})
-
-    if !iszero(r2)
-        r = sqrt(r2)
-
-        # Regularizing function and deriv
-        g_sgm, dg_sgmdr = g_dgdr(r/sigmap)
-
-        # K × Γp
-        r3inv = one(r) / (r2 * r)
-        crss1 = -const4 * r3inv * ( dy*gamma_z - dz*gamma_y )
-        crss2 = -const4 * r3inv * ( dz*gamma_x - dx*gamma_z )
-        crss3 = -const4 * r3inv * ( dx*gamma_y - dy*gamma_x )
-
-        # U = ∑g_σ(x-xp) * K(x-xp) × Γp
-        Ux = g_sgm * crss1
-        Uy = g_sgm * crss2
-        Uz = g_sgm * crss3
-
-        vhat += SVector{3,TF}(Ux, Uy, Uz)
-    end
-end
-
 """
     influence_coefficients!(AIC, surface; kwargs...)
 
@@ -321,8 +313,9 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
     surface_id = 1:length(surfaces),
     wake_shedding_locations = fill(nothing, length(surfaces)),
     trailing_vortices = fill(true, length(surfaces)),
-    xhat = SVector(1, 0, 0),
-    particles = fill(false, length(surfaces)), g_dgdr=(r)->(0.0,0.0))
+    ignore_trailing_edges = fill(false, length(surfaces)),
+    force_finite_core = fill(false, length(surfaces)),
+    xhat = SVector(1, 0, 0))
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -350,16 +343,16 @@ function influence_coefficients!(AIC, surfaces::AbstractVector{<:AbstractMatrix}
             vAIC = view(AIC, iAIC+1:iAIC+nr, jAIC+1:jAIC+ns)
 
             # check if it's the same surface
-            finite_core = surface_id[i] != surface_id[j]
+            finite_core = surface_id[i] != surface_id[j] || force_finite_core[j]
 
             # populate entries in the AIC matrix
             influence_coefficients!(vAIC, receiving, sending;
-                finite_core = finite_core,
+                finite_core,
                 symmetric = symmetric[j],
                 wake_shedding_locations = wake_shedding_locations[j],
                 trailing_vortices = trailing_vortices[j],
-                xhat = xhat,
-                particles = particles[j], g_dgdr)
+                ignore_trailing_edge = ignore_trailing_edges[j],
+                xhat = xhat)
 
             # increment position in AIC matrix
             jAIC += ns
@@ -391,8 +384,11 @@ function influence_coefficients!(AIC, receiving, sending;
     symmetric = false,
     wake_shedding_locations = nothing,
     trailing_vortices = true,
-    xhat = SVector(1, 0, 0),
-    particles=false, g_dgdr=(r)->(0.0, 0.0))
+    ignore_trailing_edge = false,
+    xhat = SVector(1, 0, 0))
+
+    # determine if we need to add trailing edge filaments
+    trailing_edge_filaments = ignore_trailing_edge ? false : isnothing(wake_shedding_locations) && !trailing_vortices
 
     # get sending surface dimensions
     nc, ns = size(sending)
@@ -472,8 +468,8 @@ function influence_coefficients!(AIC, receiving, sending;
                     finite_core = finite_core,
                     symmetric = symmetric,
                     xhat = xhat,
-                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
-                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    bottom = trailing_edge_filaments,
+                    reflected_bottom = trailing_edge_filaments,
                     right = false,
                     reflected_right = false,
                     left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
@@ -504,38 +500,22 @@ function influence_coefficients!(AIC, receiving, sending;
                     r22 = wake_shedding_locations[j2+1]
                     core_size = get_core_size(panel)
 
-                    if particles # solve for new particle sheds rather than filaments
-                        
-                        # bottom
-                        r1, r2 = r22, r21
-                        Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                        Vhat = particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                        
-                        # left side
-                        r1, r2 = r21, r11
-                        Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                        Vhat_l = -particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                        Vhat -= Vhat_l
-
-                    else
-
-                        Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
-                            r11, r12, r21, r22;
-                            finite_core = finite_core,
-                            core_size = core_size,
-                            symmetric = symmetric,
-                            xhat = xhat,
-                            top = false,
-                            reflected_top = false,
-                            bottom = !trailing_vortices,
-                            reflected_bottom = !trailing_vortices,
-                            right = false,
-                            reflected_right = false,
-                            left_trailing = trailing_vortices,
-                            reflected_left_trailing = trailing_vortices,
-                            right_trailing = false,
-                            reflected_right_trailing = false)
-                    end
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        right = false,
+                        reflected_right = false,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = false,
+                        reflected_right_trailing = false)
 
                     # add partial contribution from current panel
                     AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
@@ -557,8 +537,8 @@ function influence_coefficients!(AIC, receiving, sending;
                 finite_core = finite_core,
                 symmetric = symmetric,
                 xhat = xhat,
-                bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
-                reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                bottom = trailing_edge_filaments,
+                reflected_bottom = trailing_edge_filaments,
                 left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                 reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                 right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
@@ -587,39 +567,20 @@ function influence_coefficients!(AIC, receiving, sending;
                 r22 = wake_shedding_locations[j2+1]
                 core_size = get_core_size(panel)
 
-                if particles
-                    # right
-                    r1, r2 = r12, r22
-                    Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                    Vhat = particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                    
-                    # bottom
-                    r1, r2 = r22, r21
-                    Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                    Vhat += particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                    
-                    # left side
-                    r1, r2 = r21, r11
-                    Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                    Vhat_l = -particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                    Vhat -= Vhat_l
-                else
-
-                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
-                        r11, r12, r21, r22;
-                        finite_core = finite_core,
-                        core_size = core_size,
-                        symmetric = symmetric,
-                        xhat = xhat,
-                        top = false,
-                        reflected_top = false,
-                        bottom = !trailing_vortices,
-                        reflected_bottom = !trailing_vortices,
-                        left_trailing = trailing_vortices,
-                        reflected_left_trailing = trailing_vortices,
-                        right_trailing = trailing_vortices,
-                        reflected_right_trailing = trailing_vortices)
-                end
+                Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                    r11, r12, r21, r22;
+                    finite_core = finite_core,
+                    core_size = core_size,
+                    symmetric = symmetric,
+                    xhat = xhat,
+                    top = false,
+                    reflected_top = false,
+                    bottom = !trailing_vortices,
+                    reflected_bottom = !trailing_vortices,
+                    left_trailing = trailing_vortices,
+                    reflected_left_trailing = trailing_vortices,
+                    right_trailing = trailing_vortices,
+                    reflected_right_trailing = trailing_vortices)
 
                 # add partial contribution from current panel
                 AIC[i,ls[j1, j2]] += dot(Vhat, nhat)
@@ -653,8 +614,8 @@ function influence_coefficients!(AIC, receiving, sending;
                     finite_core = finite_core,
                     symmetric = symmetric,
                     xhat = xhat,
-                    bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
-                    reflected_bottom = isnothing(wake_shedding_locations) && !trailing_vortices,
+                    bottom = trailing_edge_filaments,
+                    reflected_bottom = trailing_edge_filaments,
                     left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                     reflected_left_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
                     right_trailing = isnothing(wake_shedding_locations) && trailing_vortices,
@@ -674,38 +635,20 @@ function influence_coefficients!(AIC, receiving, sending;
                     r22 = wake_shedding_locations[j2+1]
                     core_size = get_core_size(panel)
 
-                    if particles
-                        # right
-                        r1, r2 = r12, r22
-                        Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                        Vhat = particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                        
-                        # bottom
-                        r1, r2 = r22, r21
-                        Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                        Vhat += particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                        
-                        # left side
-                        r1, r2 = r21, r11
-                        Xp, Γp, sigmap = filament_to_particle(r1, r2, one(eltype(r1)))
-                        Vhat += particle_velocity(rcp, Xp, Γp, sigmap, g_dgdr)
-                    else
-
-                        Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
-                            r11, r12, r21, r22;
-                            finite_core = finite_core,
-                            core_size = core_size,
-                            symmetric = symmetric,
-                            xhat = xhat,
-                            top = false,
-                            reflected_top = false,
-                            bottom = !trailing_vortices,
-                            reflected_bottom = !trailing_vortices,
-                            left_trailing = trailing_vortices,
-                            reflected_left_trailing = trailing_vortices,
-                            right_trailing = trailing_vortices,
-                            reflected_right_trailing = trailing_vortices)
-                    end
+                    Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp,
+                        r11, r12, r21, r22;
+                        finite_core = finite_core,
+                        core_size = core_size,
+                        symmetric = symmetric,
+                        xhat = xhat,
+                        top = false,
+                        reflected_top = false,
+                        bottom = !trailing_vortices,
+                        reflected_bottom = !trailing_vortices,
+                        left_trailing = trailing_vortices,
+                        reflected_left_trailing = trailing_vortices,
+                        right_trailing = trailing_vortices,
+                        reflected_right_trailing = trailing_vortices)
 
                     # add contribution to AIC matrix
                     AIC[i,j] += dot(Vhat, nhat)
