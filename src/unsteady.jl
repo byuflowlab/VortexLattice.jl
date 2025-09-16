@@ -113,9 +113,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
     # begin simulation
     i_step = 0
-    for t in t_range[1:end-1]
-        dt = t_range[i_step + 2] - t
-        println("\tstep $(i_step+1)/$(length(t_range)) at time $(t)")
+    for t in t_range
+        println("\tstep $(i_step)/$(length(t_range)-1) at time $(t)")
         
         #------- reset system -------#
 
@@ -231,6 +230,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         end
 
         # solve for dΓdt using finite difference `dΓdt = (Γ - Γp)/dt`
+        dt = i_step == 0 ? t_range[i_step + 2] - t_range[i_step + 1] : t - t_range[i_step]
         dΓdt .+= Γ # add newly computed circulation
         dΓdt ./= dt # divide by corresponding time step
 
@@ -293,54 +293,38 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         #------- propagate system -------#
 
-        #--- state evolution ---#
+        if i_step < length(t_range)
 
-        # dynamics function
-        # if dynamics_toggle
-        #     apply_dynamics!(system, frames)
-        # end
-        
-        # propagate rigid-body kinematics
-        propagate_kinematics!(system, frames, dt)
-        
-        # propagate wake
-        FLOWVPM._euler(wake, dt; relax=true)
+            #--- state evolution ---#
 
-        #--- shed new wake particles ---#
+            # dynamics function
+            # if dynamics_toggle
+            #     apply_dynamics!(system, frames)
+            # end
+            
+            # propagate rigid-body kinematics
+            propagate_kinematics!(system, frames, dt)
+            
+            # propagate wake
+            FLOWVPM._euler(wake, dt; relax=true)
 
-        # update wake shedding locations based on wake and vehicle
-        # accounts for vehicle-induced, wake-induced, freestream, 
-        # and kinematic velocities
-        update_wake_shedding_locations!(wakes, wake_shedding_locations,
-            current_surfaces, ref, fs, dt, additional_velocity, Vte,
-            nwake, eta)
+            #--- shed new wake particles ---#
 
-        # shed wake particles
-        shed_wake!(wake, system,  dt, 
-            particle_trailing_methods, particle_unsteady_methods)
+            # update wake shedding locations based on wake and vehicle
+            # accounts for vehicle-induced, wake-induced, freestream, 
+            # and kinematic velocities
+            update_wake_shedding_locations!(wakes, wake_shedding_locations,
+                current_surfaces, ref, fs, dt, additional_velocity, Vte,
+                nwake, eta)
 
-        # FLOWVLM particle field
-        FLOWVPM.save(wake, name * "_wake_debug"; add_num=true, num=i_step, path, overwrite_time=i_step)
+            # shed wake particles
+            shed_wake!(wake, system,  dt, 
+                particle_trailing_methods, particle_unsteady_methods)
+        end
 
         # increment step
         i_step += 1
-    end
-            
-    println("\tstep $(i_step+1)/$(length(t_range)) at time $(t_range[end])")
-    
-    #------- save state -------#
-
-    if !isnothing(path)
-        # VortexLattice system
-        write_vtk(joinpath(path, name * "_step_$i_step"), system; trailing_edge_list=.!shedding_surfaces, vtk_args...)
-
-        # FLOWVLM particle field
-        FLOWVPM.save(wake, name * "_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
-        
-        # save trailing edge filaments
-        # write_vtk(joinpath(path, name * "_filaments_step_$i_step"), trailing_edge_filaments)
-    end
-    
+    end    
 end
 
 function wake_on_all!(system::System, wake::ParticleField; fmm_wake_args...)
