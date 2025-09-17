@@ -10,7 +10,7 @@ theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
-nc = 1
+nc = 3
 spacing_s = Uniform()
 spacing_c = Uniform()
 mirror = true
@@ -67,16 +67,16 @@ phi_p2 = [0.0, 0.0]
 fc_p2 = fill((xc) -> 0, 2) # camberline function for each section
 ns_p2 = 6
 nc_p2 = 3
-spacing_s_p2 = Cosine()
+spacing_s_p2 = Uniform()
 spacing_c_p2 = Uniform()
 mirror_p2 = false
 
 # vehicle reference
-Sref = 9.0
-cref = 0.9
+Sref = 8.0
+cref = 0.8
 bref = 10.0
 rref = [0.5, 0.0, 0.0]
-Vinf = 1.0
+Vinf = 10.04987562112089
 ref = Reference(Sref, cref, bref, rref, Vinf)
 
 alpha = 5.0*pi/180
@@ -229,20 +229,41 @@ function constant_maneuver!(frames, system, wake, t)
     # frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
 end
 
+steady_system = deepcopy(system)
+
+println("Unsteady Analysis:")
 system.Γ .= zero(eltype(system.Γ))  # reset circulation
 Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
-t_range = range(0, stop=.8, length=160)
+t_range = range(0, stop=3.0, length=301)
 # VortexLattice.DEBUG[] = true
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
            )
 wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range;
-        name = "test20250619_1", vtk_args=(trailing_vortices=false,),
+        name = "test20250619_2", vtk_args=(trailing_vortices=false,),
         particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
         # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
         particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
         # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
         derivatives=false, monitors, eta=1.0)
+
+gamma_unsteady = deepcopy(system.Γ)
+CF_unsteady, CM_unsteady = body_forces(system.surfaces, system.properties,
+                            system.reference[], system.freestream[], 
+                            system.symmetric, Body())
+
+
+println("Steady Analysis:")
+fs = Freestream(frames[1], steady_system.reference[], Uinf(0.0))
+xhat = Uinf(0.0) / norm(Uinf(0.0))
+steady_analysis!(steady_system, steady_system.reference[], fs; symmetric=false, xhat)
+CF_steady, CM_steady = body_forces(steady_system.surfaces, steady_system.properties,
+                            steady_system.reference[], steady_system.freestream[], 
+                            steady_system.symmetric, Body())
+
+gamma_steady = deepcopy(steady_system.Γ)
+
+write_vtk(joinpath(path, "test_steady"), steady_system; xhat)
 
 println("Done.")
 

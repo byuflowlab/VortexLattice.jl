@@ -23,7 +23,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
         cr = CartesianIndices(receiving)
 
         # loop through receiving panels
-        for i = 1:length(receiving)
+        for i in 1:length(receiving)
 
             # get panel cartesian index
             I = cr[i]
@@ -31,7 +31,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             # --- Calculate forces on the panel bound vortex --- #
 
             # bound vortex location
-            rc = top_center(receiving[i])
+            rc = top_center(receiving[I])
 
             # freestream velocity
             Vi = freestream_velocity(fs)
@@ -46,7 +46,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
 
             # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
-                Vi += Vh[isurf][i]
+                Vi += Vh[isurf][I]
             end
             V_streamwise = deepcopy(Vi)
 
@@ -215,7 +215,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             # store panel circulation, velocity, and forces
             q = 1/2*RHO*ref.V^2
 
-            props[isurf][i] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
+            props[isurf][I] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
                 Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S), V_streamwise)
         end
 
@@ -263,7 +263,7 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             I = cr[i]
 
             # --- Calculate forces on the panel bound vortex -- #
-            rc = top_center(receiving[i])
+            rc = top_center(receiving[I])
 
             # freestream velocity
             Vi, dVi = freestream_velocity_derivatives(fs)
@@ -281,7 +281,7 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
 
             # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
-                Vi += Vh[isurf][i]
+                Vi += Vh[isurf][I]
             end
 
             V_streamwise = deepcopy(Vi)
