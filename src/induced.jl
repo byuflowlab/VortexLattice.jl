@@ -2180,13 +2180,13 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
 
             # check if the bottom bound vortex should be included
             include_bottom =
-                !(J in skip_bottom) && # skipped indices
-                !(J in skip_inside_edges) # skipped inside edges
+                !(J in skip_bottom) #&& # skipped indices
+                # !(J in skip_inside_edges) # skipped inside edges
 
             # check if the reflection of the bottom bound vortex should be included
             include_reflected_bottom =
-                (!(J in skip_bottom) || keep_reflected) && # skipped indices
-                !(J in skip_inside_edges) # skipped inside edges
+                (!(J in skip_bottom) || keep_reflected) #&& # skipped indices
+                # !(J in skip_inside_edges) # skipped inside edges
 
             # check if left bound vortex should be included
             include_left = !(J in skip_left)
