@@ -48,7 +48,8 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             if !isnothing(Vh)
                 Vi += Vh[isurf][I]
             end
-            V_streamwise = deepcopy(Vi)
+            V_streamwise = zero(Vi)
+            V_streamwise += Vi
 
             # induced velocity from surfaces and wakes
             if calculate_vlm_induced
@@ -122,6 +123,55 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             trailing_vortices = trailing_vortices[jsurf],
                             xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     end
+
+                    jΓ += Ns # increment Γ index for sending panels
+                end
+
+            else # we're using the VPM wake
+                # calculate V_streamwise only
+                V_bound = zero(Vi) # V_streamwise = Vi - V_bound
+
+                jΓ = 0 # index for accessing Γ
+                for jsurf = 1:nsurf
+
+                    # number of panels on sending surface
+                    sending = surfaces[jsurf]
+                    Ns = length(sending)
+
+                    # see if wake panels are being used
+                    wake_panels = nwake[jsurf] > 0
+
+                    # check if we need to shift shedding locations
+                    if isnothing(wake_shedding_locations)
+                        shedding_locations = nothing
+                    else
+                        shedding_locations = wake_shedding_locations[jsurf]
+                    end
+
+                    # extract circulation values corresonding to the sending surface
+                    vΓ = view(Γ, jΓ+1:jΓ+Ns)
+
+                    # induced velocity from this surface
+                    if isurf == jsurf
+                        V_bound += induced_velocity(I, surfaces[jsurf], vΓ;
+                            finite_core = true, # always use finite core with VPM
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_streamwise_edges = true, skip_trailing_edge=true)
+                            # skip trailing edge since it isn't used with VPM
+                    else
+                        V_bound += induced_velocity(rc, surfaces[jsurf], vΓ;
+                            finite_core = true, # always use finite core with VPM
+                            wake_shedding_locations = shedding_locations,
+                            symmetric = symmetric[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                            xhat = xhat, skip_streamwise_edges = true, skip_trailing_edge=true)
+                            # skip trailing edge since it isn't used with VPM
+                    end
+
+                    # update V_streamwise
+                    V_streamwise -= V_bound
 
                     jΓ += Ns # increment Γ index for sending panels
                 end
