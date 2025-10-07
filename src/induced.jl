@@ -1151,7 +1151,6 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
     wake_shedding_locations = nothing,
     trailing_vortices = true, xhat = SVector(1, 0, 0),
     skip_leading_edge = false, skip_inside_edges = false, skip_trailing_edge = false,
-    skip_streamwise_edges = false,
     skip_top = (), skip_bottom = (),
     skip_left = (), skip_right = (),
     skip_left_trailing = (), skip_right_trailing = ())
@@ -1219,10 +1218,10 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !(j1 != 1 && skip_inside_edges) # skipped inside edges
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # skip bottom and right edges since their influence is added during
             # another panel's induced velocity calculations
@@ -1321,16 +1320,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !(j1 != 1 && skip_inside_edges) # skipped inside edges
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # check if right bound vortex should be included
-            include_right = !(J in skip_right) && !skip_streamwise_edges
+            include_right = !(J in skip_right)
 
             # check if reflection of right bound vortex should be included
-            include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_right = (!(J in skip_right) || keep_reflected)
 
             # skip bottom edge since its influence is added during another
             # panel's induced velocity calculations
@@ -1441,10 +1440,10 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !skip_trailing_edge # skipped trailing edge
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # check if left trailing vortex should be included
             include_left_trailing =
@@ -1555,10 +1554,10 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                     !skip_trailing_edge # skipped trailing edge
 
                 # check if left bound vortex should be included
-                include_left = !(J in skip_left) && !skip_streamwise_edges
+                include_left = !(J in skip_left)
 
                 # check if reflection of left bound vortex should be included
-                include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+                include_reflected_left = (!(J in skip_left) || keep_reflected)
 
                 # check if left trailing vortex should be included
                 include_left_trailing =
@@ -1681,16 +1680,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
             !skip_trailing_edge # skipped trailing edge
 
         # check if left bound vortex should be included
-        include_left = !(J in skip_left) && !skip_streamwise_edges
+        include_left = !(J in skip_left)
 
         # check if reflection of left bound vortex should be included
-        include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+        include_reflected_left = (!(J in skip_left) || keep_reflected)
 
         # check if right bound vortex should be included
-        include_right = !(J in skip_right) && !skip_streamwise_edges
+        include_right = !(J in skip_right)
 
         # check if reflection of right bound vortex should be included
-        include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+        include_reflected_right = (!(J in skip_right) || keep_reflected)
 
         # check if left trailing vortex should be included
         include_left_trailing =
@@ -1806,16 +1805,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !skip_trailing_edge # skipped trailing edge
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # check if right bound vortex should be included
-            include_right = !(J in skip_right) && !skip_streamwise_edges
+            include_right = !(J in skip_right)
 
             # check if reflection of right bound vortex should be included
-            include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_right = (!(J in skip_right) || keep_reflected)
 
             # check if left trailing vortex should be included
             include_left_trailing =
@@ -1936,16 +1935,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !(J in skip_inside_edges) # skipped inside edges
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # check if right bound vortex should be included
-            include_right = !(J in skip_right) && !skip_streamwise_edges
+            include_right = !(J in skip_right)
 
             # check if reflection of right bound vortex should be included
-            include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_right = (!(J in skip_right) || keep_reflected)
 
             # compute induced velocity
             Vhat, Vhat_t, Vhat_b, Vhat_l, Vhat_r = ring_induced_velocity(rcp, surface[j1, j2];
@@ -2012,16 +2011,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                 !skip_trailing_edge # skipped trailing edge
 
             # check if left bound vortex should be included
-            include_left = !(J in skip_left) && !skip_streamwise_edges
+            include_left = !(J in skip_left)
 
             # check if reflection of left bound vortex should be included
-            include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_left = (!(J in skip_left) || keep_reflected)
 
             # check if right bound vortex should be included
-            include_right = !(J in skip_right) && !skip_streamwise_edges
+            include_right = !(J in skip_right)
 
             # check if reflection of right bound vortex should be included
-            include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+            include_reflected_right = (!(J in skip_right) || keep_reflected)
 
             # check if left trailing vortex should be included
             include_left_trailing =
@@ -2098,16 +2097,16 @@ function induced_velocity(rcp, surface, Γ = nothing, dΓ = nothing;
                     !skip_trailing_edge # skipped trailing edge
 
                 # check if left bound vortex should be included
-                include_left = !(J in skip_left) && !skip_streamwise_edges
+                include_left = !(J in skip_left)
 
                 # check if reflection of left bound vortex should be included
-                include_reflected_left = (!(J in skip_left) || keep_reflected) && !skip_streamwise_edges
+                include_reflected_left = (!(J in skip_left) || keep_reflected)
 
                 # check if right bound vortex should be included
-                include_right = !(J in skip_right) && !skip_streamwise_edges
+                include_right = !(J in skip_right)
 
                 # check if reflection of right bound vortex should be included
-                include_reflected_right = (!(J in skip_right) || keep_reflected) && !skip_streamwise_edges
+                include_reflected_right = (!(J in skip_right) || keep_reflected)
 
                 # check if left trailing vortex should be included
                 include_left_trailing =
