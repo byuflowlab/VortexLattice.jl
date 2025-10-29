@@ -8,7 +8,7 @@ Calculate local panel forces in the body frame.
 function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true)
+    calculate_vlm_induced = true, skip_nonlinear_surfaces = false)
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -16,11 +16,15 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
-
         receiving = surfaces[isurf]
         nr = length(receiving)
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
+
+        if skip_nonlinear_surfaces
+            iΓ += nr
+            continue
+        end
 
         # loop through receiving panels
         for i in 1:length(receiving)
@@ -239,7 +243,7 @@ near_field_forces_derivatives!
 function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true)
+    calculate_vlm_induced = true, skip_nonlinear_surfaces = false)
 
     # unpack derivatives
     props_a, props_b, props_p, props_q, props_r = dprops
@@ -251,6 +255,10 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
+        if skip_nonlinear_surfaces && isempty(system.sections[isurf])
+            iΓ += nr
+            continue
+        end
 
         receiving = surfaces[isurf]
         nr = length(receiving)

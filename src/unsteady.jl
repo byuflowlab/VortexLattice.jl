@@ -234,12 +234,22 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         dΓdt .+= Γ # add newly computed circulation
         dΓdt ./= dt # divide by corresponding time step
 
+        #--- nonlinear airfoil analysis ---#
+        if nonlinear_analysis
+            call_near_field_forces!(system)
+            nonlinear_analysis!(system, ref, fs; nonlinear_args...)
+        end
+
         #--- vehicle-on-all ---#
 
         # solve n-body problem
         vehicle_on_all!(system, wake; fmm_vehicle_args...)
 
         #--- forces and moments ---#
+
+        if nonlinear_analysis
+            update_section_forces!(system)
+        end
 
         # compute transient forces on each panel (if necessary)
         if derivatives
@@ -248,23 +258,17 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 additional_velocity, Vh, Vv, symmetric, nwake,
                 surface_id, wake_finite_core, wake_shedding_locations,
                 trailing_vortices, xhat,
-                calculate_vlm_induced=false) # we've already calculated the induced velocity
+                calculate_vlm_induced=false,
+                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
                                              # in vehicle_on_all!
         else
             near_field_forces!(properties, current_surfaces, wakes,
                 ref, fs, Γ; dΓdt, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
                 wake_shedding_locations, trailing_vortices, xhat,
-                calculate_vlm_induced=false) # we've already calculated the induced velocity
+                calculate_vlm_induced=false,
+                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
                                              # in vehicle_on_all!
-        end
-
-        # save flag indicating that a near-field analysis has been performed
-        system.near_field_analysis[] = true
-
-        # nonlinear airfoil analysis
-        if nonlinear_analysis
-            nonlinear_analysis!(system, ref, fs; nonlinear_args...)
         end
         
         #------- other solvers -------#
