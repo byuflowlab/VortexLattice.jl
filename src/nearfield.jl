@@ -974,7 +974,7 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, r, c; frame=Body())
+function lifting_line_coefficients(system, r, c, w; frame=Body())
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -984,12 +984,12 @@ function lifting_line_coefficients(system, r, c; frame=Body())
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c; frame)
+    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame)
 end
 
 function lifting_line_coefficients(system; frame=Body(), xc = 0.25)
-    r, c = lifting_line_geometry(system.grids, xc)
-    return lifting_line_coefficients(system, r, c; frame)
+    r, c, w = lifting_line_geometry(system.grids, xc)
+    return lifting_line_coefficients(system, r, c, w; frame)
 end
 
 """
@@ -997,7 +997,7 @@ end
 
 In-place version of [`lifting_line_coefficients`](@ref)
 """
-function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
+function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
 
     # number of surfaces
     nsurf = length(system.surfaces)
@@ -1020,7 +1020,8 @@ function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
             # calculate segment length
             rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
             rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
-            ds = norm(rrs - rls)
+            # ds = norm(rrs - rls)
+            ds = norm(cross(w[isurf][:,j], rrs - rls)) # Use the spanwise width of the panel
             # calculate reference location
             rs = (rls + rrs)/2
             # calculate reference chord

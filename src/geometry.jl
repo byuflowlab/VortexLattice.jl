@@ -934,19 +934,21 @@ function lifting_line_geometry(grids, xc=0.25)
     nsurf = length(grids)
     r = Vector{Matrix{TF}}(undef, nsurf)
     c = Vector{Vector{TF}}(undef, nsurf)
+    w = Vector{Matrix{TF}}(undef, nsurf)
     for isurf = 1:nsurf
         ns = size(grids[isurf], 3) - 1
         r[isurf] = Matrix{TF}(undef, 3, ns+1)
         c[isurf] = Vector{TF}(undef, ns+1)
+        w[isurf] = Matrix{TF}(undef, 3, ns+1)
     end
-    return lifting_line_geometry!(r, c, grids, xc)
+    return lifting_line_geometry!(r, c, w, grids, xc)
 end
 
 """
-    lifting_line_geometry!(r, c, grids, xc=0.25)
+    lifting_line_geometry!(r, c, w, grids, xc=0.25)
 In-place version of [`lifting_line_geometry`](@ref)
 """
-function lifting_line_geometry!(r, c, grids, xc=0.25)
+function lifting_line_geometry!(r, c, w, grids, xc=0.25)
     nsurf = length(grids)
     # iterate through each lifting surface
     for isurf = 1:nsurf
@@ -964,9 +966,11 @@ function lifting_line_geometry!(r, c, grids, xc=0.25)
             r[isurf][:,j] = linearinterp(xc, le, te)
             # get chord length
             c[isurf][j] = norm(le - te)
+            # get panel unit vector
+            w[isurf][:,j] = (te - le) / c[isurf][j]
         end
     end
-    return r, c
+    return r, c, w
 end
 
 """
