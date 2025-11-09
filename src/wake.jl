@@ -93,6 +93,89 @@ function update_wake_shedding_locations!(wakes, wake_shedding_locations,
     return wakes, wake_shedding_locations
 end
 
+function update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, Vwake)
+
+    # get number of surfaces
+    nsurf = length(wakes)
+
+    # loop through all surfaces
+    for isurf = 1:nsurf
+
+        # number of spanwise panels
+        ns = size(wakes[isurf], 2)
+
+        #--- get left velocity ---#
+
+        # extract trailing edge coordinate
+        rte = wakes[isurf][1,1].rtl
+
+        # freestream velocity
+        V = freestream_velocity(fs)
+
+        # rotational velocity
+        V += rotational_velocity(rte, fs, ref)
+
+        # additional velocity field
+        if !isnothing(additional_velocity)
+            V += additional_velocity(rte)
+        end
+
+        # velocity due to surface motion
+        if !isnothing(Vwake)
+            V += Vwake[isurf][1,1]
+        end
+
+        # update vpm shedding location
+        new_rbl = rte + V*dt
+
+        # update vpm shedding location
+        for j = 1:ns
+
+            # extract trailing edge coordinate
+            rte = wakes[isurf][1,j].rtr
+
+            # freestream velocity
+            V = freestream_velocity(fs)
+
+            # rotational velocity
+            V += rotational_velocity(rte, fs, ref)
+
+            # additional velocity field
+            if !isnothing(additional_velocity)
+                V += additional_velocity(rte)
+            end
+
+            # velocity due to surface motion
+            if !isnothing(Vwake)
+                V += Vwake[isurf][1,j]
+            end
+
+            # update wake shedding location coordinates
+            new_rbr = rte + V*dt
+
+            # preserve other wake panel coordinates
+            rtl = top_left(wakes[isurf][1,j])
+            rtr = top_right(wakes[isurf][1,j])
+
+            # preserve core size
+            core_size = get_core_size(wakes[isurf][1,j])
+
+            # preserve circulation strength
+            gamma = circulation_strength(wakes[isurf][1,j])
+
+            # replace the old wake panel
+            wakes[isurf][1,j] = WakePanel(rtl, rtr, new_rbl, new_rbr, core_size, gamma)
+
+            # recurse new_rbl for next panel
+            new_rbl = new_rbr
+
+        end
+
+    end
+
+    return wakes
+end
+
 """
     get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
         additional_velocity, Vte, symmetric, repeated_points, nwake,

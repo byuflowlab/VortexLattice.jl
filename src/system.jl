@@ -199,6 +199,7 @@ function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}})
         n += (nc + 1) * ns # Vh
         n += nc * (ns + 1) # Vv
         n += ns + 1 # Vte
+        n += ns + 1 # V (just the first row of vertices)
     end
     return n
 end
@@ -349,6 +350,16 @@ function update_probes!(system::System{TF}) where TF
         i_probe += 1
     end
 
+    # V (just the first row of vertices)
+    for wake in system.wakes
+        for j in 1:size(wake, 2)
+            system.probes.position[i_probe] = wake[1, j].rtr
+            i_probe += 1
+        end
+        system.probes.position[i_probe] = wake[1, end].rbr
+        i_probe += 1
+    end
+
     return system.probes
 end    
 
@@ -418,6 +429,20 @@ function probes_to_surfaces!(system::System{TF}) where TF
         end
         v = system.probes.gradient[i_probe]
         vte[ns+1] += v
+        i_probe += 1
+    end
+
+    # V (just the first row of vertices)
+    for i_surf in eachindex(system.wakes)
+        wake = system.wakes[i_surf]
+        V = system.V[i_surf]
+        for j in 1:size(wake, 2)
+            v = system.probes.gradient[i_probe]
+            V[1, j] += v
+            i_probe += 1
+        end
+        v = system.probes.gradient[i_probe]
+        V[1, end] += v
         i_probe += 1
     end
 

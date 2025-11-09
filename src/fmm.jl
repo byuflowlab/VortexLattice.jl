@@ -1,4 +1,4 @@
-#------- FastMultipole compatibility functions -------#
+#------- FastMultipole compatibility functions for System -------#
 
 function vlm_to_fmm_index(system::System, i_surf, i, j)
     surfaces = system.surfaces
@@ -155,4 +155,109 @@ function FastMultipole.buffer_to_target_system!(target_system::System, i_target,
 
     # target_system.potential[i_VELOCITY, i_target] .= velocity
     @warn "A VortexLattice.System object should not be used as a target in an FMM call."
+end
+
+#------- FastMultipole compatibility functions for Vector{<:WakePanel} -------#
+
+struct FilamentWrapper{TF}
+    wakes::Vector{Matrix{WakePanel{TF}}}
+end
+
+Base.eltype(filaments::FilamentWrapper{TF}) where TF = TF
+
+function fmm_to_vlm_index(filaments::FilamentWrapper, n)
+    n_counter = 0
+    wakes = filaments.wakes
+    for k in eachindex(wakes)
+        nc, ns = size(wakes[k])
+        if n_counter + nc * ns >= n # found the surface
+            i_plus = n - n_counter
+            i = mod(i_plus-1, nc) + 1
+            j = div(i_plus-1, nc) + 1
+            i_surf = k
+            return i_surf, i, j
+        end
+        n_counter += nc * ns
+    end
+end
+
+function FastMultipole.source_system_to_buffer!(buffer, i_buffer, filaments::FilamentWrapper, i_body)
+    
+    # vlm index
+    wakes = filaments.wakes
+    i_surf, i, j = fmm_to_vlm_index(filaments, i_body)
+
+    # get panel
+    panel = wakes[i_surf][i, j]
+
+    # update buffer
+    buffer[1:3, i_buffer] .= 0.5 * (panel.rtl + panel.rbr)
+    buffer[4, i_buffer] = 0.5 * norm(panel.rbl - panel.rtr) + panel.core_size
+    buffer[5, i_buffer] = panel.gamma
+    buffer[6:8,i_buffer] .= panel.rtl
+    buffer[9:11,i_buffer] .= panel.rtr
+    buffer[12,i_buffer] = panel.core_size
+end
+
+function FastMultipole.data_per_body(wakes::FilamentWrapper)
+    return 12
+end
+
+function FastMultipole.get_position(filaments::FilamentWrapper, i)
+    wakes = filaments.wakes
+    i_surf, i, j = fmm_to_vlm_index(filaments, i)
+    panel = wakes[i_surf][i, j]
+    return 0.5 * (panel.rtl + panel.rbr)
+end
+
+function FastMultipole.strength_dims(filaments::FilamentWrapper)
+    return 1
+end
+
+FastMultipole.has_vector_potential(filaments::FilamentWrapper) = true
+
+function FastMultipole.get_n_bodies(filaments::FilamentWrapper)
+    nwakes = 0
+    for wake in filaments.wakes
+        nc, ns = size(wake)
+        nwakes += nc * ns
+    end
+    return nwakes
+end
+
+function FastMultipole.body_to_multipole!(filaments::FilamentWrapper, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
+    # loop over bodies
+    for i_body in bodies_index
+       
+        # extract vertices from buffer
+        rtl = FastMultipole.get_vertex(buffer, filaments, i_body, 1)
+        rtr = FastMultipole.get_vertex(buffer, filaments, i_body, 2)
+
+        # extract strength from buffer
+        gamma = FastMultipole.get_strength(buffer, filaments, i_body)[1]
+
+        # top bound vortex
+        body_to_multipole_vl!(multipole_coefficients, harmonics, rtl, rtr, center, gamma, expansion_order)
+    end
+end
+
+function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::FilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+    @inbounds for j_target in target_index
+        target = FastMultipole.get_position(target_system, j_target)
+        v = SVector{3,TF}(0.0, 0.0, 0.0)
+        @inbounds for i_source in source_index
+            v1 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
+            v2 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
+            gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
+            cs = source_buffer[12, i_source]
+            if VS
+                v += bound_induced_velocity(target-v1, target-v2, true, cs) * gamma
+            end
+        end
+        FastMultipole.set_gradient!(target_system, j_target, v)
+    end
+end
+
+function FastMultipole.buffer_to_target_system!(target_system::FilamentWrapper, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
+    @warn "A VortexLattice.System.wakes object should not be used as a target in an FMM call."
 end

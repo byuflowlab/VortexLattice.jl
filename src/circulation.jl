@@ -49,7 +49,7 @@ induced velocity from the wake panels.
 This forms the right hand side of the circulation linear system solve.
 """
 function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
-    Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat)
+    Vcp, symmetric, nwake, surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=true)
 
     nsurf = length(surfaces)
 
@@ -88,14 +88,16 @@ function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
             end
 
             # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
-                    V += induced_velocity(rcp, wakes[jsurf];
-                        finite_core = wake_finite_core[isurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
+            if include_wakes
+                for jsurf = 1:length(wakes)
+                    if nwake[jsurf] > 0
+                        V += induced_velocity(rcp, wakes[jsurf];
+                            finite_core = wake_finite_core[isurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
                 end
             end
 
@@ -124,7 +126,7 @@ This forms the right hand side of the circulation linear system solve (and its d
 """
 function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
     additional_velocity, Vcp, symmetric, nwake, surface_id, wake_finite_core,
-    trailing_vortices, xhat)
+    trailing_vortices, xhat, include_wakes=true)
 
     nsurf = length(surfaces)
 
@@ -172,14 +174,16 @@ function normal_velocity_derivatives!(w, dw, surfaces, wakes, ref, fs;
             end
 
             # velocity due to the wake panels
-            for jsurf = 1:length(wakes)
-                if nwake[jsurf] > 0
-                    V += induced_velocity(rcp, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
+            if include_wakes
+                for jsurf = 1:length(wakes)
+                    if nwake[jsurf] > 0
+                        V += induced_velocity(rcp, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                            symmetric = symmetric[jsurf],
+                            nc = nwake[jsurf],
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                    end
                 end
             end
 

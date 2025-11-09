@@ -106,6 +106,32 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     # empty wake shedding locations
     # empty_wake_shedding_locations = fill(nothing, length(system.surfaces))
 
+    # one row of wake panels per surface
+    system.nwake .= 1
+    for isurf in 1:length(system.surfaces)
+        if shedding_surfaces[isurf]
+            panels = Matrix{WakePanel{eltype(system.Γ)}}(undef, 1, size(system.surfaces[isurf], 2))
+            for i in 1:size(system.surfaces[isurf], 2)
+                panels[1, i] = WakePanel{eltype(system.Γ)}(SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
+                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
+                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
+                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
+                                                        zero(eltype(system.Γ)),
+                                                        zero(eltype(system.Γ)))
+            end
+            system.wakes[isurf] = panels
+        end
+    end
+    
+    # wrap in wake object
+    trailing_edge_filaments = FilamentWrapper(system.wakes)
+
+    # velocity at wake vertices
+    for isurf in 1:length(system.surfaces)
+        nc, ns = size(system.wakes[isurf])
+        system.V[isurf] = zeros(SVector{3,eltype(system.Γ)}, nc+1, ns+1)
+    end
+
     # unpack system properties
     symmetric = system.symmetric
     surface_id = system.surface_id
@@ -122,11 +148,13 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         Vh = system.Vh
         Vv = system.Vv
         Vte = system.Vte
+        V = system.V
         for isurf in 1:length(system.surfaces)
             Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
             Vh[isurf] .= Ref(zero(eltype(Vh[isurf])))
             Vv[isurf] .= Ref(zero(eltype(Vv[isurf])))
             Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
+            V[isurf] .= Ref(zero(eltype(V[isurf])))
         end
         system.w .= zero(eltype(system.w))
         for i in eachindex(system.dw)
@@ -163,11 +191,11 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         xhat = system.xhat[]
 
         # unpack system storage (including state variables)
-        previous_surfaces = system.previous_surfaces
+        # previous_surfaces = system.previous_surfaces
         properties = system.properties
         dproperties = system.dproperties
         wakes = system.wakes
-        wake_velocities = system.V
+        # wake_velocities = system.V
         wake_shedding_locations = system.wake_shedding_locations
         nwake = system.nwake
         AIC = system.AIC
@@ -182,41 +210,42 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         symmetric .= false
         
         # align "wake shedding locations" with the trailing edge
-        # update_wake_shedding_locations!(wakes, wake_shedding_locations,
-        #     current_surfaces, ref, fs, dt, additional_velocity, Vte,
-        #     nwake, zero(eta))
+        dt = i_step == 0 ? t_range[i_step + 2] - t_range[i_step + 1] : t - t_range[i_step]
+        update_wake_shedding_locations!(wakes, wake_shedding_locations,
+            current_surfaces, ref, fs, dt, additional_velocity, Vte,
+            nwake, eta)
 
         # update trailing edge filaments with the previous circulation solution
-        # update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
+        update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
 
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
-        wake_on_all!(system, wake; fmm_wake_args...)
+        wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
 
         #--- solve the system ---#
 
         # calculate/re-calculate AIC matrix (if necessary)
         if calculate_influence_matrix
             influence_coefficients!(AIC, current_surfaces;
-                symmetric, # empty_wake_shedding_locations, # defaults to nothing
-                ignore_trailing_edges = shedding_surfaces,
+                symmetric, wake_shedding_locations,
+                # ignore_trailing_edges = shedding_surfaces,
                 surface_id, trailing_vortices, xhat,
                 force_finite_core = fill(true, length(current_surfaces)))
         end
 
-        # # update the AIC matrix to use the new wake shedding locations
-        # update_trailing_edge_coefficients!(AIC, current_surfaces;
-        #     symmetric, wake_shedding_locations, trailing_vortices)
+        # update the AIC matrix to use the new wake shedding locations
+        update_trailing_edge_coefficients!(AIC, current_surfaces;
+            symmetric, wake_shedding_locations, trailing_vortices)
 
         # calculate RHS
         if derivatives
             normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
                 ref, fs; additional_velocity, Vcp, symmetric, nwake,
-                surface_id, wake_finite_core, trailing_vortices, xhat)
+                surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
         else
             normal_velocity!(w, current_surfaces, wakes, ref, fs;
                 additional_velocity, Vcp, symmetric, nwake, surface_id,
-                wake_finite_core, trailing_vortices, xhat)
+                wake_finite_core, trailing_vortices, xhat, include_wakes=false)
         end
 
         # save (negative) previous circulation in dΓdt
@@ -230,14 +259,13 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         end
 
         # solve for dΓdt using finite difference `dΓdt = (Γ - Γp)/dt`
-        dt = i_step == 0 ? t_range[i_step + 2] - t_range[i_step + 1] : t - t_range[i_step]
         dΓdt .+= Γ # add newly computed circulation
         dΓdt ./= dt # divide by corresponding time step
 
         #--- vehicle-on-all ---#
 
         # solve n-body problem
-        vehicle_on_all!(system, wake; fmm_vehicle_args...)
+        vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
 
         #--- forces and moments ---#
 
@@ -313,9 +341,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
             # update wake shedding locations based on wake and vehicle
             # accounts for vehicle-induced, wake-induced, freestream, 
             # and kinematic velocities
-            update_wake_shedding_locations!(wakes, wake_shedding_locations,
-                current_surfaces, ref, fs, dt, additional_velocity, Vte,
-                nwake, eta)
+            update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, V)
 
             # shed wake particles
             shed_wake!(wake, system,  dt, 
@@ -327,7 +353,29 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     end    
 end
 
-function wake_on_all!(system::System, wake::ParticleField; fmm_wake_args...)
+function update_trailing_edge_filaments!(trailing_edge_filaments::FilamentWrapper, current_surfaces, Γ::Vector{TF}) where TF
+    # loop over surfaces
+    wakes = trailing_edge_filaments.wakes
+    iΓ = 0
+    for isurf = eachindex(current_surfaces)
+        surface = current_surfaces[isurf]
+        wake = wakes[isurf]
+        nc, ns = size(surface)
+        for j in 1:ns
+            # strength
+            iΓ += nc
+
+            # core size
+            core_size = surface[end, j].core_size
+
+            # update wake panel circulation
+            wp = wake[1, j]
+            wake[1, j] = WakePanel{TF}(wp.rtl, wp.rtr, wp.rbl, wp.rbr, core_size, Γ[iΓ])
+        end
+    end
+end
+
+function wake_on_all!(system::System, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_wake_args...)
     # reset probes
     FastMultipole.reset!(system.probes)
 
@@ -336,7 +384,7 @@ function wake_on_all!(system::System, wake::ParticleField; fmm_wake_args...)
 
     # solve n-body problem
     # fmm!((wake, system.probes), (wake, ); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
-    fmm!((wake, system.probes), (wake, ); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
+    fmm!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
     probes_to_surfaces!(system) # update Vcp, Vv, Vh, and Vte based on probes
 end
 
@@ -364,18 +412,18 @@ end
 function shed_wake!(pfield::FLOWVPM.ParticleField, system, dt, 
         shedding_trailing::AbstractVector{<:WakeSheddingMethod}, shedding_unsteady::AbstractVector{<:WakeSheddingMethod})
     # shed trailing edge particles
-    shed_trailing_edge!(pfield, system.surfaces, system.wake_shedding_locations, system.Γ, shedding_trailing)
+    shed_trailing_edge!(pfield, system.surfaces, system.wakes, system.Γ, shedding_trailing)
 
     # shed unsteady particles
-    shed_unsteady!(pfield, system.surfaces, system.wake_shedding_locations, system.dΓdt, dt, shedding_unsteady)
+    shed_unsteady!(pfield, system.surfaces, system.wakes, system.dΓdt, dt, shedding_unsteady)
 end
 
-function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedding_locations, Γ, shedding_methods)
+function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wakes, Γ, shedding_methods)
     # loop over surfaces
     iΓ = 0
-    for isurf = 1:length(surfaces)
+    for isurf = eachindex(surfaces)
         surface = surfaces[isurf]
-        wsl = wake_shedding_locations[isurf]
+        wake = wakes[isurf]
         method = shedding_methods[isurf]
         nc, ns = size(surface)
         Γlast = zero(eltype(Γ))
@@ -384,9 +432,9 @@ function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedd
             iΓ += nc
 
             # get vertices
-            panel = surface[end, j]
-            r2 = bottom_left(panel)
-            r1 = wsl[j]
+            panel = wake[1, j]
+            r2 = top_left(panel)
+            r1 = bottom_left(panel)
 
             # shed left particles
             Γthis = Γ[iΓ]
@@ -397,21 +445,21 @@ function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedd
         end
 
         # get vertices
-        panel = surface[end, end]
-        r1 = bottom_right(panel)
-        r2 = wsl[end]
+        panel = wake[1, end]
+        r1 = top_right(panel)
+        r2 = bottom_right(panel)
 
         # shed right particles
         shed_particles!(pfield, r1, r2, Γlast, method)
     end
 end
 
-function shed_unsteady!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedding_locations, dΓdt, dt, shedding_methods)
+function shed_unsteady!(pfield::FLOWVPM.ParticleField, surfaces, wakes, dΓdt, dt, shedding_methods)
     # loop over surfaces
     iΓ = 0
-    for isurf = 1:length(surfaces)
+    for isurf = eachindex(surfaces)
         surface = surfaces[isurf]
-        wsl = wake_shedding_locations[isurf]
+        wake = wakes[isurf]
         method = shedding_methods[isurf]
         nc, ns = size(surface)
         for j in 1:ns
@@ -419,9 +467,9 @@ function shed_unsteady!(pfield::FLOWVPM.ParticleField, surfaces, wake_shedding_l
             iΓ += nc
 
             # get vertices
-            panel = surface[end, j]
-            r2 = wsl[j]
-            r1 = wsl[j + 1]
+            panel = wake[1, j]
+            r2 = bottom_left(panel)
+            r1 = bottom_right(panel)
 
             # shed unsteady particles
             shed_particles!(pfield, r1, r2, dΓdt[iΓ] * dt, method)
@@ -498,12 +546,12 @@ function get_max_particles(system, particle_trailing_methods, particle_unsteady_
     return np_trailing + np_unsteady
 end
 
-function vehicle_on_all!(system::System, wake::ParticleField; fmm_vehicle_args...)
+function vehicle_on_all!(system::System, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_vehicle_args...)
     # reset probes
     FastMultipole.reset!(system.probes)
 
     # n-body problem
-    fmm!((wake, system.probes), system; hessian=SVector{2}(true,false), fmm_vehicle_args...)
+    fmm!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
 
     # update Vcp, Vv, Vh, and Vte based on probes
     probes_to_surfaces!(system)

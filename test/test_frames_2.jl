@@ -1,5 +1,6 @@
 using VortexLattice
 using VortexLattice.StaticArrays
+import LinearAlgebra: norm
 
 # wing
 xle = [0.0, 0.2]
@@ -11,7 +12,7 @@ phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
 nc = 3
-spacing_s = Uniform()
+spacing_s = Sine()
 spacing_c = Uniform()
 mirror = true
 
@@ -234,7 +235,7 @@ steady_system = deepcopy(system)
 println("Unsteady Analysis:")
 system.Γ .= zero(eltype(system.Γ))  # reset circulation
 Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
-t_range = range(0, stop=3.0, length=301)
+t_range = range(0, stop=1.0, length=101)
 # VortexLattice.DEBUG[] = true
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
