@@ -56,6 +56,8 @@ function grid_to_sections(grid, airfoils;
     cols = zeros(Int, size(rows))
     gamma_vec = zeros(Int, size(rows))
 
+    r, c, w = lifting_line_geometry([grid])
+
     gamma_start = 1
     for i in 1:ns
         cols .= i
@@ -64,12 +66,11 @@ function grid_to_sections(grid, airfoils;
         gammas = CartesianIndex.(gamma_vec)
         gamma_start = gamma_vec[end] + 1
 
-        chord = 0.0
-        span = norm(surface[panels[1]].rtl - surface[panels[1]].rtr)
-        for j in 1:nc 
-            chord += surface[panels[j]].chord
-        end
-        area = chord*span
+        rls = SVector(r[1][1,i], r[1][2,i], r[1][3,i])
+        rrs = SVector(r[1][1,i+1], r[1][2,i+1], r[1][3,i+1])
+        ds = norm(cross(w[1][:,i], rrs - rls)) # Use the spanwise width of the panel
+        cs = (c[1][i] + c[1][i+1])/2
+        area = ds * cs
 
         sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i])
     end
@@ -129,12 +130,12 @@ Perform a nonlinear analysis on the system.
 - `kwargs...`: Additional keyword arguments for steady analysis
 """
 
-function nonlinear_analysis!(system, ref, fs; max_iter=10000, tol=1E-1, damping=0.01, print_iters=false, kwargs...)
+function nonlinear_analysis!(system, ref, fs; max_iter=10, tol=1E-6, damping=0.01, print_iters=false, kwargs...)
     if !system.near_field_analysis[]
         steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
     end
 
-    r, _ = lifting_line_geometry(system.grids)
+    r, _, _ = lifting_line_geometry(system.grids)
     if max_iter < 1
         error("max_iter must be greater than 0")
     end
@@ -204,10 +205,12 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
             for k in eachindex(section.panels)
                 total_chord += surface[section.panels[k]].chord
                 vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity_from_streamwise
+                # vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity * system.reference[1].V
             end
 
             for k in eachindex(section.panels)
-                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
+                # TODO update first term to be leading edge of the section
+                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rtc) / total_chord
             end
 
             if length(section.panels) > 1
@@ -215,9 +218,9 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
                 vel[2] = FLOWMath.linear(x_c_view, vy_view, 0.5)
                 vel[3] = FLOWMath.linear(x_c_view, vz_view, 0.5)
             else
-                vel[1] = vx[1]
-                vel[2] = vy[1]
-                vel[3] = vz[1]
+                vel[1] = vx_view[1]
+                vel[2] = vy_view[1]
+                vel[3] = vz_view[1]
             end
 
             section.α[1] = atan(dot(vel, section.n_hat[1]), dot(vel, section.c_hat[1])) * (-1)^system.invert_normals[i]
@@ -239,7 +242,7 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
                     vel[3]*r_vec[1] - vel[1]*r_vec[3],
                     vel[1]*r_vec[2] - vel[2]*r_vec[1]
                 )
-                section.Γs[2] = ((0.5*section.cl[1]*section.area * (dot(vel, section.n_hat[1])^2 + dot(vel, section.c_hat[1])^2)) / 
+                section.Γs[2] = (0.5*(section.cl[1]*section.area * (dot(vel, section.n_hat[1])^2 + dot(vel, section.c_hat[1])^2)) / 
                                 (sqrt(dot(cr, section.n_hat[1])^2+dot(cr, section.c_hat[1])^2))) * (-1)^system.invert_normals[i]
                 section.Γs[3] = section.Γs[1] + damping*(section.Γs[2] - section.Γs[1])
             end
@@ -257,7 +260,6 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
                     converged = false
                 end
             end
-
             section.Γs[1] = section.Γs[3]
         end
     end
@@ -293,7 +295,8 @@ function update_section_forces!(system,
             end
 
             for k in eachindex(section.panels)
-                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
+                # TODO update first term to be leading edge of the section
+                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rtc) / total_chord
             end
 
             if length(section.panels) > 1
@@ -374,5 +377,39 @@ function call_near_field_forces!(system)
                 wake_finite_core = wake_finite_core,
                 wake_shedding_locations = nothing,#system.wake_shedding_location,
                 trailing_vortices = trailing_vortices,
-                xhat = xhat)
+                xhat = xhat,
+                calculate_vlm_induced = true, 
+                skip_nonlinear_surfaces = true,
+                sections = system.sections,)
+end
+
+function section_induced_velocity(section, surface, Γ, I)
+    # identify relevant section
+    panels_CI = section.panels
+    gammas_CI = section.gammas
+    rc = top_center(surface[I])
+    Vind = @SVector zeros(3)
+
+    for i = eachindex(panels_CI)
+        panel = surface[panels_CI[i]]
+        gamma = Γ[gammas_CI[i]]
+        include_top = i != I[1]
+        include_bottom = (i != I[1]-1) || (I[1] == length(panels_CI))
+
+        Vind += ring_induced_velocity(rc, panel;
+                                                top = include_top,
+                                                bottom = include_bottom,
+                                                reflected_top=false,
+                                                reflected_bottom=false,
+                                                reflected_left=false,
+                                                reflected_right=false,
+                                                left=false,
+                                                right=false,
+                                                )[1] * gamma
+
+    end
+    if any(isnan.(Vind))
+        error("NaN detected in section_induced_velocity")
+    end
+    return Vind
 end

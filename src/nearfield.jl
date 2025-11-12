@@ -8,8 +8,15 @@ Calculate local panel forces in the body frame.
 function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true, skip_nonlinear_surfaces = false)
+    calculate_vlm_induced = true, skip_nonlinear_surfaces = false,
+    sections=[])
 
+    if isempty(sections)
+        skip_nonlinear_surfaces = false
+        sectional_corrections = false
+    else
+        sectional_corrections = true
+    end
     # number of surfaces
     nsurf = length(surfaces)
 
@@ -21,9 +28,13 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
 
-        if skip_nonlinear_surfaces
-            iΓ += nr
-            continue
+        if sectional_corrections
+            if skip_nonlinear_surfaces
+                if isempty(sections[isurf])
+                    iΓ += nr
+                    continue
+                end
+            end
         end
 
         # loop through receiving panels
@@ -87,12 +98,21 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             xhat = xhat)
 
                         # streamwise velocity
-                        V_streamwise += induced_velocity(I, surfaces[jsurf], vΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                        if sectional_corrections
+                            skips = tuple(vec(CartesianIndices((nr1, I[2]:I[2])))...)
+                            V_streamwise += induced_velocity(controlpoint(receiving[I]), surfaces[jsurf], vΓ;
+                                finite_core = surface_id[isurf] != surface_id[jsurf],
+                                wake_shedding_locations = shedding_locations,
+                                symmetric = symmetric[jsurf],
+                                trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                                xhat = xhat, skip_leading_edge = false, skip_inside_edges = false, 
+                                skip_trailing_edge = false,
+                                skip_top=skips,
+                                skip_bottom=skips,
+                                skip_left=skips,
+                                skip_right=skips,
+                            )
+                        end
                     else
                         # induced velocity on another surface
                         Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
@@ -102,12 +122,15 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
                             xhat = xhat)
 
-                        V_streamwise += induced_velocity(rc, surfaces[jsurf], vΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                        if sectional_corrections
+                            V_streamwise += induced_velocity(rc, surfaces[jsurf], vΓ;
+                                finite_core = surface_id[isurf] != surface_id[jsurf],
+                                wake_shedding_locations = shedding_locations,
+                                symmetric = symmetric[jsurf],
+                                trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
+                                xhat = xhat, skip_leading_edge = false, skip_inside_edges = false, 
+                                skip_trailing_edge = false)
+                        end
                     end
 
                     # induced velocity from corresponding wake
@@ -119,12 +142,12 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             trailing_vortices = trailing_vortices[jsurf],
                             xhat = xhat)
 
-                        V_streamwise += induced_velocity(rc, wakes[jsurf];
-                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                            symmetric = symmetric[jsurf],
-                            nc = nwake[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf],
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                        # V_streamwise += induced_velocity(rc, wakes[jsurf];
+                        #     finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
+                        #     symmetric = symmetric[jsurf],
+                        #     nc = nwake[jsurf],
+                        #     trailing_vortices = trailing_vortices[jsurf],
+                        #     xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     end
 
                     jΓ += Ns # increment Γ index for sending panels
@@ -218,6 +241,14 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
 
             # store panel circulation, velocity, and forces
             q = 1/2*RHO*ref.V^2
+
+            # if sectional_corrections
+            #     V_streamwise = Vi - section_induced_velocity(sections[isurf][I[2]], surfaces[isurf], Γ, I)
+            # else
+            #     V_streamwise = Vi
+            # end
+
+            # @show V_streamwise
 
             props[isurf][I] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
                 Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S), V_streamwise)
