@@ -265,7 +265,13 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #--- vehicle-on-all ---#
 
         # solve n-body problem
+        # println("SHERLOCK!! BEFORE vehicle_on_all!")
+        # @show V[1][1,1] V[1][1,end]
+        # DEBUG[] = true
         vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
+        # DEBUG[] = false
+        # @show V[1][1,1] V[1][1,end]
+        # throw(ErrorException("STOP HERE"))
 
         #--- forces and moments ---#
 
@@ -306,9 +312,11 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         if !isnothing(path)
             # VortexLattice system
-            write_vtk(joinpath(path, name * "_step_$i_step"), system; trailing_edge_list=.!shedding_surfaces, vtk_args...)
+            write_vtk(joinpath(path, name * "_step_$i_step"), system; write_wakes=true, vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
 
             # FLOWVLM particle field
+
+            # check wake for NaNs
             FLOWVPM.save(wake, name * "_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
             
             # save trailing edge filaments
@@ -366,7 +374,7 @@ function update_trailing_edge_filaments!(trailing_edge_filaments::FilamentWrappe
             iΓ += nc
 
             # core size
-            core_size = surface[end, j].core_size
+            core_size = surface[nc, j].core_size
 
             # update wake panel circulation
             wp = wake[1, j]
@@ -385,7 +393,8 @@ function wake_on_all!(system::System, wake::ParticleField, trailing_edge_filamen
     # solve n-body problem
     # fmm!((wake, system.probes), (wake, ); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
     fmm!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
-    probes_to_surfaces!(system) # update Vcp, Vv, Vh, and Vte based on probes
+    # direct!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
+    probes_to_surfaces!(system) # update Vcp, Vv, Vh, Vte, V based on probes
 end
 
 #------- wake shedding -------#
@@ -551,6 +560,8 @@ function vehicle_on_all!(system::System, wake::ParticleField, trailing_edge_fila
     FastMultipole.reset!(system.probes)
 
     # n-body problem
+    # direct!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
+    # direct!((wake, system.probes), (system, ); hessian=SVector{2}(true,false), fmm_vehicle_args...)
     fmm!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
 
     # update Vcp, Vv, Vh, and Vte based on probes

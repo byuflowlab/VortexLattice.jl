@@ -11,8 +11,8 @@ theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 12
-nc = 3
-spacing_s = Sine()
+nc = 6
+spacing_s = Uniform()
 spacing_c = Uniform()
 mirror = true
 
@@ -235,7 +235,7 @@ steady_system = deepcopy(system)
 println("Unsteady Analysis:")
 system.Γ .= zero(eltype(system.Γ))  # reset circulation
 Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
-t_range = range(0, stop=1.0, length=101)
+t_range = range(0, stop=3.0, length=301)
 # VortexLattice.DEBUG[] = true
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
@@ -244,9 +244,9 @@ wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range;
         name = "test20250619_2", vtk_args=(trailing_vortices=false,),
         particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
         # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-        particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
+        particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,2), length(system.surfaces)),
         # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-        derivatives=false, monitors, eta=1.0)
+        derivatives=false, monitors, eta=0.3, calculate_influence_matrix=false)
 
 gamma_unsteady = deepcopy(system.Γ)
 CF_unsteady, CM_unsteady = body_forces(system.surfaces, system.properties,

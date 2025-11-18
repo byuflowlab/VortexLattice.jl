@@ -107,6 +107,7 @@ end
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
     wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=nothing; 
+        symmetric=fill(nothing, length(surfaces)), 
         trailing_edge_list=fill(true, length(surfaces)), kwargs...)
 
     # create multiblock file
@@ -127,10 +128,10 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
 
             # add paraview files corresponding to the surface to the multiblock file
             write_vtk!(vtmfile, surfaces[i], properties[i]; wake_circulation,
-                trailing_edge = isempty(wakes[i]) && trailing_edge_list[i], kwargs..., trailing_vortices = false)
+                trailing_edge = isempty(wakes[i]) && trailing_edge_list[i], symmetric=symmetric[i], kwargs..., trailing_vortices = false)
 
             # add paraview files corresponding to the wake to the multiblock file
-            write_vtk!(vtmfile, wakes[i]; surface_circulation, kwargs...)
+            write_vtk!(vtmfile, wakes[i]; surface_circulation, symmetric=symmetric[i], kwargs...)
         end
     end
 

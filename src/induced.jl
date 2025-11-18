@@ -41,19 +41,22 @@ function bound_induced_velocity(r1, r2, finite_core, core_size)
 
     if finite_core
         # core size comes into play here
-        δ1 = get_δ(nr1, core_size)
-        δ2 = get_δ(nr2, core_size)
-        nr3 = norm(r1 - r2) # length of the filament
-        distance_3 = sqrt(max(2*nr1*nr1 + 2*nr2*nr2 - nr3*nr3, zero(nr3)))*0.5 # distance to midpoint
-        δ3 = get_δ(distance_3, core_size)
+        # nr3 = norm(r1 - r2) # length of the segment
+        # distance_line = norm(num) / nr3
+        δ0 = get_δ(denom, core_size)
+        δ1 = get_δ(nr1, core_size) # distance to first endpoint
+        δ2 = get_δ(nr2, core_size) # distance to second endpoint
+        # nr3 = norm(r1 - r2) # length of the filament
+        # distance_3 = sqrt(max(2*nr1*nr1 + 2*nr2*nr2 - nr3*nr3, zero(nr3)))*0.5 # distance to midpoint
+        # δ3 = get_δ(distance_3, core_size)
     else
+        δ0 = zero(denom)
         δ1 = zero(nr1)
         δ2 = zero(nr2)
-        δ3 = zero(nr2)
     end
 
     # desingularized terms
-    f1 = num/(denom + max(δ1, δ2, δ3))
+    f1 = num/(denom + δ0)
     f2 = 1/(nr1+δ1)
     f3 = 1/(nr2+δ2)
 

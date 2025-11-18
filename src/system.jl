@@ -353,10 +353,12 @@ function update_probes!(system::System{TF}) where TF
     # V (just the first row of vertices)
     for wake in system.wakes
         for j in 1:size(wake, 2)
-            system.probes.position[i_probe] = wake[1, j].rtr
+            # println("\t\tHolmes: adding wake probe at ", wake[1, j].rtl)
+            # println("\t\t\twake_shedding_locations: ", system.wake_shedding_locations[1][j])
+            system.probes.position[i_probe] = wake[1, j].rtl
             i_probe += 1
         end
-        system.probes.position[i_probe] = wake[1, end].rbr
+        system.probes.position[i_probe] = wake[1, end].rtr
         i_probe += 1
     end
 
@@ -438,10 +440,12 @@ function probes_to_surfaces!(system::System{TF}) where TF
         V = system.V[i_surf]
         for j in 1:size(wake, 2)
             v = system.probes.gradient[i_probe]
+            # @show v, system.probes.position[i_probe]
             V[1, j] += v
             i_probe += 1
         end
         v = system.probes.gradient[i_probe]
+        # @show v, system.probes.position[i_probe]
         V[1, end] += v
         i_probe += 1
     end

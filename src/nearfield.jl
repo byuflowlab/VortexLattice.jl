@@ -47,6 +47,11 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
                 Vi += Vh[isurf][I]
+                if true in isnan.(Vh[isurf][I])
+                    @warn "NaN detected in horizontal velocity field at surface $isurf, panel $I"
+                else
+                    @debug "Horizontal velocity at surface $isurf, panel $I: $(Vh[isurf][I])"
+                end
             end
             V_streamwise = deepcopy(Vi)
 
@@ -136,7 +141,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             if !isnothing(dΓdt)
                 # unsteady part of Kutta-Joukowski theorem
 
-                #TODO: decide whether to divide by perpindicular velocity like
+                #TODO: decide whether to divide by perpendicular velocity like
                 # Drela does in ASWING?
 
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
