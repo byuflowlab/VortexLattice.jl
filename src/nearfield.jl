@@ -8,7 +8,7 @@ Calculate local panel forces in the body frame.
 function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true)
+    calculate_vlm_induced = true, skip_nonlinear_surfaces = false, sections=[])
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -16,11 +16,19 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
-
         receiving = surfaces[isurf]
         nr = length(receiving)
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
+
+        if !isempty(sections)
+            if skip_nonlinear_surfaces
+                if isempty(sections[isurf])
+                    iΓ += nr
+                    continue
+                end
+            end
+        end
 
         # loop through receiving panels
         for i in 1:length(receiving)
@@ -88,12 +96,16 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             xhat = xhat)
 
                         # streamwise velocity
-                        V_streamwise += induced_velocity(I, surfaces[jsurf], vΓ;
+                        V_streamwise += induced_velocity(controlpoint(receiving[I]), surfaces[isurf], vΓ;
                             finite_core = surface_id[isurf] != surface_id[jsurf],
                             wake_shedding_locations = shedding_locations,
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                            xhat = xhat, 
+                            skip_leading_edge = true, 
+                            skip_inside_edges = true, 
+                            skip_trailing_edge = true,
+                            )
                     else
                         # induced velocity on another surface
                         Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
@@ -108,7 +120,8 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             wake_shedding_locations = shedding_locations,
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
+                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, 
+                            skip_trailing_edge = true)
                     end
 
                     # induced velocity from corresponding wake
@@ -244,7 +257,7 @@ near_field_forces_derivatives!
 function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     ref, fs, Γ, dΓ; dΓdt, additional_velocity, Vh, Vv, symmetric, nwake,
     surface_id, wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true)
+    calculate_vlm_induced = true, skip_nonlinear_surfaces = false)
 
     # unpack derivatives
     props_a, props_b, props_p, props_q, props_r = dprops
@@ -256,6 +269,10 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
+        if skip_nonlinear_surfaces && isempty(system.sections[isurf])
+            iΓ += nr
+            continue
+        end
 
         receiving = surfaces[isurf]
         nr = length(receiving)
@@ -971,7 +988,7 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, r, c; frame=Body())
+function lifting_line_coefficients(system, r, c, w; frame=Body())
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -981,12 +998,12 @@ function lifting_line_coefficients(system, r, c; frame=Body())
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c; frame)
+    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame)
 end
 
 function lifting_line_coefficients(system; frame=Body(), xc = 0.25)
-    r, c = lifting_line_geometry(system.grids, xc)
-    return lifting_line_coefficients(system, r, c; frame)
+    r, c, w = lifting_line_geometry(system.grids, xc)
+    return lifting_line_coefficients(system, r, c, w; frame)
 end
 
 """
@@ -994,7 +1011,7 @@ end
 
 In-place version of [`lifting_line_coefficients`](@ref)
 """
-function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
+function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
 
     # number of surfaces
     nsurf = length(system.surfaces)
@@ -1017,7 +1034,8 @@ function lifting_line_coefficients!(cf, cm, system, r, c; frame=Body())
             # calculate segment length
             rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
             rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
-            ds = norm(rrs - rls)
+            # ds = norm(rrs - rls)
+            ds = norm(cross(w[isurf][:,j], rrs - rls)) # Use the spanwise width of the panel
             # calculate reference location
             rs = (rls + rrs)/2
             # calculate reference chord
