@@ -17,9 +17,12 @@ struct SectionProperties{TF}
     n_hat::Array{SVector{3,TF},0} # unit vector normal to the section
     airfoil::CCBlade.AlphaAF{TF, String, Akima{Vector{TF}, Vector{TF}, TF}}
     contour::Matrix{Float64}
+    zero_lift_aoa::TF
+    alpha_max::TF
+    alpha_min::TF
 end
 
-function SectionProperties(panels_indicies, gammas, area, airfoil, contour)
+function SectionProperties(panels_indicies, gammas, area, airfoil, contour, zero_lift_aoa=0.0, alpha_max=180.0, alpha_min=-180.0)
     α = zeros()
     cl = zeros()
     cd = zeros()
@@ -28,7 +31,7 @@ function SectionProperties(panels_indicies, gammas, area, airfoil, contour)
     n_hat = fill(SVector{3, eltype(α)}(0, 0, 0))
     Γs = zeros(3)
     λ = ones(length(panels_indicies))
-    return SectionProperties(α, cl, cd, Γs, λ, panels_indicies, gammas, area, force, c_hat, n_hat, airfoil, contour)
+    return SectionProperties(α, cl, cd, Γs, λ, panels_indicies, gammas, area, force, c_hat, n_hat, airfoil, contour, zero_lift_aoa, alpha_max, alpha_min)
 end
 
 """
@@ -38,7 +41,10 @@ end
 """
 function grid_to_sections(grid, airfoils; 
                     ratios=zeros(2, size(grid, 2)-1, size(grid, 3)-1) .+ [0.5;0.75], 
-                    contours=[zeros(1,1)])
+                    contours=[zeros(1,1)],
+                    zero_lift_aoa=0.0,
+                    alpha_max = pi,
+                    alpha_min = -pi)
                     
     _, _, surface = grid_to_surface_panels(grid; ratios)
     ns = size(surface, 2)
@@ -47,6 +53,7 @@ function grid_to_sections(grid, airfoils;
     if length(airfoils) == 1
         airfoils = fill(airfoils[1], ns)
         contours = fill(contours[1], ns)
+        zero_lift_aoa = fill(zero_lift_aoa, ns)
     end
     if length(airfoils) != ns
         error("Number of airfoils must match number of spanwise panels")
@@ -72,7 +79,11 @@ function grid_to_sections(grid, airfoils;
         cs = (c[1][i] + c[1][i+1])/2
         area = ds * cs
 
-        sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i])
+        alpha_max = maximum(airfoils[i].alpha)
+        alpha_min = minimum(airfoils[i].alpha)
+        zero_lift_aoa, _ = FLOWMath.brent(x -> airfoils[i].clspline(x), alpha_min, alpha_max)
+
+        sections[i] = SectionProperties(panels, gammas, area, airfoils[i], contours[i], zero_lift_aoa, alpha_max, alpha_min)
     end
 
     return sections
@@ -81,7 +92,6 @@ end
 function redefine_gamma_index!(sections, ns, nc)
     gamma_start = 1
     for i in eachindex(sections)
-        # if !isassigned(sections[i],1)
         if isempty(sections[i])
             gamma_start += ns[i] * nc[i]
             continue
@@ -108,7 +118,7 @@ Perform a nonlinear analysis on the system. This assumes that reference and free
 - `kwargs...`: Additional keyword arguments for steady analysis
 
 """
-function nonlinear_analysis!(system; max_iter=1, tol=1E-6, damping=0.01, kwargs...)
+function nonlinear_analysis!(system; max_iter=1, tol=1E-3, damping=0.01, kwargs...)
     ref = system.reference[]
     fs = system.freestream[]
     return nonlinear_analysis!(system, ref, fs; max_iter=max_iter, tol=tol, damping=damping, kwargs...)
@@ -130,12 +140,12 @@ Perform a nonlinear analysis on the system.
 - `kwargs...`: Additional keyword arguments for steady analysis
 """
 
-function nonlinear_analysis!(system, ref, fs; max_iter=10, tol=1E-6, damping=0.01, print_iters=false, kwargs...)
+function nonlinear_analysis!(system, ref, fs; max_iter=1, tol=1E-3, damping=0.01, print_iters=false, polar_correction=true, kwargs...)
     if !system.near_field_analysis[]
         steady_analysis!(system, ref, fs; derivatives=false, near_field_analysis=true, kwargs...)
+        system.near_field_analysis[] = true
     end
 
-    r, _, _ = lifting_line_geometry(system.grids)
     if max_iter < 1
         error("max_iter must be greater than 0")
     end
@@ -147,15 +157,22 @@ function nonlinear_analysis!(system, ref, fs; max_iter=10, tol=1E-6, damping=0.0
             section = system.sections[i][j]
             Γavg = 0.0
             for k in eachindex(section.panels)
-                Γavg += surface_properties[section.panels[k]].gamma
+                Γavg += surface_properties[section.panels[k]].gamma * system.reference[1].V
             end
             Γavg /= length(section.panels)
             section.Γs[1] = Γavg
             for k in eachindex(section.panels)
-                section.λ[k] = surface_properties[section.panels[k]].gamma / Γavg
+                section.λ[k] = surface_properties[section.panels[k]].gamma * system.reference[1].V / Γavg
             end
         end
     end
+
+    if polar_correction
+        system.derivatives[] = false
+        return polar_correction_calculation(system)
+    end
+
+    r, _, _ = lifting_line_geometry(system.grids)
 
     T = eltype(system.Γ)
     vel = zeros(T,3)
@@ -170,8 +187,6 @@ function nonlinear_analysis!(system, ref, fs; max_iter=10, tol=1E-6, damping=0.0
             break
         end
     end
-    # update_section_forces!(system, vel, vx, vy, vz, x_c)
-    system.near_field_analysis[] = true
     system.derivatives[] = false
     return system
 end
@@ -183,6 +198,7 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
     vy .= 0.0
     vz .= 0.0
     x_c .= 0.0
+
     for i in eachindex(system.surfaces)
         isempty(system.sections[i]) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
         sections = system.sections[i]
@@ -197,20 +213,26 @@ function _nonlinear_analysis!(system, r, damping, tol, vel, vx, vy, vz, x_c)
         for j in eachindex(sections)
             total_chord = 0.0
             section = sections[j]
-            section.c_hat[1] = surface[section.panels[end]].rbc - surface[section.panels[1]].rtc
-            section.c_hat[1] /= norm(section.c_hat[1])
-            section.n_hat[1] = cross(section.c_hat[1], surface[section.panels[end]].rbr - surface[section.panels[1]].rtl)
+
+            rtl = surface[section.panels[1]].rtl
+            rtr = surface[section.panels[1]].rtr
+            rbl = surface[section.panels[end]].rbl
+            rtc = surface[section.panels[1]].rtc
+            rbc = surface[section.panels[end]].rbc
+
+            section.n_hat[1] = cross(rbl - rtl, rtr - rtl)
             section.n_hat[1] /= norm(section.n_hat[1])
+
+            section.c_hat[1] = rbc - rtc
+            section.c_hat[1] /= norm(section.c_hat[1])
 
             for k in eachindex(section.panels)
                 total_chord += surface[section.panels[k]].chord
                 vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity_from_streamwise
-                # vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity * system.reference[1].V
             end
 
             for k in eachindex(section.panels)
-                # TODO update first term to be leading edge of the section
-                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rtc) / total_chord
+                x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rcp) / total_chord
             end
 
             if length(section.panels) > 1
@@ -291,11 +313,9 @@ function update_section_forces!(system,
             for k in eachindex(section.panels)
                 total_chord += surface[section.panels[k]].chord
                 vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity * system.reference[1].V
-                # vx_view[k], vy_view[k], vz_view[k] = properties[section.panels[k]].velocity_from_streamwise
             end
 
             for k in eachindex(section.panels)
-                # TODO update first term to be leading edge of the section
                 x_c_view[k] = norm(surface[section.panels[1]].rtc - surface[section.panels[k]].rtc) / total_chord
             end
 
@@ -308,10 +328,6 @@ function update_section_forces!(system,
                 vel[2] = vy[1]
                 vel[3] = vz[1]
             end
-
-            # section.α[1] = atan(dot(vel, section.n_hat[1]), dot(vel, section.c_hat[1])) * (-1)^system.invert_normals[i]
-            # section.cl[1] = section.airfoil.clspline(section.α[1])
-            # section.cd[1] = section.airfoil.cdspline(section.α[1])
             
             v_mag = norm(vel)
             y_hat = cross(section.n_hat[1], section.c_hat[1])
@@ -380,36 +396,72 @@ function call_near_field_forces!(system)
                 xhat = xhat,
                 calculate_vlm_induced = true, 
                 skip_nonlinear_surfaces = true,
-                sections = system.sections,)
+                sections = system.sections)
 end
 
-function section_induced_velocity(section, surface, Γ, I)
-    # identify relevant section
-    panels_CI = section.panels
-    gammas_CI = section.gammas
-    rc = top_center(surface[I])
-    Vind = @SVector zeros(3)
+function polar_correction_calculation(system)
+    r, c, w = lifting_line_geometry(system.grids)
+    cl_data = lifting_line_coefficients(system, r, c, w; frame=Body())[1]
+    V = zeros(eltype(system.Γ),3)
+    for i in eachindex(system.surfaces)
+        isempty(system.sections[i]) && continue # Ensure sections are assigned, if not do not perform nonlinear analysis on this surface
+        sections = system.sections[i]
+        surface = system.surfaces[i]
+        for j in eachindex(sections)
+            section = sections[j]
+            cl_local = cl_data[i][1:3, j]
 
-    for i = eachindex(panels_CI)
-        panel = surface[panels_CI[i]]
-        gamma = Γ[gammas_CI[i]]
-        include_top = i != I[1]
-        include_bottom = (i != I[1]-1) || (I[1] == length(panels_CI))
+            rtl = surface[section.panels[1]].rtl
+            rtr = surface[section.panels[1]].rtr
+            rbl = surface[section.panels[end]].rbl
+            rtc = surface[section.panels[1]].rtc
+            rbc = surface[section.panels[end]].rbc
 
-        Vind += ring_induced_velocity(rc, panel;
-                                                top = include_top,
-                                                bottom = include_bottom,
-                                                reflected_top=false,
-                                                reflected_bottom=false,
-                                                reflected_left=false,
-                                                reflected_right=false,
-                                                left=false,
-                                                right=false,
-                                                )[1] * gamma
+            section.n_hat[1] = cross(rbl - rtl, rtr - rtl)
+            section.n_hat[1] /= norm(section.n_hat[1])
 
+            section.c_hat[1] = rbc - rtc
+            section.c_hat[1] /= norm(section.c_hat[1])
+            
+            y_hat = cross(section.n_hat[1], section.c_hat[1])
+            y_hat /= norm(y_hat)
+
+            cl_global = cl_local[1]*section.c_hat[1] + cl_local[2]*y_hat + cl_local[3]*section.n_hat[1]
+
+            V .= 0.0
+            for k in eachindex(section.panels)
+                Vx, Vy, Vz = system.properties[i][section.panels[k]].velocity_from_streamwise
+                V[1] += Vx
+                V[2] += Vy
+                V[3] += Vz
+            end
+            V ./= length(section.panels)
+            V_inf = sqrt(V[1]^2 + V[2]^2 + V[3]^2)
+            cl_global *= system.reference[1].V^2 / (V_inf^2 + eps(eltype(V_inf)))
+
+            V_hat = V / (V_inf + eps(eltype(V_inf)))
+            cl_plane = cl_global .- dot(cl_global, V_hat) * V_hat
+            n_perp = section.n_hat[1] .- dot(section.n_hat[1], V_hat) * V_hat
+            n_perp_norm = norm(n_perp)
+            n_perp_hat = n_perp / n_perp_norm
+            cl_section = dot(cl_plane, n_perp_hat)
+            
+            section.α[1] = (cl_section / (2*π) + section.zero_lift_aoa) * (-1)^system.invert_normals[i]            
+
+            if section.α[1] > section.alpha_max
+                section.α[1] = section.alpha_max
+            elseif section.α[1] < section.alpha_min
+                section.α[1] = section.alpha_min
+            end
+            section.cl[1] = section.airfoil.clspline(section.α[1])
+            section.cd[1] = section.airfoil.cdspline(section.α[1])
+            section.Γs[2] = 0.5 * section.cl[1] * c[i][j] * V_inf * (-1)^system.invert_normals[i]
+
+            for k in eachindex(section.gammas)
+                system.Γ[section.gammas[k]] = section.Γs[1] * section.λ[k]
+            end
+        end
     end
-    if any(isnan.(Vind))
-        error("NaN detected in section_induced_velocity")
-    end
-    return Vind
+    call_near_field_forces!(system)
+    return system
 end
