@@ -87,9 +87,9 @@ fs = Freestream(Vinf, alpha, beta, Omega)
 
 # generate surface panels for wing
 w1grid, w1ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=true, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-# w2grid, w2ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-#     mirror=false, flip=true, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+    mirror=false, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
+w2grid, w2ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+    mirror=false, flip=true, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
 # generate surface panels for horizontal tail
 hgrid, hratio = wing_to_grid(xle_h, yle_h, zle_h, chord_h, theta_h, phi_h, ns_h, nc_h;
@@ -141,9 +141,9 @@ translate!(p2grid1, o_p2)
 translate!(p2grid2, o_p2)
 
 # create system
-grids = [w1grid]#, w2grid]#, hgrid, vgrid]#, p1grid1, p1grid2, p2grid1, p2grid2]
-ratios = [w1ratio]#, w2ratio]#, hratio, vratio]#, p1ratio1, p1ratio2, p2ratio1, p2ratio2]
-surface_id = [1]#, 1]#, 3, 4]#, 5, 6, 7, 8]
+grids = [w1grid, w2grid, hgrid, vgrid, p1grid1, p1grid2, p2grid1, p2grid2]
+ratios = [w1ratio, w2ratio, hratio, vratio, p1ratio1, p1ratio2, p2ratio1, p2ratio2]
+surface_id = [1, 2, 3, 4, 5, 6, 7, 8]
 system = System(grids; ratios)
 system.reference[] = ref
 symmetric = [false for _ in grids]  # no implied symmetry
@@ -171,28 +171,30 @@ frames = ReferenceFrame(system;
     dependent_index = collect(1:length(system.surfaces))
 )
 
+# comment the following lines to disable propellers
 # add wing frames
-# VortexLattice.add_frame!(frames, "wing1", "vehicle", SVector{3}(0.0, 0.0, -10.0), [1]; 
-#     v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = -0.025 * 2 * pi,
-#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+VortexLattice.add_frame!(frames, "wing1", "vehicle", SVector{3}(0.0, 0.0, -10.0), [1]; 
+    v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = -0.025 * 2 * pi,
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
-# VortexLattice.add_frame!(frames, "wing2", "vehicle", SVector{3}(0.0, 0.0, -10.0), [2]; 
-#     v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = 0.025 * 2 * pi,
-#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+VortexLattice.add_frame!(frames, "wing2", "vehicle", SVector{3}(0.0, 0.0, -10.0), [2]; 
+    v = SVector{3}(0.0, 0.0, 0.25), ω_axis = SVector{3}(-1.0, 0.0, 0.0), ω = 0.025 * 2 * pi,
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
 # add propeller and blade frames
-# VortexLattice.add_frame!(frames, "propeller1", "wing1", o_p1, [5,6]; 
-#     v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = -7.0 * 2 * pi,
-#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+VortexLattice.add_frame!(frames, "propeller1", "wing1", o_p1, [5,6]; 
+    v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = -7.0 * 2 * pi,
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
-# VortexLattice.add_frame!(frames, "propeller2", "wing2", o_p2, [7,8]; 
-#     v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = 7.0 * 2 * pi,
-#     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+VortexLattice.add_frame!(frames, "propeller2", "wing2", o_p2, [7,8]; 
+    v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = 7.0 * 2 * pi,
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+# comment the preceding lines to disable propellers
 
 #--- perform maneuver ---#
 
 function maneuver!(frames, system, wake, t)
-    if 0.0 <= t < 0.25
+    if 0.0 <= t%1.0 < 0.25
         (; x, R, name, parent_index, child_index, dependent_index) = frames[2]
         v = SVector{3}(0.0, 0.0, 0.25)
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
@@ -200,7 +202,7 @@ function maneuver!(frames, system, wake, t)
         frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
         frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
-    elseif 0.25 <= t < 0.5
+    elseif 0.25 <= t%1.0 < 0.5
         v = SVector{3}(0.0, 0.0, 0.25) * -4
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
         ω = -0.025 * 2 * pi * -8 * 2
@@ -208,7 +210,7 @@ function maneuver!(frames, system, wake, t)
         frames[2] = typeof(frames[2])(x, v, ω_axis, ω, R, name, parent_index, child_index, dependent_index)
         (; x, R, name, parent_index, child_index, dependent_index) = frames[3]
         frames[3] = typeof(frames[3])(x, v, ω_axis, -ω, R, name, parent_index, child_index, dependent_index)
-    elseif 0.5 <= t
+    elseif 0.5 <= t%1.0
         v = SVector{3}(0.0, 0.0, 0.25) * 3 * 0.5
         ω_axis = SVector{3}(-1.0, 0.0, 0.0)
         ω = -0.025 * 2 * pi * 7 * 0.5 * 2
@@ -240,13 +242,13 @@ t_range = range(0, stop=3.0, length=301)
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
            )
-wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range;
-        name = "test20250619_2", vtk_args=(trailing_vortices=false,),
+@time wake = simulate!(system, frames, maneuver!, Uinf, t_range;
+        name = "flapping", vtk_args=(trailing_vortices=false,),
         particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
         # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-        particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,2), length(system.surfaces)),
+        particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
         # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-        derivatives=false, monitors, eta=0.3, calculate_influence_matrix=false)
+        derivatives=false, monitors, eta=0.3, calculate_influence_matrix=true)
 
 gamma_unsteady = deepcopy(system.Γ)
 CF_unsteady, CM_unsteady = body_forces(system.surfaces, system.properties,
