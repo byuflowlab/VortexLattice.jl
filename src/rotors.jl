@@ -60,13 +60,15 @@ function _read_blade(blade_file::String, data_path)
     sweepdist = readdlm(joinpath(rotor_path, files[3, 2]),',';skipstart=1)
     heightdist = readdlm(joinpath(rotor_path, files[4, 2]),',';skipstart=1)
     airfoil_files = readdlm(joinpath(rotor_path, files[5, 2]),',';skipstart=1)
-    airfoil_reference = zeros(length(airfoil_files),2)
-        if num_files > 5
-            if tryparse(Float64, files[6, 2]) !== nothing # check if files[6,2] is a Float
-            else
-                airfoil_reference = readdlm(joinpath(rotor_path, files[6, 2]),',';skipstart=1)
-            end
+    if num_files > 5
+        if !isa(files[6,2], Number)
+            airfoil_reference = readdlm(joinpath(rotor_path, files[6, 2]),',';skipstart=1)
+        else
+            airfoil_reference = zeros(1,1)
         end
+    else
+        airfoil_reference = zeros(1,1)
+    end
 
     af = airfoil_files
     airfoil_files = [(Float64(af[i, 1]), String(af[i, 2]), String(af[i, 3]))
@@ -157,6 +159,13 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     zle = FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
     invert_normals = fill(invert, B)
 
+    if size(airfoil_reference,1) < length(yle)
+        if length(airfoil_reference) != 1
+            @warn "Airfoil reference line has different length than spanwise stations. Ignoring reference line."
+        end
+        airfoil_reference = zeros(length(yle),2)
+    end
+
     grid, ratio = wing_to_grid(xle,yle,zle,chord,theta,zeros(length(yle)),
                     ns,nc;reference_line=airfoil_reference,
                     spacing_s=spacing_s, spacing_c=spacing_c, invert_cambers=invert)
@@ -183,7 +192,7 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     airfoils = Vector{Tuple{Float64, CCBlade.AlphaAF{Float64, String, Akima{Vector{Float64}, Vector{Float64}, Float64}}}}(undef,length(airfoil_contours))
     contours = Vector{Array{Float64,2}}(undef,length(airfoil_contours))
     for (rfli, (pos, contour, file_name)) in enumerate(airfoil_contours)
-        polar = CCBlade.AlphaAF(joinpath(data_path, "airfoils", file_name); radians=polar_in_radians)
+        polar = get_polars(joinpath(data_path, "airfoils", file_name); radians=polar_in_radians)
 
         if zero_at_root
             pos = (Rhub + pos*(Rtip-Rhub))/Rtip
@@ -306,4 +315,19 @@ function interpolate_airfoil!(new_airfoils, new_contours, airfoils, contours, r,
 
     new_airfoils[i] = CCBlade.AlphaAF(alpha, cl, cd, "Interpolated Airfoil from airfoils $(index) and $(index+1)")
     new_contours[i] = contours[index]
+end
+
+function get_polars(filename; radians=true)
+    if endswith(lowercase(filename), ".csv")
+        data = readdlm(filename,',';skipstart=1)
+        alpha = data[:,1]
+        cl = data[:,2]
+        cd = data[:,3]
+        if !radians
+            alpha *= pi/180
+        end
+        return CCBlade.AlphaAF(alpha, cl, cd, filename)
+    else
+        return CCBlade.AlphaAF(filename; radians=radians)
+    end
 end
