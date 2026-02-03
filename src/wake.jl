@@ -147,7 +147,7 @@ function update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity,
 
             # velocity due to surface motion
             if !isnothing(Vwake)
-                V += Vwake[isurf][1,j]
+                V += Vwake[isurf][1,j+1]
             end
 
             # update wake shedding location coordinates

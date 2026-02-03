@@ -74,6 +74,7 @@ function normal_velocity!(w, surfaces, wakes, ref, fs; additional_velocity,
             # freestream velocity
             V = freestream_velocity(fs)
 
+
             # rotational velocity
             V += rotational_velocity(rcp, fs, ref)
 

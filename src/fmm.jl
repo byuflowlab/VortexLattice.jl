@@ -258,8 +258,7 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, filaments::Fil
     buffer[4, i_buffer] = 0.5 * norm(panel.rbl - panel.rtr) + panel.core_size
     r1 = panel.rtl
     r2 = panel.rtr
-    l = norm(r2 - r1)
-    buffer[5, i_buffer] = panel.gamma / l
+    buffer[5, i_buffer] = panel.gamma
     buffer[6:8,i_buffer] .= r1
     buffer[9:11,i_buffer] .= r2
     buffer[12,i_buffer] = panel.core_size

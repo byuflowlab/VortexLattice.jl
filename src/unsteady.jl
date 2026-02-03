@@ -224,14 +224,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # update trailing edge filaments with the previous circulation solution
         update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
 
-        #--- shed new wake particles ---#
-
-        # shed wake particles
-        if i_step > 0
-            shed_wake!(wake, system,  dt, 
-                particle_trailing_methods, particle_unsteady_methods)
-        end
-
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
@@ -247,9 +239,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 force_finite_core = fill(true, length(current_surfaces)))
         end
 
-        # update the AIC matrix to use the new wake shedding locations
-        update_trailing_edge_coefficients!(AIC, current_surfaces;
-            symmetric, wake_shedding_locations, trailing_vortices)
+        # # update the AIC matrix to use the new wake shedding locations
+        # update_trailing_edge_coefficients!(AIC, current_surfaces;
+        #     symmetric, wake_shedding_locations, trailing_vortices)
 
         # calculate RHS
         if derivatives
@@ -261,7 +253,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 additional_velocity, Vcp, symmetric, nwake, surface_id,
                 wake_finite_core, trailing_vortices, xhat, include_wakes=false)
         end
-        @show w
+        # @show w
         # throw("here2")
 
         # save (negative) previous circulation in dΓdt
@@ -287,7 +279,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #--- vehicle-on-all ---#
 
         # solve n-body problem
-        # println("SHERLOCK!! BEFORE vehicle_on_all!")
         # @show V[1][1,1] V[1][1,end]
         # DEBUG[] = true
         vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
@@ -369,6 +360,12 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
             # and kinematic velocities
             update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, V)
 
+            #--- shed new wake particles ---#
+
+            # shed wake particles
+            shed_wake!(wake, system,  dt, 
+                particle_trailing_methods, particle_unsteady_methods)
+
         end
 
         # increment step
@@ -404,7 +401,7 @@ function wake_on_all!(system::System, wake::ParticleField, trailing_edge_filamen
 
     # update probe positions
     update_probes!(system)
-
+    
     # solve n-body problem
     fmm!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
     probes_to_surfaces!(system) # update Vcp, Vv, Vh, Vte, V based on probes
@@ -574,7 +571,7 @@ function vehicle_on_all!(system::System, wake::ParticleField, trailing_edge_fila
     FastMultipole.reset!(system.probes)
 
     # n-body problem
-    fmm!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
+    fmm!((wake, system.probes), (system, ); hessian=SVector{2}(true,false), fmm_vehicle_args...)
 
     # update Vcp, Vv, Vh, and Vte based on probes
     probes_to_surfaces!(system)

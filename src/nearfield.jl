@@ -55,11 +55,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             # velocity due to surface motion (and possibly wake and surfaces)
             if !isnothing(Vh)
                 Vi += Vh[isurf][I]
-                if true in isnan.(Vh[isurf][I])
-                    @warn "NaN detected in horizontal velocity field at surface $isurf, panel $I"
-                else
-                    @debug "Horizontal velocity at surface $isurf, panel $I: $(Vh[isurf][I])"
-                end
             end
             V_streamwise = deepcopy(Vi)
 
