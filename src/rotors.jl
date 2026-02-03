@@ -155,8 +155,8 @@ function _generate_rotor(Rtip, Rhub, B::Int,
 
     chord = FLOWMath.linear(chorddist[:,1] .* Rtip, chorddist[:,2] .* Rtip, yle)
     theta = FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]) * clockwise_mod, yle)
-    xle = FLOWMath.linear(sweepdist[:,1] .* Rtip, sweepdist[:,2] .* Rtip, yle)
-    zle = FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
+    xle = .-FLOWMath.linear(sweepdist[:,1] .* Rtip, sweepdist[:,2] .* Rtip, yle)
+    zle = .-FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
     invert_normals = fill(invert, B)
 
     if size(airfoil_reference,1) < length(yle)

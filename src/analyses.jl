@@ -584,6 +584,9 @@ function propagate_system!(system, surfaces, fs, dt;
             wake_finite_core, trailing_vortices, xhat)
     end
 
+    @show w
+    # throw("here")
+
     # save (negative) previous circulation in dΓdt
     dΓdt .= .-Γ
 

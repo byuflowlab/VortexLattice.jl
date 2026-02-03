@@ -270,7 +270,7 @@ function Freestream(frame::ReferenceFrame{TF}, ref::Reference, vinf_ext) where T
 
     # create freestream object
     Omega = frame.ω_axis * frame.ω
-    fs = velocity_to_freestream(V, Omega)
+    fs = velocity_to_freestream(V, -Omega)
 
     return fs
 end

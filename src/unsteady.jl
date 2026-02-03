@@ -47,7 +47,7 @@ struct ForcesMonitor{TF,F}
     frame::F
 end
 
-function ForcesMonitor(nt::Int, TF=Float64; frame=Body())
+function ForcesMonitor(nt::Int, TF=Float64; frame=Wind())
     CF = zeros(SVector{3,TF}, nt)
     CM = zeros(SVector{3,TF}, nt)
 
@@ -60,6 +60,12 @@ function (monitor::ForcesMonitor)(system::System, wake, i_step::Int)
                             system.symmetric, monitor.frame)
     monitor.CF[i_step + 1] = CF
     monitor.CM[i_step + 1] = CM
+end
+
+struct FrameForcesMonitor{TF,F}
+    CF::Vector{SVector{3,TF}}
+    CM::Vector{SVector{3,TF}}
+    frame::F
 end
 
 function simulate!(system::System{TF}, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
@@ -176,9 +182,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # NOTE: this skips the top level frame, which is captured in system.fs
         current_surfaces = system.surfaces
         kinematic_velocity!(Vcp, Vh, Vv, Vte, current_surfaces, frames; skip_top_level=true)
-
+        
         #------- aerodynamics -------#
-
+        
         # update freestream velocity based on the top level frame
         # (includes top level frame's velocity and rotation)
         ref = system.reference[]
@@ -218,6 +224,14 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # update trailing edge filaments with the previous circulation solution
         update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
 
+        #--- shed new wake particles ---#
+
+        # shed wake particles
+        if i_step > 0
+            shed_wake!(wake, system,  dt, 
+                particle_trailing_methods, particle_unsteady_methods)
+        end
+
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
@@ -247,6 +261,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 additional_velocity, Vcp, symmetric, nwake, surface_id,
                 wake_finite_core, trailing_vortices, xhat, include_wakes=false)
         end
+        @show w
+        # throw("here2")
 
         # save (negative) previous circulation in dΓdt
         dΓdt .= .-Γ
@@ -348,16 +364,11 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
             # propagate wake
             FLOWVPM._euler(wake, dt; relax=true)
 
-            #--- shed new wake particles ---#
-
             # update wake shedding locations based on wake and vehicle
             # accounts for vehicle-induced, wake-induced, freestream, 
             # and kinematic velocities
             update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, V)
 
-            # shed wake particles
-            shed_wake!(wake, system,  dt, 
-                particle_trailing_methods, particle_unsteady_methods)
         end
 
         # increment step
@@ -382,7 +393,7 @@ function update_trailing_edge_filaments!(trailing_edge_filaments::FilamentWrappe
 
             # update wake panel circulation
             wp = wake[1, j]
-            wake[1, j] = WakePanel{TF}(wp.rtl, wp.rtr, wp.rbl, wp.rbr, core_size, Γ[iΓ])
+            wake[1, j] = WakePanel{TF}(wp.rtl, wp.rtr, wp.rbl, wp.rbr, core_size, Γ[iΓ]) # use previous timestep's circulation
         end
     end
 end
@@ -395,9 +406,7 @@ function wake_on_all!(system::System, wake::ParticleField, trailing_edge_filamen
     update_probes!(system)
 
     # solve n-body problem
-    # fmm!((wake, system.probes), (wake, ); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
     fmm!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
-    # direct!((wake, system.probes), (wake, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_wake_args...) # solve N-body problem
     probes_to_surfaces!(system) # update Vcp, Vv, Vh, Vte, V based on probes
 end
 
@@ -483,9 +492,10 @@ function shed_unsteady!(pfield::FLOWVPM.ParticleField, surfaces, wakes, dΓdt, d
             panel = wake[1, j]
             r2 = bottom_left(panel)
             r1 = bottom_right(panel)
+            Γ = dΓdt[iΓ] * dt
 
             # shed unsteady particles
-            shed_particles!(pfield, r1, r2, dΓdt[iΓ] * dt, method)
+            shed_particles!(pfield, r1, r2, Γ, method)
         end
     end
 end
@@ -564,8 +574,6 @@ function vehicle_on_all!(system::System, wake::ParticleField, trailing_edge_fila
     FastMultipole.reset!(system.probes)
 
     # n-body problem
-    # direct!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
-    # direct!((wake, system.probes), (system, ); hessian=SVector{2}(true,false), fmm_vehicle_args...)
     fmm!((wake, system.probes), (system, trailing_edge_filaments); hessian=SVector{2}(true,false), fmm_vehicle_args...)
 
     # update Vcp, Vv, Vh, and Vte based on probes
