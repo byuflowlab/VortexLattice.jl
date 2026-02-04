@@ -11,7 +11,7 @@ AR = 6 # last aspect ratio is essentially infinite
 
 # non-dimensional time (t*Vinf/c)
 t = range(0.0, 10.0, step=1/16)
-# t = range(0.0, 2.0, step=1/16)
+t = range(0.0, 2.0, step=1/16)
 
 # chord length
 c = 1

@@ -523,7 +523,7 @@ function shed_particles!(pfield, r1, r2, Γ, method::SigmaPPS)
     Xp = r1 + distance_vector * 0.5
     Γp = Γ * distance_vector
     for i in 1:p_per_step
-        FLOWVPM.add_particle(pfield, Xp, Γp, sigma)
+        FLOWVPM.add_particle(pfield, Xp, Γp, sigma; circulation=Γ)
         Xp += distance_vector
     end
 end

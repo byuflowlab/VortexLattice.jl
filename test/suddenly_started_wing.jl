@@ -73,6 +73,8 @@ tmax = max_Vinf_t_c * cref / Vinf
 nsteps = Int(ceil(tmax / dt))
 t_range = range(start=0.0, stop=nsteps*dt, length=nsteps+1)
 monitors = (VortexLattice.ForcesMonitor(length(t_range); frame=Wind()),)
+system_ssw.Γ .= 0.0
+system_ssw.dΓdt .= 0.0
 benchmark = @elapsed wake = simulate!(system_ssw, frames, constant_maneuver!, Vinf_func, t_range; 
             monitors,
             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
