@@ -33,7 +33,7 @@ chord = [c, c]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
-ns = 1
+ns = 13
 nc = 1
 
 spacing_s = Uniform()

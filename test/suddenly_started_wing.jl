@@ -15,8 +15,7 @@ zle = [0.0, 0.0]
 chord = [c, c]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
-ns = 1
-# ns = 1
+ns = 13
 # nc = 4
 nc = 1
 fc = fill((xc) -> 0, length(yle)) # camberline function for each section
@@ -77,14 +76,14 @@ monitors = (VortexLattice.ForcesMonitor(length(t_range); frame=Wind()),)
 benchmark = @elapsed wake = simulate!(system_ssw, frames, constant_maneuver!, Vinf_func, t_range; 
             monitors,
             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
-            particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3, 1), length(system_ssw.surfaces)),
+            particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3, 5), length(system_ssw.surfaces)),
             # particle_unsteady_methods=fill(VortexLattice.SigmaPPS(5.5, 1), length(system_ssw.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3, 80), length(system_ssw.surfaces)),
-            particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
+            particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3, 5), length(system_ssw.surfaces)),
+            # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
             eta = 0.25,
             derivatives = false,
             vtk_args=(trailing_vortices=false,),
-            fmm_wake_args=(leaf_size_source=1000,),
+            fmm_wake_args=(leaf_size_source=20,),
             # nonlinear_analysis=true,
             # nonlinear_args=(polar_correction=false,),
             # calculate_influence_matrix=true,
@@ -107,13 +106,16 @@ fig.add_subplot(121, xlabel=L"t^*", ylabel=L"C_L")
 fig.add_subplot(122, xlabel=L"t^*", ylabel=L"C_D")
 ax = fig.get_axes()[0]
 ax.plot(tstar, CLs, label="VPM")
-ax.plot(tstar, fill(CL_steady, length(tstar)), "--", label="steady VLM")
+ax.plot(t[1:end-1]*Vinf/cref, CLs_uvlm, "--", label="UVLM")
+ax.plot(tstar, fill(CL_steady, length(tstar)), ":", label="steady VLM")
+
 ax.set_ylim(0.0, 1.0)
 ax.legend()
 ax2 = fig.get_axes()[1]
 ax2.plot(tstar, CDs, label="VPM")
-ax2.plot(tstar, fill(CD_steady, length(tstar)), "--", label="steady VLM")
-# ax2.set_ylim(0.0, 0.008)
+ax2.plot(t[1:end-1]*Vinf/cref, Ds_uvlm, "--", label="UVLM")
+ax2.plot(tstar, fill(CD_steady, length(tstar)), ":", label="steady VLM")
+ax2.set_ylim(0.0, 0.02)
 ax2.legend()
 tight_layout()
 
