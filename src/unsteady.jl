@@ -94,14 +94,14 @@ end
 
 function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
-        vtk_args=(), fmm_wake_args=(), fmm_vehicle_args=(),
+        vtk_args=(trailing_vortices=false,), fmm_wake_args=(), fmm_vehicle_args=(),
         derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
         eta=0.3, 
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         particle_unsteady_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         trailing_vortices=fill(false, length(system.surfaces)),
         shedding_surfaces=fill(true, length(system.surfaces)),
-        monitors,
+        monitors=(),
         calculate_influence_matrix=true
     )
     # create save path if it does not exist
