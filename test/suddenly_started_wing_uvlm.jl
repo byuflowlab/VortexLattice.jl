@@ -11,7 +11,7 @@ AR = 6 # last aspect ratio is essentially infinite
 
 # non-dimensional time (t*Vinf/c)
 t = range(0.0, 10.0, step=1/16)
-t = range(0.0, 2.0, step=1/16)
+# t = range(0.0, 2.0, step=1/16)
 
 # chord length
 c = 1
@@ -34,7 +34,7 @@ theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
 ns = 13
-nc = 1
+nc = 4
 
 spacing_s = Uniform()
 spacing_c = Uniform()
