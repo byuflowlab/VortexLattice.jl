@@ -42,30 +42,19 @@ spacing_c_p1 = Uniform()
 mirror_p1 = false
 p1grid1, p1ratio1 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
     mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-p1ratio1 = zeros(2, size(p1grid1, 2)-1, size(p1grid1, 3)-1) .+ [0.5;0.75]
 p1grid2, p1ratio2 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
-    mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-p1ratio2 = zeros(2, size(p1grid2, 2)-1, size(p1grid2, 3)-1) .+ [0.5;0.75]
+mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
 translate!(p1grid1, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
 translate!(p1grid2, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
 R1_b1 = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
-VortexLattice.rotate!(p1grid1, R1_b1)
+rotate!(p1grid1, R1_b1)
 R1_b2 = VortexLattice.Rodrigues(SVector{3}(1.0,0,0), pi*1.0) * R1_b1
-VortexLattice.rotate!(p1grid2, R1_b2)
-
-# debug geometry
-using VortexLattice.WriteVTK
-testgrid = zeros(size(p1grid1,1), size(p1grid1,2), size(p1grid1,3), 1)
-testgrid[:,:,:,1] .= p1grid1
-vtk_grid("debug_grid", testgrid) do vtk
-    vtk["ptdata"] = reshape(p1grid1[1,:,:], size(p1grid1,2), size(p1grid1,3), 1)
-end
+rotate!(p1grid2, R1_b2)
 
 grids = [p1grid1, p1grid2]
 ratios = [p1ratio1, p1ratio2]
 
 system = System(grids; ratios, sections);
-# system = System(grids; ratios, sections);
 
 Sref = 1.0
 cref = 1.0
@@ -83,9 +72,9 @@ Omega = [0; 0.0; 0.0]
 fs = Freestream(magVinf, alpha, beta, Omega)
 system.freestream[] = fs
 
-steady_analysis!(system, system.reference[], system.freestream[]; symmetric=false);
+steady_analysis!(system, system.reference[], system.freestream[]; symmetric=false)
 
-write_vtk("rotor_hover_initial", system; write_wakes=false, trailing_edge_list=fill(false, length(system.surfaces)));
+write_vtk("rotor_hover_initial", system; write_wakes=false, trailing_edge_list=fill(false, length(system.surfaces)))
 
 frames = ReferenceFrame(system;
         origin = SVector{3}(0.0, 0.0, 0.0),
@@ -103,7 +92,7 @@ n_revs = 10
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
-overlap = 1.6
+overlap = 1.3
 p_per_step = 4
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
@@ -116,10 +105,9 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
             # particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
             particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            eta = 0.25,
+            eta = 0.4,
             derivatives = false,
-            # vtk_args=(trailing_vortices=false,),
-            # wake_args=(SFS=VortexLattice.FLOWVPM.SFS_Cd_twolevel_nobackscatter,),
+            vtk_args=(trailing_vortices=false,),
             # nonlinear_analysis=true,
             # nonlinear_args=(polar_correction=false,),
             # calculate_influence_matrix=true,
@@ -142,12 +130,12 @@ CT_exp = 0.072
 CT_URANS = 0.071
 ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
 
-di = timestep_per_rev * 1
-CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])
+di = timestep_per_rev >> 1
+CT_vpm = sum(CTs[end-di: end]) / length(CTs[end-di: end])
 percent_error = abs((CT_vpm - CT_exp) / CT_exp) * 100
 println("VPM CT: $CT_vpm\nExperiment CT: $CT_exp\nURANS CT: $CT_URANS\nPercent Error (VPM vs Experiment): $percent_error %")
 
 # save csv with CT vs time
-name = "rotor_hover_eta0.25_ns13cos_nc1_ns36_pps4_overlap1.6"
+name = "rotor_hover_eta0.4_ns13cos_nc1"
 data = hcat(collect(t_range), CTs)
 writedlm(name*".csv", data, ',')

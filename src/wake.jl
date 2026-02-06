@@ -93,7 +93,245 @@ function update_wake_shedding_locations!(wakes, wake_shedding_locations,
     return wakes, wake_shedding_locations
 end
 
+"""
+    Similar to `update_wake_shedding_locations`, but assumes `wake_shedding_locations` contain the previous trailing edge location.
+"""
+function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations,
+    surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
+
+    # get number of surfaces
+    nsurf = length(surfaces)
+
+    # loop through all surfaces
+    for isurf = 1:nsurf
+
+        # number of spanwise panels
+        ns = length(wake_shedding_locations[isurf]) - 1
+        wsl = wake_shedding_locations[isurf]
+        surface = surfaces[isurf]
+        wake = wakes[isurf]
+
+        # scale wsl (temporarily contains previous trailing edge location) by eta 
+        wsl .*= eta
+
+        # update wake shedding location
+        for j = 1:ns+1
+
+            # extract trailing edge coordinate
+            if j < ns + 1
+                rte = bottom_left(surface[end, j])
+            else
+                rte = bottom_right(surface[end, j-1])
+            end
+
+            # freestream velocity
+            V = freestream_velocity(fs)
+
+            # rotational velocity
+            V += rotational_velocity(rte, fs, ref)
+
+            # additional velocity field
+            if !isnothing(additional_velocity)
+                V += additional_velocity(rte)
+            end
+
+            # velocity due to surface motion
+            if !isnothing(Vte)
+                V += Vte[isurf][j]
+            end
+
+            # update wake shedding location coordinates
+            wsl[j] += (1-eta) * rte + eta*V*dt
+
+        end
+
+        if nwake[isurf] > 0
+            # loop through first row of wake panels
+            for j = 1:ns
+                # update wake panel with wake shedding location coordinates
+                rtl = wsl[j]
+                rtr = wsl[j+1]
+
+                # preserve other wake panel coordinates
+                rbl = bottom_left(wakes[isurf][1,j])
+                rbr = bottom_right(wakes[isurf][1,j])
+
+                # preserve core size
+                core_size = get_core_size(wakes[isurf][1,j])
+
+                # preserve circulation strength
+                gamma = circulation_strength(wakes[isurf][1,j])
+
+                # replace the old wake panel
+                wake[1,j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+            end
+        end
+
+    end
+
+    return wakes, wake_shedding_locations
+end
+
+function initial_wake_panels!(wakes, wake_shedding_locations, surfaces, eta)
+    for isurf in eachindex(surfaces)
+        wsl = wake_shedding_locations[isurf]
+        surface = surfaces[isurf]
+        wake = wakes[isurf]
+        nc, ns = size(surface)
+
+        # get trailing edge point
+        rte = bottom_left(surface[nc,1])
+
+        # wsl point
+        rwsl = wsl[1]
+
+        # extend to the end of the wake panel
+        dx = rwsl - rte
+        rbl_wake = rwsl + dx / eta
+
+        for j in 1:ns
+            
+            # get right trailing edge point
+            rte = bottom_right(surface[nc,j])
+
+            # wsl point
+            rwsl = wsl[j+1]
+
+            # extend to the end of the wake panel
+            dx = rwsl - rte
+            rbr_wake = rwsl + dx / eta
+
+            # update wake panel with wake shedding location coordinates
+            rtl = top_left(wake[1,j])
+            rtr = top_right(wake[1,j])
+            core_size = get_core_size(wake[1,j])
+            gamma = circulation_strength(wake[1,j])
+
+            # replace the old wake panel
+            wake[1,j] = WakePanel(rtl, rtr, rbl_wake, rbr_wake, core_size, gamma)
+
+            # recurse rbl
+            rbl_wake = rbr_wake
+
+        end
+    end
+end
+
+function store_trailing_edge!(wake_shedding_locations, surfaces)
+
+    # get number of surfaces
+    nsurf = length(surfaces)
+
+    # loop through all surfaces
+    for isurf = 1:nsurf
+
+        # number of spanwise panels
+        ns = length(wake_shedding_locations[isurf]) - 1
+
+        # update wake shedding location
+        for j = 1:ns+1
+
+            # extract trailing edge coordinate
+            if j < ns + 1
+                rte = bottom_left(surfaces[isurf][end, j])
+            else
+                rte = bottom_right(surfaces[isurf][end, j-1])
+            end
+
+            # update wake shedding location coordinates
+            wake_shedding_locations[isurf][j] = rte
+
+        end
+
+    end
+
+    return wake_shedding_locations
+end
+
 function update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, Vwake)
+
+    # get number of surfaces
+    nsurf = length(wakes)
+
+    # loop through all surfaces
+    for isurf = 1:nsurf
+
+        # number of spanwise panels
+        ns = size(wakes[isurf], 2)
+
+        #--- get left velocity ---#
+
+        # extract trailing edge coordinate
+        rte = wakes[isurf][1,1].rtl
+
+        # freestream velocity
+        V = freestream_velocity(fs)
+
+        # rotational velocity
+        V += rotational_velocity(rte, fs, ref)
+
+        # additional velocity field
+        if !isnothing(additional_velocity)
+            V += additional_velocity(rte)
+        end
+
+        # velocity due to surface motion
+        if !isnothing(Vwake)
+            V += Vwake[isurf][1,1]
+        end
+
+        # update vpm shedding location
+        new_rbl = rte + V*dt
+
+        # update vpm shedding location
+        for j = 1:ns
+
+            # extract trailing edge coordinate
+            rte = wakes[isurf][1,j].rtr
+
+            # freestream velocity
+            V = freestream_velocity(fs)
+
+            # rotational velocity
+            V += rotational_velocity(rte, fs, ref)
+
+            # additional velocity field
+            if !isnothing(additional_velocity)
+                V += additional_velocity(rte)
+            end
+
+            # velocity due to surface motion
+            if !isnothing(Vwake)
+                V += Vwake[isurf][1,j+1]
+            end
+
+            # update wake shedding location coordinates
+            new_rbr = rte + V*dt
+
+            # preserve other wake panel coordinates
+            rtl = top_left(wakes[isurf][1,j])
+            rtr = top_right(wakes[isurf][1,j])
+
+            # preserve core size
+            core_size = get_core_size(wakes[isurf][1,j])
+
+            # preserve circulation strength
+            gamma = circulation_strength(wakes[isurf][1,j])
+
+            # replace the old wake panel
+            wakes[isurf][1,j] = WakePanel(rtl, rtr, new_rbl, new_rbr, core_size, gamma)
+
+            # recurse new_rbl for next panel
+            new_rbl = new_rbr
+
+        end
+
+    end
+
+    return wakes
+end
+
+function update_vpm_shedding_TE!(wakes, ref, fs, dt, additional_velocity, Vwake)
 
     # get number of surfaces
     nsurf = length(wakes)

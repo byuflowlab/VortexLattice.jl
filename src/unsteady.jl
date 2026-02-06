@@ -92,9 +92,84 @@ function force!(val, force_val)
     val .= force_val
 end
 
-function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
+function check_for_nans(system::System)
+    if any(isnan.(system.Γ))
+        error("NaN detected in circulation")
+    end
+    if any(isnan.(system.w))
+        error("NaN detected in normal velocity")
+    end
+    for isurf in 1:length(system.surfaces)
+        if any(isnan.(system.V[isurf]))
+            error("NaN detected in velocity on surface $isurf")
+        end
+        if any(isnan.(system.Vcp[isurf]))
+            error("NaN detected in velocity due to surface motion on surface $isurf")
+        end
+        if any(isnan.(system.Vh[isurf]))
+            error("NaN detected in velocity due to heave on surface $isurf")
+        end
+        if any(isnan.(system.Vv[isurf]))
+            error("NaN detected in velocity due to pitch on surface $isurf")
+        end
+        if any(isnan.(system.Vte[isurf]))
+            error("NaN detected in velocity due to trailing edge motion on surface $isurf")
+        end
+        wake = system.wakes[isurf]
+        for i in eachindex(wake)
+            panel = wake[i]
+            if any(isnan.(panel.core_size))
+                error("NaN detected in wake panel core size on surface $isurf, panel $i")
+            end
+            if any(isnan.(panel.gamma))
+                error("NaN detected in wake panel circulation on surface $isurf, panel $i")
+            end
+            if any(isnan.(panel.rtl))
+                error("NaN detected in wake panel rtl on surface $isurf, panel $i")
+            end
+            if any(isnan.(panel.rbl))
+                error("NaN detected in wake panel rbl on surface $isurf, panel $i")
+            end
+            if any(isnan.(panel.rtr))
+                error("NaN detected in wake panel rtr on surface $isurf, panel $i")
+            end
+            if any(isnan.(panel.rbr))
+                error("NaN detected in wake panel rbr on surface $isurf, panel $i")
+            end
+        end
+    end
+end
+
+function check_for_nans(wake::ParticleField)
+    if any(isnan.(wake.particles[1:3, :]))
+        @show wake.particles[:, 1:10]
+        error("NaN detected in wake particle positions")
+    end
+    if any(isnan.(wake.particles[4:6, :]))
+        @show wake.particles[:, 1:10]
+        error("NaN detected in wake particle gamma")
+    end
+    if any(isnan.(wake.particles[7,:]))
+        @show wake.particles[:, 1:10]
+        error("NaN detected in wake particle core size")
+    end
+    if any(isnan.(wake.particles[10:12,:]))
+        @show wake.particles[:, 1:10]
+        error("NaN detected in wake particle velocity")
+    end
+    if any(isnan.(wake.particles[16:24,:]))
+        @show wake.particles[:, 1:10]
+        error("NaN detected in wake particle J")
+    end
+end
+
+function Base.isnan(val::SVector{N,TF}) where {N,TF}
+    return any(isnan.(val))
+end
+
+function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range, Ωinf=(t)->SVector{3}(0.0, 0.0, 0.0);
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
-        vtk_args=(trailing_vortices=false,), fmm_wake_args=(), fmm_vehicle_args=(),
+        vtk_args=(trailing_vortices=false, write_wakes=false), fmm_wake_args=(), fmm_vehicle_args=(),
         derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
         eta=0.3, 
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
@@ -143,6 +218,13 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     surface_id = system.surface_id
     system.trailing_vortices .= trailing_vortices
 
+    # freestream for initial step
+    ref = system.reference[]
+    vinf = Vinf(t_range[1])
+    Ω = Ωinf(t_range[1])
+    fs = velocity_to_freestream(vinf, Ω)
+    system.freestream[] = fs
+
     # begin simulation
     i_step = 0
     for t in t_range
@@ -180,17 +262,11 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # update kinematic velocity due to rigid body motion
         # (structural deflections should be remembered from the previous step)
         # NOTE: this skips the top level frame, which is captured in system.fs
+        # CORRECTION: just changed this to not skip the top level frame
         current_surfaces = system.surfaces
-        kinematic_velocity!(Vcp, Vh, Vv, Vte, current_surfaces, frames; skip_top_level=true)
+        kinematic_velocity!(Vcp, Vh, Vv, Vte, current_surfaces, frames; skip_top_level=false)
         
         #------- aerodynamics -------#
-        
-        # update freestream velocity based on the top level frame
-        # (includes top level frame's velocity and rotation)
-        ref = system.reference[]
-        vinf = Vinf(t)
-        fs = Freestream(frames[1], ref, vinf)
-        system.freestream[] = fs
 
         # unpack constant system parameters
         wake_finite_core = system.wake_finite_core
@@ -214,19 +290,32 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # default arguments
         additional_velocity = nothing
         symmetric .= false
-        
-        # align "wake shedding locations" with the trailing edge
-        dt = i_step == 0 ? t_range[i_step + 2] - t_range[i_step + 1] : t - t_range[i_step]
-        update_wake_shedding_locations!(wakes, wake_shedding_locations,
-            current_surfaces, ref, fs, dt, additional_velocity, Vte,
-            nwake, eta)
 
+        # if the first timestep, set up the first wake panels for particle shedding later
+        dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
+        if i_step == 0
+            # align "wake shedding locations" with the trailing edge
+            dt = t_range[2] - t_range[1]
+            additional_velocity = nothing
+            update_wake_shedding_locations!(wakes, wake_shedding_locations,
+                current_surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
+            
+            # initial wake panels are an extension of the Kutta panel for the first timestep
+            initial_wake_panels!(wakes, wake_shedding_locations, current_surfaces, eta)
+        end
+        
         # update trailing edge filaments with the previous circulation solution
         update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
 
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
+        # println("\n\n~~~ BEFORE WAKE ON ALL ~~~\n")
+        # check_for_nans(system)
+        # check_for_nans(wake)
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+        # println("\n\n~~~ AFTER WAKE ON ALL ~~~\n")
+        # check_for_nans(system)
+        # check_for_nans(wake)
 
         #--- solve the system ---#
 
@@ -323,7 +412,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         if !isnothing(path)
             # VortexLattice system
-            write_vtk(joinpath(path, name * "_step_$i_step"), system; write_wakes=true, vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
+            write_vtk(joinpath(path, name * "_step_$i_step"), system; vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
 
             # FLOWVLM particle field
 
@@ -343,29 +432,62 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         if i_step < length(t_range)
 
             #--- state evolution ---#
+            
+            # propagate wake
+            FLOWVPM._euler(wake, dt; relax=true)
 
             # dynamics function
             # if dynamics_toggle
             #     apply_dynamics!(system, frames)
             # end
+
+            # calculate next step's wake trailing edge
+            this_V = nothing # ignore wake- and vehicle-induced velocity for wake shedding location update
+            update_vpm_shedding_TE!(wakes, ref, fs, dt, additional_velocity, this_V) # uses current step's freestream
+
+            # store trailing edge location for next step's wsl
+            store_trailing_edge!(wake_shedding_locations, current_surfaces)
             
             # propagate rigid-body kinematics
             propagate_kinematics!(system, frames, dt)
-            
-            # propagate wake
-            FLOWVPM._euler(wake, dt; relax=true)
 
-            # update wake shedding locations based on wake and vehicle
-            # accounts for vehicle-induced, wake-induced, freestream, 
-            # and kinematic velocities
-            update_vpm_shedding_locations!(wakes, ref, fs, dt, additional_velocity, V)
+            # next step's freestream
+            idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
+            vinf = Vinf(t_range[idx])
+            Ω = Ωinf(t_range[idx])
+            # fs = Freestream(frames[1], ref, vinf)
+            fs = velocity_to_freestream(vinf, Ω)
+            system.freestream[] = fs
+
+            # update wake shedding locations / wake leading edge
+            this_Vte = nothing # ignore wake- and vehicle-induced velocity for wake shedding location update
+            update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations,
+                current_surfaces, ref, fs, dt, additional_velocity, this_Vte, nwake, eta) # uses next step's freestream
 
             #--- shed new wake particles ---#
 
-            # shed wake particles
             shed_wake!(wake, system,  dt, 
                 particle_trailing_methods, particle_unsteady_methods)
 
+            # update wake shedding locations based on wake and vehicle
+            # accounts for vehicle-induced, wake-induced, freestream,
+            # and kinematic velocities
+            # update_vpm_shedding_LE!(wakes, ref, fs, dt, additional_velocity, V)
+
+            #--- update locations for the next step ---#
+
+            if !isnothing(path)
+                # VortexLattice system
+                write_vtk(joinpath(path, name * "_postshed_step_$i_step"), system; write_wakes=true, vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
+
+                # FLOWVLM particle field
+
+                # check wake for NaNs
+                FLOWVPM.save(wake, name * "_postshed_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
+                
+                # save trailing edge filaments
+                # write_vtk(joinpath(path, name * "_filaments_step_$i_step"), trailing_edge_filaments)
+            end
         end
 
         # increment step
@@ -542,7 +664,7 @@ end
 
 function get_max_particles(surface::AbstractMatrix{<:SurfacePanel}, method::SigmaOverlap)
     # estimate p_per_step
-    pps = 5
+    pps = 8
 
     return get_max_particles(surface, SigmaPPS(method.sigma, pps))
 end
