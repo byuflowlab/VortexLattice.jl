@@ -16,7 +16,7 @@ speedofsound    = 342.35                    # (m/s) speed of sound
 magVinf         = J*RPM/60*(2*R)
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
 
-ns = 13
+ns = 20
 nc = 1
 
 grids, ratios, sections, invert_normals = VortexLattice.generate_rotor("DJI9443.csv", data_path; 
@@ -37,7 +37,7 @@ phi_p1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
 ns_p1 = ns
 nc_p1 = nc
 fc_p1 = fill((xc) -> 0, length(yle_p1)) # camberline function for each section
-spacing_s_p1 = Sine()
+spacing_s_p1 = Uniform()
 spacing_c_p1 = Uniform()
 mirror_p1 = false
 p1grid1, p1ratio1 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
@@ -103,7 +103,7 @@ n_revs = 10
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
-overlap = 1.6
+overlap = 1.3
 p_per_step = 4
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
@@ -116,7 +116,7 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
             # particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
             particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            eta = 0.25,
+            eta = 0.3,
             derivatives = false,
             # vtk_args=(trailing_vortices=false,),
             # wake_args=(SFS=VortexLattice.FLOWVPM.SFS_Cd_twolevel_nobackscatter,),
@@ -148,6 +148,6 @@ percent_error = abs((CT_vpm - CT_exp) / CT_exp) * 100
 println("VPM CT: $CT_vpm\nExperiment CT: $CT_exp\nURANS CT: $CT_URANS\nPercent Error (VPM vs Experiment): $percent_error %")
 
 # save csv with CT vs time
-name = "rotor_hover_eta0.25_ns13cos_nc1_ns36_pps4_overlap1.6"
+name = "rotor_hover_eta0.3_ns20_nc1_nt36_pps4_overlap1.3"
 data = hcat(collect(t_range), CTs)
 writedlm(name*".csv", data, ',')
