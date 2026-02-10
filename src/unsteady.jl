@@ -346,6 +346,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         # save (negative) previous circulation in dΓdt
         dΓdt .= .-Γ
+        dΓdt_wake .= .-Γ
 
         # solve for the new circulation
         if derivatives
@@ -403,8 +404,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #------- apply viscous corrections (if set) -------#
 
         Γ_wake .= Γ
-        dΓdt_wake .= dΓdt
-        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polar, ref)
+        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polar, ref, dt)
+        Γ .= Γ_wake
         
         #------- other solvers -------#
         

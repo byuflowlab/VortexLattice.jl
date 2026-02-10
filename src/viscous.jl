@@ -1,4 +1,5 @@
 struct Polar{TF}
+    alphas::Vector{TF}
     cls_inv::Vector{TF}
     cls_delta::Vector{TF}
     cls_visc::Vector{TF}
@@ -11,7 +12,7 @@ function Polar(alphas, cls_inv, cls_visc, cds_visc)
     cls_delta = cls_visc .- cls_inv
     m_inv = (cls_inv[end] - cls_inv[1]) / (alphas[end] - alphas[1])
     cl_alpha0 = FLOWMath.linear(alphas, cls_inv, 0.0)
-    return Polar{eltype(cls_inv)}(cls_inv, cls_delta, cls_visc, cds_visc, cl_alpha0, m_inv)
+    return Polar{eltype(cls_inv)}(alphas, cls_inv, cls_delta, cls_visc, cds_visc, cl_alpha0, m_inv)
 end
 
 """
@@ -19,8 +20,10 @@ end
 
 Apply viscous corrections to the aerodynamic forces and circulation strengths based on the provided viscous correction functions `viscous_ratio_cl` and `viscous_ratio_cd`.
 The corrections are applied to the `properties` of each panel, as well as the circulation strengths `Γ` and their time derivatives `dΓdt`.
+
+Note: dΓdt should contain -Γ from the PREVIOUS timestep
 """
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Polar, ref::Reference) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Polar, ref::Reference, dt) where TF
     # properties contains:
     # * cf
     # surface contains:
@@ -108,7 +111,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
 
                 # get effective α
-                α_eff = cl_vlm / (2 * pi)
+                α_eff = cl_vlm / (2 * pi) * pi/180
 
                 # refer to polar for viscous cl
                 cl_star = FLOWMath.linear(polar.alphas, polar.cls_visc, α_eff)
@@ -120,7 +123,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # get viscous lift correction factor
                 f_cl = cl_star / cl_vlm
                 # f_cl = clamp(f_cl, 0.0, 1.0)
-                @show j, cl_star / cl_vlm, cl_star, cl_vlm, polar.m_inv, polar.cl_alpha0
+                # @show j, cl_star / cl_vlm, cl_star, cl_vlm, polar.m_inv, polar.cl_alpha0
 
                 # get direction of viscous drag
                 v_induced = R * v_induced # rotate into this frame
@@ -170,9 +173,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 end
 
                 # apply viscous correction to circulation strengths and their time derivatives
-                # Γ[iΓ-size(surface,1):iΓ-1] .*= f_cl
-                # dΓdt[iΓ-size(surface,1):iΓ-1] .*= f_cl
+                Γ[iΓ-size(surface,1):iΓ-1] .*= f_cl
             end
+            dΓdt .+= Γ
+            dΓdt ./= dt
         else
             iΓ += size(surface, 1) * size(surface, 2) # skip circulation strengths for this surface
         end
