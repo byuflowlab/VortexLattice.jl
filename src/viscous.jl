@@ -104,15 +104,22 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # force per length
                 l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl)
                 
-                # calculate effective cl predicted by the VLM
+                # calculate effective cl predicted by the VLM, = 2π * α_eff
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
 
-                # correct for alpha=0 cl, inviscid lift slope, and viscous correction
-                cl_star = polar.m_inv / (2*pi) * cl_vlm + polar.cl_alpha0
-                cl_star = cl_star + FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_star)
+                # get effective α
+                α_eff = cl_vlm / (2 * pi)
+
+                # refer to polar for viscous cl
+                cl_star = FLOWMath.linear(polar.alphas, polar.cls_visc, α_eff)
+
+                # # correct for alpha=0 cl, inviscid lift slope, and viscous correction
+                # cl_star = polar.m_inv / (2*pi) * cl_vlm + polar.cl_alpha0
+                # cl_star = cl_star + FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_star)
                 
                 # get viscous lift correction factor
-                f_cl = clamp(cl_star / cl_vlm, 0.0, 1.0)
+                f_cl = cl_star / cl_vlm
+                # f_cl = clamp(f_cl, 0.0, 1.0)
                 @show j, cl_star / cl_vlm, cl_star, cl_vlm, polar.m_inv, polar.cl_alpha0
                 
                 # get direction of viscous drag
@@ -121,7 +128,8 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 dhat /= norm(dhat)
 
                 # get viscous drag coefficient
-                cd = FLOWMath.linear(polar.cls_visc, polar.cds_visc, cl_star)
+                # cd = FLOWMath.linear(polar.cls_visc, polar.cds_visc, cl_star)
+                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
                 
                 # get magnitude of viscous drag
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
