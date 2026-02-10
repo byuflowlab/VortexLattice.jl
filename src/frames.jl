@@ -4,6 +4,7 @@ struct ReferenceFrame{TF}
 	ω_axis::SVector{3,TF}        # axis of rotation in parent frame
 	ω::TF                        # angular velocity in parent frame
 	R::SMatrix{3,3,TF,9}         # basis vectors expressed in parent frame
+    Rp2g::SMatrix{3,3,TF,9}      # parent frame basis vectors expressed in global frame
 	name::String                 # name of this frame
 	parent_index::Int            # index of parent frame
 	child_index::Vector{Int}  # child reference frames
@@ -27,7 +28,7 @@ function propagate_kinematics!(system::System, frames::Vector{<:ReferenceFrame},
 
     # update panels
     for isurf = 1:length(system.surfaces)
-        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf])
+        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore = (c, Δs) -> system.core_size)
     end
 end
 
@@ -55,7 +56,7 @@ function propagate_kinematics!(system::System, i_frame::Int, frames::Vector{<:Re
     # Update the frame
     x_new = frame.x + dx
     R_new = Rω * frame.R
-    frames[i_frame] = ReferenceFrame(x_new, frame.v, frame.ω_axis, frame.ω, R_new, frame.name, frame.parent_index, frame.child_index, frame.dependent_index)    
+    frames[i_frame] = ReferenceFrame(x_new, frame.v, frame.ω_axis, frame.ω, R_new, R_parent_to_global, frame.name, frame.parent_index, frame.child_index, frame.dependent_index)    
 
     # new dx_parent_to_global
     dx_parent_to_global = origin_global + dx_global
@@ -127,6 +128,7 @@ function ReferenceFrame(system::System{TF};
         ω_axis = SVector{3,TF}(0.0, 1.0, 0.0),
         ω = zero(TF),
         R = SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
+        Rp2g = SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), # rotation from parent frame to global frame
         name = "vehicle",  # name of this frame
         child_index = Int[],  # indices of child frames
         dependent_index = collect(1:length(system.surfaces))  # indices of dependent surfaces
@@ -134,7 +136,7 @@ function ReferenceFrame(system::System{TF};
     ) where TF
     parent_index = -1  # no parent frame
     vehicle_frame = ReferenceFrame{TF}(
-        origin, v, ω_axis, ω, R,
+        origin, v, ω_axis, ω, R, Rp2g,
         name, parent_index, child_index, dependent_index
     )
     frames = [vehicle_frame]
@@ -281,12 +283,13 @@ function add_frame!(frames::Vector{ReferenceFrame{TF}}, name::String, parent_ind
     v = zero(SVector{3,TF}),  # velocity in parent frame
     ω_axis = SVector{3,TF}(0.0, 1.0, 0.0),  # axis of rotation in parent frame
     ω = zero(TF),  # angular velocity in parent frame
-    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # basis vectors expressed in parent frame
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # basis vectors expressed in parent frame
+    Rp2g = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # rotation from parent frame to global frame
 ) where TF
 
     # create new frame
     new_frame = ReferenceFrame{TF}(
-        origin, v, ω_axis, ω, R,
+        origin, v, ω_axis, ω, R, Rp2g,
         name, parent_index, Int[], surface_indices
     )
     push!(frames, new_frame)
@@ -311,7 +314,7 @@ function change_convention!(system, origin, to::ForwardRightDown, from::BackRigh
 
     for i_surf in 1:length(system.surfaces)
         rotate_translate!(system, i_surf, origin, R180_y, SVector{3}(0.0, 0.0, 0.0))
-        update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf])
+        update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf], fcore = (c, Δs) -> system.core_size)
     end
 
     # freestream direction
@@ -327,7 +330,7 @@ function change_convention!(system, to::BackRightUp, from::ForwardRightDown)
 
     for i_surf in 1:length(system.surfaces)
         rotate_translate!(system, i_surf, origin, R180_y, SVector{3}(0.0, 0.0, 0.0))
-        update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf])
+        update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf], fcore = (c, Δs) -> system.core_size)
     end
 
     # freestream direction

@@ -47,7 +47,7 @@ struct ForcesMonitor{TF,F}
     frame::F
 end
 
-function ForcesMonitor(nt::Int, TF=Float64; frame=Wind())
+function ForcesMonitor(nt::Int, TF=Float64; frame=Body())
     CF = zeros(SVector{3,TF}, nt)
     CM = zeros(SVector{3,TF}, nt)
 
@@ -177,7 +177,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         trailing_vortices=fill(false, length(system.surfaces)),
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors=(),
-        calculate_influence_matrix=true
+        calculate_influence_matrix=true,
+        polar=nothing, frames_index=fill(-1, length(system.surfaces)) # viscous correction
     )
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
@@ -224,6 +225,10 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     Ω = Ωinf(t_range[1])
     fs = velocity_to_freestream(vinf, Ω)
     system.freestream[] = fs
+
+    # storage for setting wake strengths
+    Γ_wake = zeros(length(system.Γ))
+    dΓdt_wake = zeros(length(system.Γ))
 
     # begin simulation
     i_step = 0
@@ -309,13 +314,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         # wake-on-all
         wake.SFS(wake, FLOWVPM.BeforeUJ())
-        # println("\n\n~~~ BEFORE WAKE ON ALL ~~~\n")
-        # check_for_nans(system)
-        # check_for_nans(wake)
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
-        # println("\n\n~~~ AFTER WAKE ON ALL ~~~\n")
-        # check_for_nans(system)
-        # check_for_nans(wake)
 
         #--- solve the system ---#
 
@@ -328,9 +327,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 force_finite_core = fill(true, length(current_surfaces)))
         end
 
-        # # update the AIC matrix to use the new wake shedding locations
-        # update_trailing_edge_coefficients!(AIC, current_surfaces;
-        #     symmetric, wake_shedding_locations, trailing_vortices)
+        # update the AIC matrix to use the new wake shedding locations
+        update_trailing_edge_coefficients!(AIC, current_surfaces;
+            symmetric, wake_shedding_locations, trailing_vortices)
 
         # calculate RHS
         if derivatives
@@ -390,7 +389,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 trailing_vortices, xhat,
                 calculate_vlm_induced=false,
                 skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
-                                             # in vehicle_on_all!
+                                                            # in vehicle_on_all!
         else
             near_field_forces!(properties, current_surfaces, wakes,
                 ref, fs, Γ; dΓdt, additional_velocity, Vh, Vv,
@@ -400,6 +399,12 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
                                              # in vehicle_on_all!
         end
+
+        #------- apply viscous corrections (if set) -------#
+
+        Γ_wake .= Γ
+        dΓdt_wake .= dΓdt
+        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polar, ref)
         
         #------- other solvers -------#
         
@@ -407,7 +412,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         
         #------- update state -------#
         
-        
+
         #------- save state -------#
 
         if !isnothing(path)
@@ -466,7 +471,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
             #--- shed new wake particles ---#
 
-            shed_wake!(wake, system,  dt, 
+            shed_wake!(wake, system,  dt, Γ_wake, dΓdt_wake,
                 particle_trailing_methods, particle_unsteady_methods)
 
             # update wake shedding locations based on wake and vehicle
@@ -492,6 +497,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         # increment step
         i_step += 1
+        # if i_step == 2
+        #     breakme
+        # end
     end    
 end
 
@@ -550,13 +558,13 @@ struct OverlapPPS{TF} <: WakeSheddingMethod
     p_per_step::Int
 end
 
-function shed_wake!(pfield::FLOWVPM.ParticleField, system, dt, 
+function shed_wake!(pfield::FLOWVPM.ParticleField, system, dt, Γ, dΓdt,
         shedding_trailing::AbstractVector{<:WakeSheddingMethod}, shedding_unsteady::AbstractVector{<:WakeSheddingMethod})
     # shed trailing edge particles
-    shed_trailing_edge!(pfield, system.surfaces, system.wakes, system.Γ, shedding_trailing)
+    shed_trailing_edge!(pfield, system.surfaces, system.wakes, Γ, shedding_trailing)
 
     # shed unsteady particles
-    shed_unsteady!(pfield, system.surfaces, system.wakes, system.dΓdt, dt, shedding_unsteady)
+    shed_unsteady!(pfield, system.surfaces, system.wakes, dΓdt, dt, shedding_unsteady)
 end
 
 function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wakes, Γ, shedding_methods)

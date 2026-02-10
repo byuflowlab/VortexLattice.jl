@@ -6,7 +6,7 @@ constant_maneuver!(frames, system, wake, t) = nothing
 
 # generate wing
 # AR = 20.0
-AR = 6.0
+AR = 100
 c = 1.0
 b = AR * c
 xle = [0.0, 0.0]
@@ -15,7 +15,7 @@ zle = [0.0, 0.0]
 chord = [c, c]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
-ns = 13
+ns = AR * 3
 nc = 4
 fc = fill((xc) -> 0, length(yle)) # camberline function for each section
 spacing_s = Uniform()
@@ -114,7 +114,7 @@ ax.set_ylim(0.0, 1.0)
 ax.legend()
 ax2 = fig.get_axes()[1]
 ax2.plot(tstar, CDs, label="VPM")
-ax2.plot(t[1:end-1]*Vinf/cref, Ds_uvlm, "--", label="UVLM")
+# ax2.plot(t[1:end-1]*Vinf/cref, Ds_uvlm, "--", label="UVLM")
 ax2.plot(tstar, fill(CD_steady, length(tstar)), ":", label="steady VLM")
 ax2.set_ylim(0.0, 0.02)
 ax2.legend()

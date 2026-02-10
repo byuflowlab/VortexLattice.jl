@@ -74,6 +74,8 @@ export write_vtk
 
 include("fmm.jl")
 
+include("viscous.jl")
+
 include("unsteady.jl")
 export simulate!
 

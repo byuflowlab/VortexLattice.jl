@@ -7,7 +7,7 @@ using PythonPlot
 # α = 5°
 
 # AR = 20 # last aspect ratio is essentially infinite
-AR = 6 # last aspect ratio is essentially infinite
+AR = 100 # last aspect ratio is essentially infinite
 
 # non-dimensional time (t*Vinf/c)
 t = range(0.0, 10.0, step=1/16)
@@ -33,7 +33,7 @@ chord = [c, c]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
-ns = 13
+ns = AR * 3
 nc = 4
 
 spacing_s = Uniform()

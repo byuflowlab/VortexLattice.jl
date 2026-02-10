@@ -13,7 +13,7 @@ J = 0.0001
 rho             = 1.071778                  # (kg/m^3) air density
 mu              = 1.85508e-5                # (kg/ms) air dynamic viscosity
 speedofsound    = 342.35                    # (m/s) speed of sound
-magVinf         = J*RPM/60*(2*R)
+magVinf         = J*RPM/60*(2*R) * 0.0
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
 
 ns = 20
@@ -36,7 +36,12 @@ theta_p1 = [-0.26234070166665546, -0.31991308290106085, -0.3419082713692357, -0.
 phi_p1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ns_p1 = ns
 nc_p1 = nc
-fc_p1 = fill((xc) -> 0, length(yle_p1)) # camberline function for each section
+
+# camber function
+# x_camber, camber = get_camber(x, y)
+camber_func = (xc) -> 0.0 # FLOWMath.linear(x_camber, camber, xc)
+
+fc_p1 = fill(camber_func, length(yle_p1)) # camberline function for each section
 spacing_s_p1 = Uniform()
 spacing_c_p1 = Uniform()
 mirror_p1 = false
@@ -64,10 +69,11 @@ end
 grids = [p1grid1, p1grid2]
 ratios = [p1ratio1, p1ratio2]
 
-system = System(grids; ratios, sections);
+core_size = 1e-3
+system = System(grids; ratios, sections, core_size);
 # system = System(grids; ratios, sections);
 
-Sref = 1.0
+Sref = 2.0
 cref = 1.0
 bref = 1.0
 rref = [0.0, 0.0, 0.0]
@@ -92,21 +98,37 @@ frames = ReferenceFrame(system;
         v = SVector{3}(0.0, 0.0, 0.0),
         ω_axis = SVector{3}(1.0, 0.0, 0.0),
         ω = -RPM * 2 * pi / 60,
-        R = SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
+        R = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
         name = "vehicle",
         child_index = Int[],
         dependent_index = collect(1:length(system.surfaces))
     )
-
 
 n_revs = 10
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
 overlap = 1.3
-p_per_step = 4
+p_per_step = 2
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
+
+# generate correction functions
+#### include("polar_correction.jl") # generates cl_correction and cd_correction functions based on XFOIL data for the airfoil sections at 70% span
+
+# cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
+# cl_alpha0, delta_cl_fun, cd_visc_fun = get_viscous_corrections2("corrections.csv")
+
+filename = "corrections.csv"
+data = readdlm(filename, ',', skipstart=0)
+@show data
+cls_inv = data[:,1]
+cls_visc = data[:,2]
+cds_visc = data[:,3]
+alphas = data[:,4]
+
+polar = VortexLattice.Polar(alphas, cls_inv, cls_visc, cds_visc .* 0.0)
+# polar = nothing
 
 monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
@@ -124,11 +146,12 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             # nonlinear_args=(polar_correction=false,),
             # calculate_influence_matrix=true,
             # path=nothing,
-            # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,)
+            # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
+            polar, frames_index = fill(1, length(system.surfaces))
         )
 
 # post-process
-Ts = [-monitors[1].CF[i][1] for i in 1:length(t_range)]
+Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
 CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
 fig = figure("CT")
 fig.clear()

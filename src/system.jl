@@ -117,6 +117,7 @@ struct System{TF}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
     probes::FastMultipole.ProbeSystem{TF}
+    core_size::TF
 end
 
 Base.eltype(::Type{System{TF}}) where TF = TF
@@ -224,7 +225,7 @@ variables
  - `invert_normals`: Flags indicating whether the normals of each surface should
     be inverted
 """
-function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing, invert_normals = nothing)
+function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, sections = nothing, invert_normals = nothing, core_size = 1e-3)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -291,7 +292,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
         wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt, probes)
+        Vv, Vte, dΓdt, probes, core_size)
 end
 
 function update_probes!(system::System{TF}) where TF
