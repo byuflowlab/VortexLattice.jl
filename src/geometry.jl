@@ -481,11 +481,11 @@ function grid_to_surface_panels(xyz, ns, nc;
             r4 = xyz_panels[:, i+1, j+1] # bottom right
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
-            # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = sqrt((rtc[2] - rtl[2])^2 + (rtc[3] - rtl[3])^2) / sqrt((rtr[2] - rtl[2])^2 + (rtr[3] - rtl[3])^2)
-            rtop = linearinterp(ratios[1,i,j], r1, r2)
-            rbot = linearinterp(ratios[1,i,j], r3, r4)
-            ratios[2,i,j] = sqrt((rcp[1] - rtop[1])^2 + (rcp[3] - rtop[3])^2) / sqrt((rbot[1] - rtop[1])^2 + (rbot[3] - rtop[3])^2)
+            # calculate parametric ratios used for spanwise and chordwise placement
+            # spanwise ratio places the slice at global span coordinate etabar[j]
+            ratios[1,i,j] = (etabar[j] - etas[j]) / (etas[j+1] - etas[j])
+            # chordwise ratio places the control point at global chord coordinate eta_thrqtr[i]
+            ratios[2,i,j] = (eta_thrqtr[i] - etac[i]) / (etac[i+1] - etac[i])
 
             ip = i
             jp = mirror*right_side*ns + j
@@ -739,11 +739,11 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             r4 = xyz_panels[:,i+1, j+1] # bottom right
             chord = norm((r1 + r2)/2 - (r3 + r4)/2)
 
-            # calculate ratios for placement of control points for updating surface panels from grids
-            ratios[1,i,j] = sqrt((rtc[2] - rtl[2])^2 + (rtc[3] - rtl[3])^2) / sqrt((rtr[2] - rtl[2])^2 + (rtr[3] - rtl[3])^2)
-            rtop = linearinterp(ratios[1,i,j], r1, r2)
-            rbot = linearinterp(ratios[1,i,j], r3, r4)
-            ratios[2,i,j] = sqrt((rcp[1] - rtop[1])^2 + (rcp[3] - rtop[3])^2) / sqrt((rbot[1] - rtop[1])^2 + (rbot[3] - rtop[3])^2)
+            # calculate parametric ratios used for spanwise and chordwise placement
+            # spanwise ratio places the slice at global span coordinate etabar[j]
+            ratios[1,i,j] = (etabar[j] - etas[j]) / (etas[j+1] - etas[j])
+            # chordwise ratio places the control point at global chord coordinate eta_thrqtr[i]
+            ratios[2,i,j] = (eta_thrqtr[i] - etac[i]) / (etac[i+1] - etac[i])
 
             ip = i
             jp = mirror*right_side*ns + j
