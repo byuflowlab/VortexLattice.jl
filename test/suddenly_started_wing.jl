@@ -15,7 +15,7 @@ zle = [0.0, 0.0]
 chord = [c, c]
 theta = [0.0, 0.0]
 phi = [0.0, 0.0]
-ns = AR * 3
+ns = 1 #AR * 3
 nc = 4
 fc = fill((xc) -> 0, length(yle)) # camberline function for each section
 spacing_s = Uniform()
@@ -74,49 +74,62 @@ t_range = range(start=0.0, stop=nsteps*dt, length=nsteps+1)
 monitors = (VortexLattice.ForcesMonitor(length(t_range); frame=Wind()),)
 system_ssw.Γ .= 0.0
 system_ssw.dΓdt .= 0.0
-benchmark = @elapsed wake = simulate!(system_ssw, frames, constant_maneuver!, Vinf_func, t_range; 
-            monitors,
-            # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
-            particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3, 5), length(system_ssw.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.SigmaPPS(5.5, 1), length(system_ssw.surfaces)),
-            particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3, 1), length(system_ssw.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
-            eta = 0.25,
-            derivatives = false,
-            vtk_args=(trailing_vortices=false,),
-            fmm_wake_args=(leaf_size_source=20,),
-            # nonlinear_analysis=true,
-            # nonlinear_args=(polar_correction=false,),
-            # calculate_influence_matrix=true,
-            # path=nothing,
-            name="suddenly_started_wing",
-            # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,)
-        )
+# benchmark = @elapsed wake = simulate!(system_ssw, frames, constant_maneuver!, Vinf_func, t_range; 
+#             monitors,
+#             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
+#             particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3, 5), length(system_ssw.surfaces)),
+#             # particle_unsteady_methods=fill(VortexLattice.SigmaPPS(5.5, 1), length(system_ssw.surfaces)),
+#             particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3, 1), length(system_ssw.surfaces)),
+#             # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system_ssw.surfaces)),
+#             eta = 0.25,
+#             derivatives = false,
+#             vtk_args=(trailing_vortices=false,),
+#             fmm_wake_args=(leaf_size_source=20,),
+#             # nonlinear_analysis=true,
+#             # nonlinear_args=(polar_correction=false,),
+#             # calculate_influence_matrix=true,
+#             # path=nothing,
+#             name="suddenly_started_wing",
+#             # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,)
+#         )
 
-CLs = [monitors[1].CF[i][3] for i in eachindex(monitors[1].CF)]
-# CLs = Ls ./ (0.5 * Vinf^2 * Sref)
-# Ds = [monitors[1].CF[i][1] for i in eachindex(monitors[1].CF)]
-CDs = [monitors[1].CF[i][1] for i in eachindex(monitors[1].CF)]
-# CDs = Ds ./ (0.5 * Vinf^2 * Sref)
-# cls = Ls ./ (0.5 * Vinf^2 * c * b)
+# CLs = [monitors[1].CF[i][3] for i in eachindex(monitors[1].CF)]
+# # CLs = Ls ./ (0.5 * Vinf^2 * Sref)
+# # Ds = [monitors[1].CF[i][1] for i in eachindex(monitors[1].CF)]
+# CDs = [monitors[1].CF[i][1] for i in eachindex(monitors[1].CF)]
+# # CDs = Ds ./ (0.5 * Vinf^2 * Sref)
+# # cls = Ls ./ (0.5 * Vinf^2 * c * b)
 tstar = Vinf * collect(t_range) / cref
+
+data = readdlm("vpm_ssw.csv", ',')
+tstar = data[:,1]
+CLs = data[:,2]
+CDs = data[:,3]
 
 fig = figure("vpm")
 fig.clear()
 fig.add_subplot(121, xlabel=L"t^*", ylabel=L"C_L")
 fig.add_subplot(122, xlabel=L"t^*", ylabel=L"C_D")
 ax = fig.get_axes()[0]
-ax.plot(tstar, CLs, label="VPM")
-ax.plot(t[1:end-1]*Vinf/cref, CLs_uvlm, "--", label="UVLM")
-ax.plot(tstar, fill(CL_steady, length(tstar)), ":", label="steady VLM")
+ax.plot(tstar[3:end], CLs[1:end-2] ./ CL_steady, label="VPM")
+
+data = readdlm("uvlm_ssw.csv", ',')
+ax.plot(data[:,1], data[:,2] ./ CL_steady, "--", label="UVLM")
+# ax.plot(tstar, fill(CL_steady, length(tstar)), ":", label="steady VLM")
+
+# analytic solution (Wagner's function)
+Φ(t) = 1 - 0.165*exp(-0.045*t) - 0.335*exp(-0.3*t)
+ax.plot(tstar, Φ.(tstar .* 2), ":", label="analytic")
 
 ax.set_ylim(0.0, 1.0)
+ax.set_xlim(0.0,6.0)
 ax.legend()
 ax2 = fig.get_axes()[1]
-ax2.plot(tstar, CDs, label="VPM")
-# ax2.plot(t[1:end-1]*Vinf/cref, Ds_uvlm, "--", label="UVLM")
-ax2.plot(tstar, fill(CD_steady, length(tstar)), ":", label="steady VLM")
-ax2.set_ylim(0.0, 0.02)
+ax2.plot(tstar[3:end], CDs[1:end-2] ./ CL_steady, label="VPM")
+ax2.plot(data[:,1], data[:,3] ./ CL_steady, "--", label="UVLM")
+# ax2.plot(tstar, fill(CD_steady, length(tstar)), ":", label="steady VLM")
+ax2.set_ylim(0.0, 0.1)
+ax2.set_xlim(0.0,6.0)
 ax2.legend()
 tight_layout()
 

@@ -1,23 +1,17 @@
 using VortexLattice
+using DelimitedFiles
 using PythonPlot
 
-# Katz and Plotkin: Figures 13.34 and 13.35
-# AR = [4, 8, 12, 20, ∞]
+# See Katz and Plotkin: Figure 13.37
+# AR = ∞
 # Vinf*Δt/c = 1/16
 # α = 5°
 
-# AR = 20 # last aspect ratio is essentially infinite
-AR = 100 # last aspect ratio is essentially infinite
-
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 10.0, step=1/16)
-# t = range(0.0, 2.0, step=1/16)
+# essentially infinite aspect ratio
+AR = 1e2
 
 # chord length
 c = 1
-
-# time step
-dt = [t[i+1]-t[i] for i = 1:length(t)-1]
 
 # span length
 b = AR*c
@@ -30,12 +24,11 @@ xle = [0.0, 0.0]
 yle = [-b/2, b/2]
 zle = [0.0, 0.0]
 chord = [c, c]
-theta = [0.0, 0.0]
+theta = [0.0, 0.0]*pi/180
 phi = [0.0, 0.0]
 fc = fill((xc) -> 0, 2) # camberline function for each section
-ns = AR * 3
+ns = 1
 nc = 4
-
 spacing_s = Uniform()
 spacing_c = Uniform()
 mirror = false
@@ -55,28 +48,40 @@ beta = 0.0
 Omega = [0.0; 0.0; 0.0]
 fs = Freestream(Vinf, alpha, beta, Omega)
 
+# non-dimensional time (t*Vinf/c)
+t = range(0.0, 7.0, step=1/8)
+
+# time step
+dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
+
 # create vortex rings
-grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+grid, _ = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
 
-# create vector containing grids
-grids = [grid]
-ratios = [ratio]
+_, _, surface = grid_to_surface_panels(grid) # Uniform spacing means ratios are not needed
 
-grid, ratio, surface = grid_to_surface_panels(grid; ratios=ratio)
+# create vector containing all surfaces and grids
 surfaces = [surface]
+grids = [grid]
 
-# run analysis
-system, surface_history, property_history, wake_history =
-    unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
+# run steady analysis
+system = steady_analysis(grids, ref, fs; symmetric)
 
-# extract forces at each time step
-CF, CM = body_forces_history(system, surface_history,
-    property_history; frame=Wind())
+# extract steady forces
+CFs, CMs = body_forces(system; frame=Wind())
 
-# save vtk files
-write_vtk("uvlm_ssw", surface_history, property_history,
-    wake_history, dt; symmetric=false)
+# run transient analysis
+system, surface_history, property_history, wake_history = unsteady_analysis(
+    surfaces, ref, fs, dt; symmetric=symmetric)
+
+# extract transient forces
+CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
+
+# Computational Results
+CL = getindex.(CF, 3)
+CD = getindex.(CF, 1)
+CLs = getindex(CFs, 3)
+CDs = getindex(CFs, 1)
 
 fig = figure("uvlm_ssw")
 fig.clear()
@@ -85,7 +90,14 @@ fig.add_subplot(122, xlabel=L"t^*", ylabel=L"C_D")
 ax = fig.get_axes()[0]
 ax2 = fig.get_axes()[1]
 
-CLs_uvlm = [CF[i][3] for i in eachindex(CF)]
-ax.plot(t[1:end-1]*Vinf/cref, CLs_uvlm, label="UVLM")
+ax.plot(t[2:end], CL./CLs, label="UVLM")
+
+# analytic solution (Wagner's function)
+Φ(t) = 1 - 0.165*exp(-0.045*t) - 0.335*exp(-0.3*t)
+ax.plot(t, Φ.(2 .* t), ":", label="analytic")
+
+# CDs
 Ds_uvlm = [CF[i][1] for i in eachindex(CF)]
-ax2.plot(t[1:end-1]*Vinf/cref, Ds_uvlm, label="UVLM")
+ax2.plot(t[2:end], CD ./ CDs, label="UVLM")
+
+writedlm("uvlm_ssw.csv", hcat(t[2:end], CL, CD), ',')
