@@ -17,7 +17,7 @@ end
 """
     viscous!(properties, Γ, dΓdt, surfaces, grids, frames, frames_index, viscous_ratio_cl, viscous_ratio_cd)
 
-Apply viscous corrections to the aerodynamic forces and circulation strengths based on the provided viscous correction functions `viscous_ratio_cl` and `viscous_ratio_cd`. 
+Apply viscous corrections to the aerodynamic forces and circulation strengths based on the provided viscous correction functions `viscous_ratio_cl` and `viscous_ratio_cd`.
 The corrections are applied to the `properties` of each panel, as well as the circulation strengths `Γ` and their time derivatives `dΓdt`.
 """
 function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Polar, ref::Reference) where TF
@@ -94,16 +94,16 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 te = SVector(grid[1,end,j+1], grid[2,end,j+1], grid[3,end,j+1])
                 c += norm(le - te)
                 c *= 0.5
-                
+
                 # project aerodynamic force into xz plane
                 cf = R * cf # rotate into this frame
-                
+
                 # get 2-D lift magnitude of this section
                 l_2d_norm = sqrt(cf[1]*cf[1] + cf[3]*cf[3])
 
                 # force per length
                 l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl)
-                
+
                 # calculate effective cl predicted by the VLM, = 2π * α_eff
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
 
@@ -116,12 +116,12 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # # correct for alpha=0 cl, inviscid lift slope, and viscous correction
                 # cl_star = polar.m_inv / (2*pi) * cl_vlm + polar.cl_alpha0
                 # cl_star = cl_star + FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_star)
-                
+
                 # get viscous lift correction factor
                 f_cl = cl_star / cl_vlm
                 # f_cl = clamp(f_cl, 0.0, 1.0)
                 @show j, cl_star / cl_vlm, cl_star, cl_vlm, polar.m_inv, polar.cl_alpha0
-                
+
                 # get direction of viscous drag
                 v_induced = R * v_induced # rotate into this frame
                 dhat = SVector(v_induced[1], 0.0, v_induced[3])
@@ -130,10 +130,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # get viscous drag coefficient
                 # cd = FLOWMath.linear(polar.cls_visc, polar.cds_visc, cl_star)
                 cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
-                
+
                 # get magnitude of viscous drag
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
-                
+
                 # get viscous drag vector
                 d_viscous = d_viscous_mag * dhat
 
@@ -152,7 +152,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                     cfb_2d = R * cfb
                     # cfb_strip = SVector{3,TF}(cfb_2d[1], 0.0, cfb_2d[3])
                     # cfb_remaining = SVector{3,TF}(0.0, cfb_2d[2], 0.0)
-                    
+
                     # apply lift correction factor to bound circulation contribution and add viscous drag
                     cfb_new = Rp * (SVector{3,TF}(cfb_2d[1], 0.0, cfb_2d[3]) * f_cl + SVector{3,TF}(0, cfb_2d[2], 0)) + d_viscous
 
@@ -179,6 +179,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
     end
 end
 
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Nothing) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Nothing, ref) where TF
     return nothing
 end
