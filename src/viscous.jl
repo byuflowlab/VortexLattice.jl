@@ -1,18 +1,100 @@
 struct Polar{TF}
     alphas::Vector{TF}
-    cls_inv::Vector{TF}
-    cls_delta::Vector{TF}
+    # cls_inv::Vector{TF}
+    # cls_delta::Vector{TF}
     cls_visc::Vector{TF}
     cds_visc::Vector{TF}
-    cl_alpha0::TF
-    m_inv::TF
+    # cl_alpha0::TF
+    # m_inv::TF
 end
 
-function Polar(alphas, cls_inv, cls_visc, cds_visc)
-    cls_delta = cls_visc .- cls_inv
-    m_inv = (cls_inv[end] - cls_inv[1]) / (alphas[end] - alphas[1])
-    cl_alpha0 = FLOWMath.linear(alphas, cls_inv, 0.0)
-    return Polar{eltype(cls_inv)}(alphas, cls_inv, cls_delta, cls_visc, cds_visc, cl_alpha0, m_inv)
+function Polar(alphas, cls_visc, cds_visc)
+    return Polar{eltype(cls_inv)}(alphas, cls_visc, cds_visc)
+end
+
+"""
+    get_polars(section_rs, rotor_file, TF=Float64; data_path)
+
+Generates a vector of vectors of `::Polar` objects for use in the `viscous!` function.
+
+**Arguments**
+- `section_rs::Vector{Vector{Float64}}`: `section_rs[i]` contains a vector of radial coordinates of each airfoil in the `i`th surface, normalized by the radius. Note that a 0-length vector indicates no airfoil correction is to be used.
+- `rotor_file::String`: name of the file containing the radial coordinates and polar files
+
+**Optional Arguments**
+- `data_path::String`: path where `rotors/` and `airfoils/` directories live
+
+**Returns**
+- `polars::Vector{Vector{Polar{Float64}}}`: polar object for each section in each surface of the corresponding `::System`
+"""
+function get_polars2(section_rs::Vector{<:Vector}, rotor_files, TF=Float64; data_path="VortexLattice_rotor_data")
+    
+    # check vector lengths
+    @assert length(section_rs) == length(rotor_files)
+    
+    # create vector of polars to push to
+    polars = Vector{Vector{Polar{TF}}}(undef, length(section_rs))
+
+    # loop over surfaces
+    for i_surface in eachindex(section_rs)
+
+        section_r = section_rs[i_surface]
+        if length(section_r) > 0
+
+            # instantiate polar vector
+            sections = Vector{Polar{TF}}(undef, length(section_r))
+
+            # get this rotor file
+            rotor_file = rotor_files[i_surface]
+
+            # read rotor data
+            data = readdlm(joinpath(data_path, "rotors", rotor_file), ',', skipstart=1)
+
+            # generate polar objects
+            polars_list = Vector{Polar{TF}}(undef, size(data,1))
+            af_files = String.(data[:,3])
+            for i_polar in axes(data,1)
+                # get file name
+                af_file = af_files[i_polar]
+
+                # read file
+                af_data = readdlm(joinpath(data_path, "airfoils", af_file), ',', skipstart=1)
+
+                # generate polar
+                polars_list[i_polar] = Polar{TF}(af_data[:,1], af_data[:,2], af_data[:,3])
+            end
+
+            # calculate ranges for each airfoil
+            rRs = Float64.(data[:,1])
+            rRmids = (rRs[1:end-1] .+ rRs[2:end]) .* 0.5
+            rRranges = zeros(length(rRs))
+            rRranges[1:end-1] .= rRmids
+            rRranges[end] = 1.0
+
+            # loop over sections
+            for i_r in eachindex(section_r)
+                
+                # radial coordinate of this section
+                r = section_r[i_r]
+
+                # find which airfoil corresponds
+                i_polar = findfirst((x) -> (x>=r), rRranges)
+
+                # populate sections
+                sections[i_r] = polars_list[i_polar]
+
+            end
+
+            polars[i_surface] = sections
+        
+        else
+
+            # push 0-length vector
+            polars[i_surface] = Vector{Polar{TF}}(undef,0)
+        end
+    end
+
+    return polars
 end
 
 """
@@ -23,7 +105,7 @@ The corrections are applied to the `properties` of each panel, as well as the ci
 
 Note: dΓdt should contain -Γ from the PREVIOUS timestep
 """
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Polar, ref::Reference, dt) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polars::Vector{<:Vector{<:Polar}}, ref::Reference, dt) where TF
     # properties contains:
     # * cf
     # surface contains:
@@ -47,6 +129,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
             surface = surfaces[isurf]
             props = properties[isurf]
             grid = grids[isurf]
+            polar_array = polars[isurf]
 
             # get reference frame for this surface
             frame = frames[frames_index[isurf]]
@@ -68,6 +151,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
 
                 # get net aerodynamic force on this section
                 cf = zero(SVector{3,TF})
+
+                # extract the polar for this section
+                polar = polar_array[j]
 
                 # loop over chordwise panels in this section
                 for i in axes(surface, 1)
@@ -111,7 +197,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
 
                 # get effective α
-                α_eff = cl_vlm / (2 * pi) * pi/180
+                α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
 
                 # refer to polar for viscous cl
                 cl_star = FLOWMath.linear(polar.alphas, polar.cls_visc, α_eff)
@@ -132,7 +218,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
 
                 # get viscous drag coefficient
                 # cd = FLOWMath.linear(polar.cls_visc, polar.cds_visc, cl_star)
-                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
+                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff) * 0.0
 
                 # get magnitude of viscous drag
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
@@ -157,7 +243,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                     # cfb_remaining = SVector{3,TF}(0.0, cfb_2d[2], 0.0)
 
                     # apply lift correction factor to bound circulation contribution and add viscous drag
-                    cfb_new = Rp * (SVector{3,TF}(cfb_2d[1], 0.0, cfb_2d[3]) * f_cl + SVector{3,TF}(0, cfb_2d[2], 0)) + d_viscous
+                    cfb_new = Rp * (SVector{3,TF}(cfb_2d[1] * f_cl, 0.0, cfb_2d[3] * f_cl) + SVector{3,TF}(0, cfb_2d[2], 0)) + d_viscous
 
                     # reassemble properties
                     # @show cfb_strip, cfb_remaining
@@ -173,6 +259,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 end
 
                 # apply viscous correction to circulation strengths and their time derivatives
+                @show j, f_cl, α_eff, cl_vlm, cl_star
                 Γ[iΓ-size(surface,1):iΓ-1] .*= f_cl
             end
             dΓdt .+= Γ

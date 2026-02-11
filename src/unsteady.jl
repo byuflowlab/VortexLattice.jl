@@ -169,7 +169,8 @@ end
 
 function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range, Ωinf=(t)->SVector{3}(0.0, 0.0, 0.0);
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
-        vtk_args=(trailing_vortices=false, write_wakes=false), fmm_wake_args=(), fmm_vehicle_args=(),
+        vtk_args=(trailing_vortices=false, write_wakes=false), vtk_postshed=false,
+        fmm_wake_args=(), fmm_vehicle_args=(),
         derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
         eta=0.3, 
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
@@ -178,7 +179,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors=(),
         calculate_influence_matrix=true,
-        polar=nothing, frames_index=fill(-1, length(system.surfaces)) # viscous correction
+        polars=nothing, frames_index=fill(-1, length(system.surfaces)) # viscous correction
     )
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
@@ -384,7 +385,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # compute transient forces on each panel (if necessary)
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
-                current_surfaces, wakes, ref, fs, Γ, dΓ; dΓdt,
+                current_surfaces, wakes, ref, fs, Γ, dΓ; dΓdt=nothing,
                 additional_velocity, Vh, Vv, symmetric, nwake,
                 surface_id, wake_finite_core, wake_shedding_locations,
                 trailing_vortices, xhat,
@@ -393,7 +394,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                                                             # in vehicle_on_all!
         else
             near_field_forces!(properties, current_surfaces, wakes,
-                ref, fs, Γ; dΓdt, additional_velocity, Vh, Vv,
+                ref, fs, Γ; dΓdt=nothing, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
                 wake_shedding_locations, trailing_vortices, xhat,
                 calculate_vlm_induced=false,
@@ -404,8 +405,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #------- apply viscous corrections (if set) -------#
 
         Γ_wake .= Γ
-        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polar, ref, dt)
-        Γ .= Γ_wake
+        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
+        # Γ .= Γ_wake
         
         #------- other solvers -------#
         
@@ -472,7 +473,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
             #--- shed new wake particles ---#
 
-            shed_wake!(wake, system,  dt, Γ_wake, dΓdt_wake,
+            shed_wake!(wake, system,  dt, Γ_wake, dΓdt,
                 particle_trailing_methods, particle_unsteady_methods)
 
             # update wake shedding locations based on wake and vehicle
@@ -482,7 +483,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
             #--- update locations for the next step ---#
 
-            if !isnothing(path)
+            if !isnothing(path) && vtk_postshed
                 # VortexLattice system
                 write_vtk(joinpath(path, name * "_postshed_step_$i_step"), system; write_wakes=true, vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
 

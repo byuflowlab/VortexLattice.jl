@@ -1,6 +1,6 @@
 using VortexLattice
 using StaticArrays
-using PythonPlot
+# using PythonPlot
 using DelimitedFiles
 
 data_path="./VortexLattice_rotor_data"
@@ -127,8 +127,39 @@ cls_visc = data[:,2]
 cds_visc = data[:,3]
 alphas = data[:,4]
 
-polar = VortexLattice.Polar(alphas, cls_inv, cls_visc, cds_visc .* 0.0)
-# polar = nothing
+# polar = VortexLattice.Polar(alphas, cls_visc, cds_visc .* 0.0)
+
+# get section_rs
+section_rs = (yle_p1[1:end-1] .+ yle_p1[2:end]) .* 0.5 ./ yle_p1[end]
+blade_files = fill("dji_9443_airfoils.csv", 2)
+polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
+
+# or just use the same polar for all sections
+# polars = fill(polar, size(system.surfaces, 2))
+# polars = [polars, polars]
+# polars = nothing
+
+# function plot_polars(polars::Vector{VortexLattice.Polar{TF}}, labels) where TF
+#     fig = figure("airfoils")
+#     fig.clear()
+#     fig.add_subplot(121, xlabel=L"\alpha (^\circ)", ylabel=L"c_l")
+#     fig.add_subplot(122, xlabel=L"\alpha (^\circ)", ylabel=L"c_d")
+#     axs = fig.get_axes()
+
+#     # loop over polars
+#     for (ip,polar) in enumerate(polars)
+#         alpha = polar.alphas
+#         cl = polar.cls_visc
+#         cd = polar.cds_visc
+#         @show length(alpha), length(cl), length(cd) alpha cl cd
+#         axs[0].plot(alpha, cl, label=labels[ip])
+#         axs[1].plot(alpha, cd, label=labels[ip])
+#     end
+#     axs[0].legend()
+#     axs[1].legend()
+# end
+
+# plot_polars(polars[1], ["sec$i" for i in 1:length(polars[1])])
 
 monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
@@ -147,23 +178,23 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             # calculate_influence_matrix=true,
             # path=nothing,
             # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
-            polar, frames_index = fill(1, length(system.surfaces))
+            polars, frames_index = fill(1, length(system.surfaces))
         )
 
 # post-process
 Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
 CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
-fig = figure("CT")
-fig.clear()
-fig.add_subplot(111, xlabel=L"t", ylabel=L"C_T")
-ax = fig.get_axes()[0]
-ax.plot(collect(t_range), CTs, label="VPM")
+# fig = figure("CT")
+# fig.clear()
+# fig.add_subplot(111, xlabel=L"t", ylabel=L"C_T")
+# ax = fig.get_axes()[0]
+# ax.plot(collect(t_range), CTs, label="VPM")
 # ax.set_ylim(-1.0, 1.0)
 
 # comparison
 CT_exp = 0.072
 CT_URANS = 0.071
-ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
+# ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
 
 di = timestep_per_rev * 1
 CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])

@@ -3,6 +3,14 @@ using Xfoil
 using PythonPlot
 using FLOWMath
 
+#=
+cst_u, cst_l = cst_foil_fit(x, yu, x, yl, n_cst=10, xn1=0.3, xn2=1.0)
+x, yu, yl, tmax, rLE = cst_foil(1001, cst_u, cst_l, x=None, t=None, tail=0.0)   # black
+x, yu, yl, tmax, rLE = cst_foil(1001, cst_u, cst_l, x=None, t=None, tail=0.02)  # red
+x, yu, yl, tmax, rLE = cst_foil(1001, cst_u, cst_l, x=None, t=0.05, tail=0.0)   # blue
+x, yu, yl, tmax, rLE = cst_foil(1001, cst_u, cst_l, x=None, t=0.05, tail=0.01)  # green
+=#
+
 function airfoil_geometry(contour_file; airfoil_path=joinpath(@__DIR__, "..", "VortexLattice_rotor_data", "airfoils"))
     data = readdlm(joinpath(airfoil_path, contour_file), ',', skipstart=1)
     x = data[:,1]
@@ -122,6 +130,61 @@ function get_viscous_corrections2(filename)
 
     return cl_alpha0, delta_cl_func, cd_visc_func
 end
+
+function write_polar(af_file, contour_file, Re; alpha_range=range(-10,stop=15,length=51),
+        airfoil_path=joinpath(@__DIR__, "..", "VortexLattice_rotor_data", "airfoils"),
+        ncrit=1, xfoil_args...
+    )
+    # read contour
+    x, y = airfoil_geometry(contour_file; airfoil_path)
+
+    # run xfoil
+    cls_visc, cds_visc, cdps_visc, cms_visc, convs_visc = 
+        alpha_sweep(x, y, alpha_range, Re; ncrit, xfoil_args...)
+
+    if !prod(convs_visc)
+        @warn "Some Xfoil runs did not converge for $af_file"
+    end
+    
+    # write to file
+    data = Matrix{Any}(undef, length(cls_visc)+1, 4)
+    data[1,:] .= ["alpha", "cl", "cd", "cm"]
+    data[2:end, 1] .= alpha_range
+    data[2:end, 2] .= cls_visc
+    data[2:end, 3] .= cds_visc
+    data[2:end, 4] .= cms_visc
+    writedlm(joinpath(airfoil_path, af_file), data, ',')
+end
+
+function write_polars(rs, chords, RPM, af_files, contour_files; 
+        rho = 1.071778, mu = 1.85508e-5,
+        alpha_range=range(-10,stop=15,length=51), 
+        airfoil_path=joinpath(@__DIR__, "..", "VortexLattice_rotor_data", "airfoils"),
+        ncrit=1, xfoil_args...
+    )
+    @assert length(rs) == length(chords)
+    @assert length(chords) == length(af_files)
+    @assert length(af_files) == length(contour_files)
+    for i in eachindex(rs)
+        r = rs[i]
+        c = chords[i]
+        v = 2 * pi * RPM / 60 * r
+        Re = rho * c * v / mu
+        write_polar(af_files[i], contour_files[i], Re; alpha_range, airfoil_path, ncrit, xfoil_args...)
+    end
+end
+
+write_polar("testPolar.txt", rfl_contour, Re_07rR)
+
+# get rs for known sections
+Rhub = 0.00624
+Rtip = 0.12
+rs = [0.0, 0.0857143, 0.185714, 0.371429, 0.714286, 0.942857, 1.0] .* (Rtip - Rhub) .+ Rhub
+chords = FLOWMath.linear(yle_p1, chord_p1, rs)
+RPM = 5400.0
+af_files = ["dji_9443_$i.csv" for i in 1:length(rs)]
+contour_files = ["DJI9443-airfoilsec6.csv", "DJI9443-airfoilsec6.csv", "DJI9443-airfoilsec4.csv", "DJI9443-airfoilsec3.csv", "DJI9443-airfoilsec2.csv", "DJI9443-airfoilsec1.csv", "DJI9443-airfoilsec1.csv"]
+write_polars(rs, chords, RPM, af_files, contour_files)
 
 cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
 
