@@ -160,7 +160,7 @@ end
 
 #------- kinematic velocity -------#
 
-function kinematic_velocity!(Vcp, Vh, Vv, Vte, surfaces, frames::AbstractVector{ReferenceFrame{TF}}; skip_top_level=true) where TF
+function kinematic_velocity!(Vcp, Vh, Vv, Vte, surfaces, frames::AbstractVector{ReferenceFrame{TF}}; skip_top_level=false) where TF
 
     # capture the top level frame if requested
     if skip_top_level
