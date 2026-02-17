@@ -259,7 +259,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 end
 
                 # apply viscous correction to circulation strengths and their time derivatives
-                @show j, f_cl, α_eff, cl_vlm, cl_star
+                # @show j, f_cl, α_eff, cl_vlm, cl_star
                 Γ[iΓ-size(surface,1):iΓ-1] .*= f_cl
             end
             dΓdt .+= Γ

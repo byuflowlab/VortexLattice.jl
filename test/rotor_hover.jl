@@ -119,13 +119,13 @@ sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 # cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
 # cl_alpha0, delta_cl_fun, cd_visc_fun = get_viscous_corrections2("corrections.csv")
 
-filename = "corrections.csv"
-data = readdlm(filename, ',', skipstart=0)
-@show data
-cls_inv = data[:,1]
-cls_visc = data[:,2]
-cds_visc = data[:,3]
-alphas = data[:,4]
+# filename = "corrections.csv"
+# data = readdlm(filename, ',', skipstart=0)
+# @show data
+# cls_inv = data[:,1]
+# cls_visc = data[:,2]
+# cds_visc = data[:,3]
+# alphas = data[:,4]
 
 # polar = VortexLattice.Polar(alphas, cls_visc, cds_visc .* 0.0)
 
