@@ -61,3 +61,7 @@ avl3.35
 .vscode
 *.vtp
 *.vtm
+*.vts
+*.xmf
+*.h5
+test/rotor_hover.jl

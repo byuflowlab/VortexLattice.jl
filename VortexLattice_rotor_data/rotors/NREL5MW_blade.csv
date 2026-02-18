@@ -1,0 +1,7 @@
+property,file,description
+chorddist,NREL5MW_chorddist.csv,Chord distribution
+pitchdist,NREL5MW_pitchdist.csv,Pitch distribution
+sweepdist,NREL5MW_sweepdist.csv,AC sweep distribution
+heightdist,NREL5MW_curvedist.csv,AC curve distribution
+airfoil_files,NREL5MW_airfoils.csv,Airfoil distribution
+airfoil_reference,NREL5MW_centers.csv,Airfoil references

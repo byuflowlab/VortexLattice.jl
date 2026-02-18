@@ -171,7 +171,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
         vtk_args=(trailing_vortices=false, write_wakes=false), vtk_postshed=false,
         fmm_wake_args=(), fmm_vehicle_args=(),
-        derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
+        derivatives=false,
         eta=0.3, 
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         particle_unsteady_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
@@ -360,12 +360,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         dΓdt .+= Γ # add newly computed circulation
         dΓdt ./= dt # divide by corresponding time step
 
-        #--- nonlinear airfoil analysis ---#
-        if nonlinear_analysis
-            call_near_field_forces!(system)
-            nonlinear_analysis!(system, ref, fs; nonlinear_args...)
-        end
-
         #--- vehicle-on-all ---#
 
         # solve n-body problem
@@ -376,12 +370,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # @show V[1][1,1] V[1][1,end]
         # throw(ErrorException("STOP HERE"))
 
-        #--- forces and moments ---#
-
-        if nonlinear_analysis
-            update_section_forces!(system)
-        end
-
         # compute transient forces on each panel (if necessary)
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
@@ -389,16 +377,14 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 additional_velocity, Vh, Vv, symmetric, nwake,
                 surface_id, wake_finite_core, wake_shedding_locations,
                 trailing_vortices, xhat,
-                calculate_vlm_induced=false,
-                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
+                calculate_vlm_induced=false) # we've already calculated the induced velocity
                                                             # in vehicle_on_all!
         else
             near_field_forces!(properties, current_surfaces, wakes,
                 ref, fs, Γ; dΓdt=nothing, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
                 wake_shedding_locations, trailing_vortices, xhat,
-                calculate_vlm_induced=false,
-                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
+                calculate_vlm_induced=false) # we've already calculated the induced velocity
                                              # in vehicle_on_all!
         end
 

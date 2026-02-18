@@ -235,7 +235,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # apply viscous corrections to aerodynamic force on each panel
                 for i in axes(surface, 1)
                     # unpack props
-                    (; gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise) = props[i,j]
+                    (; gamma, velocity, cfb, cfl, cfr) = props[i,j]
 
                     # decompose cfb into 2-d and remaining components
                     cfb_2d = R * cfb
@@ -254,7 +254,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                         cfb_new,  # apply lift correction factor to bound circulation contribution and add viscous drag
                         cfl, # * f_cl,  # apply lift correction factor to left edge contribution
                         cfr, # * f_cl,  # apply lift correction factor to right edge contribution
-                        velocity_from_streamwise
                     )
                 end
 
