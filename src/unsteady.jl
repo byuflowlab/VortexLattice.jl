@@ -76,7 +76,6 @@ function PanelForcesMonitor(nt::Int, system::System, TF=Float64; surface_index=1
 end
 
 function (monitor::PanelForcesMonitor)(system::System, wake, i_step::Int)
-    # CF = monitor.CF[:, :, :, i_step + 1]
     CF = view(monitor.CF, 1:3, 1:monitor.nc, 1:monitor.ns, i_step + 1)
     ns = monitor.ns
     nc = monitor.nc
@@ -88,10 +87,34 @@ function (monitor::PanelForcesMonitor)(system::System, wake, i_step::Int)
     end
 end
 
-struct LiftingLineCoefficientsMonitor{TF}
-    CF::Vector{Matrix{SVector{3,TF}}}
-    CM::Vector{Matrix{SVector{3,TF}}}
-    surface_index::Int
+struct LiftingLineCoefficientsMonitor{TF, F}
+    CF::Vector{Array{TF, 3}}
+    CM::Vector{Array{TF, 3}}
+    ns::Vector{Int}
+    frame::F
+end
+
+function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; frame=Body())
+    nsurf = length(system.surfaces)
+    ns = zeros(Int, nsurf)
+    CF = Vector{Array{TF, 3}}(undef, nsurf)
+    CM = Vector{Array{TF, 3}}(undef, nsurf)
+    for isurf in 1:nsurf
+        ns[isurf] = size(system.surfaces[isurf], 2)
+        CF[isurf] = zeros(TF, 3, ns[isurf], nt)
+        CM[isurf] = zeros(TF, 3, ns[isurf], nt)
+    end
+    return LiftingLineCoefficientsMonitor{TF,typeof(frame)}(CF, CM, ns, frame)
+end
+
+function (monitor::LiftingLineCoefficientsMonitor)(system::System, wake, i_step::Int)
+    cf, cm = lifting_line_coefficients(system; frame=monitor.frame)
+    for isurf in 1:length(system.surfaces)
+        CF = view(monitor.CF[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
+        CM = view(monitor.CM[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
+        CF .= cf[isurf]
+        CM .= cm[isurf]
+    end
 end
 
 struct FrameForcesMonitor{TF,F}
