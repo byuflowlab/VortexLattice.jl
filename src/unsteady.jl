@@ -62,6 +62,38 @@ function (monitor::ForcesMonitor)(system::System, wake, i_step::Int)
     monitor.CM[i_step + 1] = CM
 end
 
+struct PanelForcesMonitor{TF}
+    CF::Array{TF, 4}
+    surface_index::Int
+    ns::Int
+    nc::Int
+end
+
+function PanelForcesMonitor(nt::Int, system::System, TF=Float64; surface_index=1)
+    nc, ns = size(system.surfaces[surface_index])
+    CF = zeros(TF, 3, nc, ns, nt)
+    return PanelForcesMonitor{TF}(CF, surface_index, ns, nc)
+end
+
+function (monitor::PanelForcesMonitor)(system::System, wake, i_step::Int)
+    # CF = monitor.CF[:, :, :, i_step + 1]
+    CF = view(monitor.CF, 1:3, 1:monitor.nc, 1:monitor.ns, i_step + 1)
+    ns = monitor.ns
+    nc = monitor.nc
+    properties = system.properties[monitor.surface_index]
+    for j in 1:ns
+        for i in 1:nc
+            CF[:, i, j] .= properties[i, j].cfb
+        end
+    end
+end
+
+struct LiftingLineCoefficientsMonitor{TF}
+    CF::Vector{Matrix{SVector{3,TF}}}
+    CM::Vector{Matrix{SVector{3,TF}}}
+    surface_index::Int
+end
+
 struct FrameForcesMonitor{TF,F}
     CF::Vector{SVector{3,TF}}
     CM::Vector{SVector{3,TF}}

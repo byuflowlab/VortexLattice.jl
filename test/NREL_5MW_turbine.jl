@@ -19,7 +19,7 @@ J               = magVinf/(RPM/60 * 2*R)
 ns = 20
 nc = 1
 
-grids, ratios = VortexLattice.generate_rotor("NREL5MW.csv", data_path; 
+grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data_path; 
                                                             turbine_flag=false, 
                                                             clockwise=true, 
                                                             ns, 
@@ -28,11 +28,16 @@ grids, ratios = VortexLattice.generate_rotor("NREL5MW.csv", data_path;
                                                             interpolate_airfoils=true);
 
 
+# Rot = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi)
+# VortexLattice.rotate!(grids[1], Rot)
+# VortexLattice.rotate!(grids[2], Rot)
+# VortexLattice.rotate!(grids[3], Rot)
+# frames[1] = ReferenceFrame(frames[1].x, frames[1].v, SVector{3}(1.0, 0.0, 0.0), -frames[1].ω, Rot * frames[1].R, frames[1].Rp2g, frames[1].name, frames[1].parent_index, frames[1].child_index, frames[1].dependent_index)
+
 core_size = 1e-3
 system = System(grids; ratios, core_size);
-# system = System(grids; ratios, sections);
 
-Sref = 2.0
+Sref = 1.0
 cref = 1.0
 bref = 1.0
 rref = [0.0, 0.0, 0.0]
@@ -122,14 +127,16 @@ sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 
 # plot_polars(polars[1], ["sec$i" for i in 1:length(polars[1])])
 
-monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
+# monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
+monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
+monitors = (monitor,)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
-            monitors, name = "rotorhover", 
+            monitors, name = "NREL5MW", 
             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
             # particle_trailing_methods=fill(VortexLattice.OverlapPPS(overlap, p_per_step), length(system.surfaces)),
             particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-            particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
+            particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
+            # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
             eta = 0.3,
             derivatives = false,
             # vtk_args=(trailing_vortices=false,),
@@ -139,12 +146,14 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             # calculate_influence_matrix=true,
             # path=nothing,
             # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
-            polars, frames_index = fill(1, length(system.surfaces))
+            polars,
+            frames_index = fill(1, length(system.surfaces))
         )
 
 # post-process
-Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
-CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
+F = -monitors[1].CF[1,1,:,end]
+# Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
+# CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
 # fig = figure("CT")
 # fig.clear()
 # fig.add_subplot(111, xlabel=L"t", ylabel=L"C_T")
@@ -153,16 +162,17 @@ CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
 # ax.set_ylim(-1.0, 1.0)
 
 # comparison
-CT_exp = 0.072
-CT_URANS = 0.071
-# ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
+# CT_exp = 0.072
+# CT_URANS = 0.071
+# # ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
 
-di = timestep_per_rev * 1
-CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])
-percent_error = abs((CT_vpm - CT_exp) / CT_exp) * 100
-println("VPM CT: $CT_vpm\nExperiment CT: $CT_exp\nURANS CT: $CT_URANS\nPercent Error (VPM vs Experiment): $percent_error %")
+# di = timestep_per_rev * 1
+# CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])
+# percent_error = abs((CT_vpm - CT_exp) / CT_exp) * 100
+# println("VPM CT: $CT_vpm\nExperiment CT: $CT_exp\nURANS CT: $CT_URANS\nPercent Error (VPM vs Experiment): $percent_error %")
 
-# save csv with CT vs time
-name = "rotor_hover_eta0.3_ns20_nc1_nt36_pps4_overlap1.3"
-data = hcat(collect(t_range), CTs)
-writedlm(name*".csv", data, ',')
+# # save csv with CT vs time
+# name = "rotor_hover_eta0.3_ns20_nc1_nt36_pps4_overlap1.3"
+# data = hcat(collect(t_range), CTs)
+# writedlm(name*".csv", data, ',')
+println()

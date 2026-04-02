@@ -16,7 +16,7 @@ speedofsound    = 342.35                    # (m/s) speed of sound
 magVinf         = J*RPM/60*(2*R) * 0.0
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
 
-ns = 20
+ns = 40
 nc = 1
 
 grids, ratios, polars, frames = VortexLattice.generate_rotor("DJI9443.csv", data_path; 
@@ -105,7 +105,7 @@ write_vtk("rotor_hover_initial", system; write_wakes=false, trailing_edge_list=f
 
 # display(frames[1])
 
-n_revs = 1
+n_revs = 10
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
