@@ -28,16 +28,10 @@ grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data
                                                             interpolate_airfoils=true);
 
 
-# Rot = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi)
-# VortexLattice.rotate!(grids[1], Rot)
-# VortexLattice.rotate!(grids[2], Rot)
-# VortexLattice.rotate!(grids[3], Rot)
-# frames[1] = ReferenceFrame(frames[1].x, frames[1].v, SVector{3}(1.0, 0.0, 0.0), -frames[1].ω, Rot * frames[1].R, frames[1].Rp2g, frames[1].name, frames[1].parent_index, frames[1].child_index, frames[1].dependent_index)
-
 core_size = 1e-3
 system = System(grids; ratios, core_size);
 
-Sref = 1.0
+Sref = 2.0
 cref = 1.0
 bref = 1.0
 rref = [0.0, 0.0, 0.0]
@@ -73,7 +67,7 @@ ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
 overlap = 1.3
-p_per_step = 2
+p_per_step = 4
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 
@@ -128,7 +122,8 @@ sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 # plot_polars(polars[1], ["sec$i" for i in 1:length(polars[1])])
 
 # monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
-monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
+# monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
+monitor = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system)
 monitors = (monitor,)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
             monitors, name = "NREL5MW", 
@@ -151,7 +146,14 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
         )
 
 # post-process
-F = -monitors[1].CF[1,1,:,end]
+# F = -monitors[1].CF[1,1,:,end] .* 2 #Panel forces monitor
+F = -monitors[1].CF[1][1,:,end-1] .* 4 #Lifting line monitor
+R = 63.0
+r = 11.75
+(R - r) / ns
+x = r .+ (R - r) / ns * (1:ns)
+p = plot(x,F,xlims=(0,65), ylims=(0,maximum(F)*1.1), legend=false, xlabel="r (m)", ylabel="Force (N)")
+display(p)
 # Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
 # CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
 # fig = figure("CT")
