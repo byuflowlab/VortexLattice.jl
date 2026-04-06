@@ -3,6 +3,7 @@ using StaticArrays
 # using PythonPlot
 using DelimitedFiles
 using FLOWMath
+using Plots
 
 function main()
 
@@ -72,7 +73,7 @@ function main()
 
     n_revs = 1
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 24
+    timestep_per_rev = 36
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     # t_range = range(start=0.0, stop=ttot/36, length=2)
     overlap = 1.3
@@ -103,61 +104,19 @@ function main()
                 polars,
                 frames_index = fill(1, length(system.surfaces)),
                 verbose=false,
-                path=nothing
+                # path=nothing
             )
-    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
-                monitors, name = "NREL5MW", 
-                # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-                # particle_trailing_methods=fill(VortexLattice.OverlapPPS(overlap, p_per_step), length(system.surfaces)),
-                particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-                particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-                # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-                eta = 0.3,
-                derivatives = false,
-                # vtk_args=(trailing_vortices=false,),
-                # wake_args=(SFS=VortexLattice.FLOWVPM.SFS_Cd_twolevel_nobackscatter,),
-                # nonlinear_analysis=true,
-                # nonlinear_args=(polar_correction=false,),
-                # calculate_influence_matrix=true,
-                # path=nothing,
-                # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
-                polars,
-                frames_index = fill(1, length(system.surfaces)),
-                verbose=false,
-                path=nothing
-            )
-    @profview_allocs wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
-                monitors, name = "NREL5MW", 
-                # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-                # particle_trailing_methods=fill(VortexLattice.OverlapPPS(overlap, p_per_step), length(system.surfaces)),
-                particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-                particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-                # particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-                eta = 0.3,
-                derivatives = false,
-                # vtk_args=(trailing_vortices=false,),
-                # wake_args=(SFS=VortexLattice.FLOWVPM.SFS_Cd_twolevel_nobackscatter,),
-                # nonlinear_analysis=true,
-                # nonlinear_args=(polar_correction=false,),
-                # calculate_influence_matrix=true,
-                # path=nothing,
-                # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
-                polars,
-                frames_index = fill(1, length(system.surfaces)),
-                verbose=false,
-                path=nothing
-            ) sample_rate=1E-2
-    # RHO = 1
-    # R = 63.0
-    # r = 11.75
-    # dr = (R - r) / ns
-    # x = r .+ dr * (1:ns)
-    # p = plot()
-    # F_panel = monitors[1].CF[1,1,:,end-1] .* 0.5*RHO*Vinf^2 * ref.S ./ dr #Panel forces monitor
-    # F_lift = monitors[2].CF[1][1,:,end] #Lifting line monitor
-    # p = plot(x,F_panel, legend=true, xlabel="r (m)", ylabel="Force (N)",label="Panel forces")
-    # p = plot(p, x,F_lift, legend=true, xlabel="r (m)", ylabel="Force (N/m)",label="Lifting line forces")
-    # display(p)
+    RHO = 1
+    R = 63.0
+    r = 11.75
+    dr = (R - r) / ns
+    x = r .+ dr * (1:ns)
+    p = plot()
+    F_panel = monitors[1].CF[1,1,:,end-1] .* 0.5*RHO*Vinf^2 * ref.S ./ dr #Panel forces monitor
+    F_lift = monitors[2].CF[1][1,:,end] #Lifting line monitor
+    p = plot(x,F_panel, legend=true, xlabel="r (m)", ylabel="Force (N)",label="Panel forces")
+    p = plot(p, x,F_lift, legend=true, xlabel="r (m)", ylabel="Force (N/m)",label="Lifting line forces")
+    display(p)
 
     # Calculate coefficient of thrust using trapz integration
     # B = 3
