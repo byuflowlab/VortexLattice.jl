@@ -191,7 +191,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 l_2d_norm = sqrt(cf[1]*cf[1] + cf[3]*cf[3])
 
                 # force per length
-                l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl) # TODO: This is from midpoint to midpoint not the perpendicular distance
+                # l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl) # TODO: This is from left leading edge to right side of last bound vortex
+                span = calculate_span(surface, j)
+                l_2d_norm /= span
+
 
                 # calculate effective cl predicted by the VLM, = 2π * α_eff
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)

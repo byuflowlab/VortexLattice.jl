@@ -958,9 +958,9 @@ end
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
-    r_ll, c_ll = lifting_line_geometry(grids)
+    r_ll, c_ll, w_ll = lifting_line_geometry(grids)
 
-    cf, cm = lifting_line_coefficients(system, r_ll, c_ll; frame=Stability())
+    cf, cm = lifting_line_coefficients(system, r_ll, c_ll, w_ll; frame=Stability())
 
     cl_avl = [0.2618, 0.2646, 0.2661, 0.2664, 0.2654, 0.2628, 0.2584, 0.2513,
         0.2404, 0.2233, 0.1952, 0.1434]

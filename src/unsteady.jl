@@ -235,7 +235,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors=(),
         calculate_influence_matrix=true,
-        polars=nothing, frames_index=fill(-1, length(system.surfaces)) # viscous correction
+        polars=nothing, frames_index=fill(-1, length(system.surfaces)), # viscous correction
+        verbose=true
     )
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
@@ -290,7 +291,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     # begin simulation
     i_step = 0
     for t in t_range
-        println("\tstep $(i_step)/$(length(t_range)-1) at time $(t)")
+        if verbose 
+            println("\tstep $(i_step)/$(length(t_range)-1) at time $(t)")
+        end
         
         #------- reset system -------#
 

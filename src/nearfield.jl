@@ -964,7 +964,10 @@ function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body(), norma
             rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
             rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
             # ds = norm(rrs - rls)
-            ds = norm(cross(w[isurf][:,j], rrs - rls)) # Use the spanwise width of the panel
+            dr = rrs - rls
+            w_vec = w[isurf][:,j]
+            cross_prod = SVector(w_vec[2]*dr[3] - w_vec[3]*dr[2], w_vec[3]*dr[1] - w_vec[1]*dr[3], w_vec[1]*dr[2] - w_vec[2]*dr[1])
+            ds = norm(cross_prod) # Use the spanwise width of the panel
             # calculate reference location
             rs = (rls + rrs)/2
             # calculate reference chord
