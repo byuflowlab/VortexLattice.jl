@@ -92,9 +92,10 @@ struct LiftingLineCoefficientsMonitor{TF, F}
     CM::Vector{Array{TF, 3}}
     ns::Vector{Int}
     frame::F
+    normalized::Bool
 end
 
-function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; frame=Body())
+function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; frame=Body(), normalized=true)
     nsurf = length(system.surfaces)
     ns = zeros(Int, nsurf)
     CF = Vector{Array{TF, 3}}(undef, nsurf)
@@ -104,11 +105,11 @@ function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; fra
         CF[isurf] = zeros(TF, 3, ns[isurf], nt)
         CM[isurf] = zeros(TF, 3, ns[isurf], nt)
     end
-    return LiftingLineCoefficientsMonitor{TF,typeof(frame)}(CF, CM, ns, frame)
+    return LiftingLineCoefficientsMonitor{TF,typeof(frame)}(CF, CM, ns, frame, normalized)
 end
 
 function (monitor::LiftingLineCoefficientsMonitor)(system::System, wake, i_step::Int)
-    cf, cm = lifting_line_coefficients(system; frame=monitor.frame)
+    cf, cm = lifting_line_coefficients(system; frame=monitor.frame, normalized=monitor.normalized)
     for isurf in 1:length(system.surfaces)
         CF = view(monitor.CF[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
         CM = view(monitor.CM[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
@@ -446,7 +447,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #------- apply viscous corrections (if set) -------#
 
         Γ_wake .= Γ
-        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
+        if !isnothing(polars)
+            viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
+        end
         # Γ .= Γ_wake
         
         #------- other solvers -------#

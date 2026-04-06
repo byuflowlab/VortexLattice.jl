@@ -2,8 +2,14 @@ using VortexLattice
 using StaticArrays
 # using PythonPlot
 using DelimitedFiles
+using FLOWMath
 
 data_path="./VortexLattice_rotor_data"
+
+save_path = "vortex_lattice_simulation"
+# Empty out the data_path directory
+isdir(save_path) && rm(save_path, recursive=true, force=true)
+mkdir(save_path)
 
 constant_maneuver!(frames, system, wake, t) = nothing
 
@@ -12,7 +18,7 @@ RPM = 9.1552
 rho             = 1.071778                  # (kg/m^3) air density
 mu              = 1.85508e-5                # (kg/ms) air dynamic viscosity
 speedofsound    = 342.35                    # (m/s) speed of sound
-magVinf         = 8.0
+magVinf         = -8.0
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
 J               = magVinf/(RPM/60 * 2*R)
 
@@ -31,11 +37,11 @@ grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data
 core_size = 1e-3
 system = System(grids; ratios, core_size);
 
-Sref = 2.0
+Sref = 5.0
 cref = 1.0
 bref = 1.0
 rref = [0.0, 0.0, 0.0]
-Vinf = 1.0
+Vinf = 5.0
 ref = Reference(Sref, cref, bref, rref, Vinf)
 system.reference[] = ref
 
@@ -66,65 +72,16 @@ n_revs = 1
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
+# t_range = range(start=0.0, stop=ttot/36, length=2)
 overlap = 1.3
-p_per_step = 4
+p_per_step = 2
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 
-# generate correction functions
-#### include("polar_correction.jl") # generates cl_correction and cd_correction functions based on XFOIL data for the airfoil sections at 70% span
-
-# cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
-# cl_alpha0, delta_cl_fun, cd_visc_fun = get_viscous_corrections2("corrections.csv")
-
-# filename = "corrections.csv"
-# data = readdlm(filename, ',', skipstart=0)
-# @show data
-# cls_inv = data[:,1]
-# cls_visc = data[:,2]
-# cds_visc = data[:,3]
-# alphas = data[:,4]
-
-# polar = VortexLattice.Polar(alphas, cls_visc, cds_visc .* 0.0)
-
-# get section_rs
-# section_rs = (yle_p1[1:end-1] .+ yle_p1[2:end]) .* 0.5 ./ yle_p1[end]
-# blade_files = fill("dji_9443_airfoils.csv", 2)
-# polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
-# @show length(polars[1])
-# error()
-
-# or just use the same polar for all sections
-# polars = fill(polar, size(system.surfaces, 2))
-# polars = [polars, polars]
-# polars = nothing
-
-# function plot_polars(polars::Vector{VortexLattice.Polar{TF}}, labels) where TF
-#     fig = figure("airfoils")
-#     fig.clear()
-#     fig.add_subplot(121, xlabel=L"\alpha (^\circ)", ylabel=L"c_l")
-#     fig.add_subplot(122, xlabel=L"\alpha (^\circ)", ylabel=L"c_d")
-#     axs = fig.get_axes()
-
-#     # loop over polars
-#     for (ip,polar) in enumerate(polars)
-#         alpha = polar.alphas
-#         cl = polar.cls_visc
-#         cd = polar.cds_visc
-#         @show length(alpha), length(cl), length(cd) alpha cl cd
-#         axs[0].plot(alpha, cl, label=labels[ip])
-#         axs[1].plot(alpha, cd, label=labels[ip])
-#     end
-#     axs[0].legend()
-#     axs[1].legend()
-# end
-
-# plot_polars(polars[1], ["sec$i" for i in 1:length(polars[1])])
-
-# monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
-# monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
-monitor = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system)
-monitors = (monitor,)
+monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
+monitor1 = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system; normalized=false)
+# monitor = VortexLattice.ForcesMonitor(length(t_range); frame=Body())
+monitors = (monitor, monitor1)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
             monitors, name = "NREL5MW", 
             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
@@ -145,36 +102,29 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
             frames_index = fill(1, length(system.surfaces))
         )
 
-# post-process
-# F = -monitors[1].CF[1,1,:,end] .* 2 #Panel forces monitor
-F = -monitors[1].CF[1][1,:,end-1] .* 4 #Lifting line monitor
+# Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
+# R = 63.0
+# q = 0.5 * rho * magVinf^2
+# A_disk = pi * R^2
+# CTs = Ts ./ (q * A_disk)
+# display(plot(t_range, CTs, xlabel="t", ylabel="CT"))
+RHO = 1
 R = 63.0
 r = 11.75
-(R - r) / ns
-x = r .+ (R - r) / ns * (1:ns)
-p = plot(x,F,xlims=(0,65), ylims=(0,maximum(F)*1.1), legend=false, xlabel="r (m)", ylabel="Force (N)")
+dr = (R - r) / ns
+x = r .+ dr * (1:ns)
+p = plot()
+F_panel = monitors[1].CF[1,1,:,end-1] .* 0.5*RHO*Vinf^2 * ref.S ./ dr #Panel forces monitor
+F_lift = monitors[2].CF[1][1,:,end] #Lifting line monitor
+p = plot(x,F_panel, legend=true, xlabel="r (m)", ylabel="Force (N)",label="Panel forces")
+p = plot(p, x,F_lift, legend=true, xlabel="r (m)", ylabel="Force (N/m)",label="Lifting line forces")
 display(p)
-# Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
-# CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
-# fig = figure("CT")
-# fig.clear()
-# fig.add_subplot(111, xlabel=L"t", ylabel=L"C_T")
-# ax = fig.get_axes()[0]
-# ax.plot(collect(t_range), CTs, label="VPM")
-# ax.set_ylim(-1.0, 1.0)
 
-# comparison
-# CT_exp = 0.072
-# CT_URANS = 0.071
-# # ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
-
-# di = timestep_per_rev * 1
-# CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])
-# percent_error = abs((CT_vpm - CT_exp) / CT_exp) * 100
-# println("VPM CT: $CT_vpm\nExperiment CT: $CT_exp\nURANS CT: $CT_URANS\nPercent Error (VPM vs Experiment): $percent_error %")
-
-# # save csv with CT vs time
-# name = "rotor_hover_eta0.3_ns20_nc1_nt36_pps4_overlap1.3"
-# data = hcat(collect(t_range), CTs)
-# writedlm(name*".csv", data, ',')
-println()
+# Calculate coefficient of thrust using trapz integration
+# B = 3
+# T_blade = trapz(x, F)
+# T_total = B * T_blade
+# q = 0.5 * rho * magVinf^2
+# A_disk = pi * R^2
+# CT = abs(T_total) / (q * A_disk)
+# println("Turbine thrust coefficient (CT): $CT")

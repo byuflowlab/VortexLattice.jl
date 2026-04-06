@@ -917,7 +917,7 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, r, c, w; frame=Body())
+function lifting_line_coefficients(system, r, c, w; frame=Body(), normalized=true)
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -927,12 +927,12 @@ function lifting_line_coefficients(system, r, c, w; frame=Body())
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame)
+    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame, normalized)
 end
 
-function lifting_line_coefficients(system; frame=Body(), xc = 0.25)
+function lifting_line_coefficients(system; frame=Body(), xc = 0.25, normalized=true)
     r, c, w = lifting_line_geometry(system.grids, xc)
-    return lifting_line_coefficients(system, r, c, w; frame)
+    return lifting_line_coefficients(system, r, c, w; frame, normalized)
 end
 
 """
@@ -940,7 +940,7 @@ end
 
 In-place version of [`lifting_line_coefficients`](@ref)
 """
-function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
+function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body(), normalized=true)
 
     # number of surfaces
     nsurf = length(system.surfaces)
@@ -990,8 +990,13 @@ function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
                 cmj += cross(rr - rs, cfr)
             end
             # update normalization
-            cfj *= ref.S/(ds*cs)
-            cmj *= ref.S/(ds*cs^2)
+            if normalized
+                cfj *= ref.S/(ds*cs)
+                cmj *= ref.S/(ds*cs^2)
+            else
+                cfj *= ref.S * 0.5*ref.V^2*RHO / ds
+                cmj *= ref.S * 0.5*ref.V^2*RHO / ds
+            end
             # change coordinate frame
             cfj, cmj = body_to_frame(cfj, cmj, ref, fs, frame)
             # save coefficients

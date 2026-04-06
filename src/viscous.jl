@@ -167,10 +167,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                     iΓ += 1
 
                     # accumulate induced velocity contribution at this bound vortex
-                    v_induced += props[i,j].velocity # TODO: what if system.reference[].v != 1.0?
+                    v_induced += props[i,j].velocity * ref.V # TODO: what if system.reference[].v != 1.0?
 
                     # accumulate aerodynamic force contribution from this bound vortex
-                    cf += props[i,j].cfb
+                    cf += props[i,j].cfb * 0.5*RHO*ref.V^2 * ref.S
                 end
 
                 # get chord length
@@ -191,7 +191,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 l_2d_norm = sqrt(cf[1]*cf[1] + cf[3]*cf[3])
 
                 # force per length
-                l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl)
+                l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl) # TODO: This is from midpoint to midpoint not the perpendicular distance
 
                 # calculate effective cl predicted by the VLM, = 2π * α_eff
                 cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
