@@ -102,7 +102,7 @@ function main()
                 # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
                 polars,
                 frames_index = fill(1, length(system.surfaces)),
-                verbose=false,
+                verbose=true,
                 # path=nothing
             )
     RHO = 1
