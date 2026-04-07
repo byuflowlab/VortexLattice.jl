@@ -1095,39 +1095,3 @@ end
 Test whether and of the points in `args` are not on the symmetry plane (y = 0)
 """
 not_on_symmetry_plane(args...; tol=eps()) = !on_symmetry_plane(args...; tol=tol)
-
-"""
-    parallel_distance_angle(v1, v2, u1, u2; tol=1e-2)
-
-Compute the distance between two *approximately* parallel lines
-using an angle-based parallelism check.
-
-`tol` is the maximum allowed sin(angle) between directions.
-"""
-function parallel_distance_angle(v1::AbstractVector, v2::AbstractVector, u1::AbstractVector, u2::AbstractVector; tol=deg2rad(1))
-    vdir = v2 - v1
-    udir = u2 - u1
-
-    nv = norm(vdir)
-    nu = norm(udir)
-
-    if nv == 0 || nu == 0
-        error("Degenerate line direction")
-    end
-
-    # Scale-invariant parallelism measure
-    sinθ = norm(cross(vdir, udir)) / (nv * nu)
-    θ = asin(sinθ)
-
-    if θ > tol
-        error("Lines differ by $(θ * 180 / π) degrees")
-    end
-
-    # Distance between parallel lines
-    return norm(cross(u1 - v1, vdir)) / nv
-end
-``
-
-function calculate_span(surface, j)
-    return parallel_distance_angle(surface[1,j].rtl, surface[end,j].rbl, surface[1,j].rtr, surface[end,j].rbr)
-end
