@@ -1,6 +1,5 @@
 using VortexLattice
 using StaticArrays
-# using PythonPlot
 using DelimitedFiles
 using FLOWMath
 using Plots
