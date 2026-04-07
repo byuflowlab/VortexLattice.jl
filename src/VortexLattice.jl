@@ -76,9 +76,6 @@ include("viscous.jl")
 include("unsteady.jl")
 export simulate!
 
-include("fluid_domain.jl")
-export load_from_files, compute_fluid_domain, load_wake, load_vlm
-
 const DEBUG = Array{Bool,0}(undef)
 DEBUG[] = false
 
