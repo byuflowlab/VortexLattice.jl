@@ -8,7 +8,7 @@ Calculate local panel forces in the body frame.
 function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
     dΓdt, additional_velocity, Vh, Vv, symmetric, nwake, surface_id,
     wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
-    calculate_vlm_induced = true, skip_nonlinear_surfaces = false, sections=[])
+    calculate_vlm_induced = true)
 
     # number of surfaces
     nsurf = length(surfaces)
@@ -20,15 +20,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
         nr = length(receiving)
         nr1, nr2 = size(receiving)
         cr = CartesianIndices(receiving)
-
-        if !isempty(sections)
-            if skip_nonlinear_surfaces
-                if isempty(sections[isurf])
-                    iΓ += nr
-                    continue
-                end
-            end
-        end
 
         # loop through receiving panels
         for i in 1:length(receiving)
@@ -56,7 +47,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             if !isnothing(Vh)
                 Vi += Vh[isurf][I]
             end
-            V_streamwise = deepcopy(Vi)
 
             # induced velocity from surfaces and wakes
             if calculate_vlm_induced
@@ -89,18 +79,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
                             xhat = xhat)
-
-                        # streamwise velocity
-                        V_streamwise += induced_velocity(controlpoint(receiving[I]), surfaces[isurf], vΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, 
-                            skip_leading_edge = true, 
-                            skip_inside_edges = true, 
-                            skip_trailing_edge = true,
-                            )
                     else
                         # induced velocity on another surface
                         Vi += induced_velocity(rc, surfaces[jsurf], vΓ;
@@ -109,14 +87,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
                             xhat = xhat)
-
-                        V_streamwise += induced_velocity(rc, surfaces[jsurf], vΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, 
-                            skip_trailing_edge = true)
                     end
 
                     # induced velocity from corresponding wake
@@ -127,13 +97,6 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
                             nc = nwake[jsurf],
                             trailing_vortices = trailing_vortices[jsurf],
                             xhat = xhat)
-
-                        V_streamwise += induced_velocity(rc, wakes[jsurf];
-                            finite_core = wake_finite_core[jsurf] || (surface_id[isurf] != surface_id[jsurf]),
-                            symmetric = symmetric[jsurf],
-                            nc = nwake[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf],
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     end
 
                     jΓ += Ns # increment Γ index for sending panels
@@ -229,7 +192,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             q = 1/2*RHO*ref.V^2
 
             props[isurf][I] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V,
-                Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S), V_streamwise)
+                Fbi/(q*ref.S), Fbli/(q*ref.S), Fbri/(q*ref.S))
         end
 
         # increment Γ index for receiving panels
@@ -264,11 +227,6 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
     # loop through receiving surfaces
     iΓ = 0 # index for accessing Γ
     for isurf = 1:nsurf
-        if skip_nonlinear_surfaces && isempty(system.sections[isurf])
-            iΓ += nr
-            continue
-        end
-
         receiving = surfaces[isurf]
         nr = length(receiving)
         nr1, nr2 = size(receiving)
@@ -300,8 +258,6 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             if !isnothing(Vh)
                 Vi += Vh[isurf][I]
             end
-
-            V_streamwise = deepcopy(Vi)
 
             # induced velocity from surfaces and wakes
             if calculate_vlm_induced
@@ -342,13 +298,6 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
                             xhat = xhat)
-
-                        Vind_stream, _ = induced_velocity_derivatives(I, surfaces[jsurf], vΓ, vdΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     else
                         # induced velocity on another surface
                         Vind, dVind = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
@@ -357,19 +306,11 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                             symmetric = symmetric[jsurf],
                             trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
                             xhat = xhat)
-
-                        Vind_stream, _ = induced_velocity_derivatives(rc, surfaces[jsurf], vΓ, vdΓ;
-                            finite_core = surface_id[isurf] != surface_id[jsurf],
-                            wake_shedding_locations = shedding_locations,
-                            symmetric = symmetric[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf] && !wake_panels,
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     end
 
                     Vind_a, Vind_b, Vind_p, Vind_q, Vind_r = dVind
 
                     Vi += Vind
-                    V_streamwise += Vind_stream
 
                     Vi_a += Vind_a
                     Vi_b += Vind_b
@@ -385,13 +326,6 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                             nc = nwake[jsurf],
                             trailing_vortices = trailing_vortices[jsurf],
                             xhat = xhat)
-
-                        V_streamwise += induced_velocity(rc, wakes[jsurf];
-                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                            symmetric = symmetric[jsurf],
-                            nc = nwake[jsurf],
-                            trailing_vortices = trailing_vortices[jsurf],
-                            xhat = xhat, skip_leading_edge = true, skip_inside_edges = true, skip_trailing_edge = true)
                     end
 
                     jΓ += Ns # increment Γ index for sending panels
@@ -552,18 +486,18 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             q = 1/2*RHO*ref.V^2
 
             props[isurf][I] = PanelProperties(Γ[iΓ+i]/ref.V, Vi/ref.V, Fbi/(q*ref.S),
-                Fbli/(q*ref.S), Fbri/(q*ref.S), V_streamwise)
+                Fbli/(q*ref.S), Fbri/(q*ref.S))
 
             props_a[isurf][I] = PanelProperties(Γ_a[iΓ+i]/ref.V, Vi_a/ref.V, Fbi_a/(q*ref.S),
-                Fbli_a/(q*ref.S), Fbri_a/(q*ref.S), V_streamwise)
+                Fbli_a/(q*ref.S), Fbri_a/(q*ref.S))
             props_b[isurf][I] = PanelProperties(Γ_b[iΓ+i]/ref.V, Vi_b/ref.V, Fbi_b/(q*ref.S),
-                Fbli_b/(q*ref.S), Fbri_b/(q*ref.S), V_streamwise)
+                Fbli_b/(q*ref.S), Fbri_b/(q*ref.S))
             props_p[isurf][I] = PanelProperties(Γ_p[iΓ+i]/ref.V, Vi_p/ref.V, Fbi_p/(q*ref.S),
-                Fbli_p/(q*ref.S), Fbri_p/(q*ref.S), V_streamwise)
+                Fbli_p/(q*ref.S), Fbri_p/(q*ref.S))
             props_q[isurf][I] = PanelProperties(Γ_q[iΓ+i]/ref.V, Vi_q/ref.V, Fbi_q/(q*ref.S),
-                Fbli_q/(q*ref.S), Fbri_q/(q*ref.S), V_streamwise)
+                Fbli_q/(q*ref.S), Fbri_q/(q*ref.S))
             props_r[isurf][I] = PanelProperties(Γ_r[iΓ+i]/ref.V, Vi_r/ref.V, Fbi_r/(q*ref.S),
-                Fbli_r/(q*ref.S), Fbri_r/(q*ref.S), V_streamwise)
+                Fbli_r/(q*ref.S), Fbri_r/(q*ref.S))
         end
 
         # increment Γ index for receiving panels
@@ -983,7 +917,7 @@ to obtain panel forces.
     being a matrix with size (3, ns) which contains the x, y, and z direction
     moment coefficients (per unit span) for each spanwise segment.
 """
-function lifting_line_coefficients(system, r, c, w; frame=Body())
+function lifting_line_coefficients(system, r, c, w; frame=Body(), normalized=true)
     TF = promote_type(eltype(system), eltype(eltype(r)), eltype(eltype(c)))
     nsurf = length(system.surfaces)
     cf = Vector{Matrix{TF}}(undef, nsurf)
@@ -993,12 +927,12 @@ function lifting_line_coefficients(system, r, c, w; frame=Body())
         cf[isurf] = Matrix{TF}(undef, 3, ns)
         cm[isurf] = Matrix{TF}(undef, 3, ns)
     end
-    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame)
+    return lifting_line_coefficients!(cf, cm, system, r, c, w; frame, normalized)
 end
 
-function lifting_line_coefficients(system; frame=Body(), xc = 0.25)
+function lifting_line_coefficients(system; frame=Body(), xc = 0.25, normalized=true)
     r, c, w = lifting_line_geometry(system.grids, xc)
-    return lifting_line_coefficients(system, r, c, w; frame)
+    return lifting_line_coefficients(system, r, c, w; frame, normalized)
 end
 
 """
@@ -1006,7 +940,7 @@ end
 
 In-place version of [`lifting_line_coefficients`](@ref)
 """
-function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
+function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body(), normalized=true)
 
     # number of surfaces
     nsurf = length(system.surfaces)
@@ -1030,7 +964,10 @@ function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
             rls = SVector(r[isurf][1,j], r[isurf][2,j], r[isurf][3,j])
             rrs = SVector(r[isurf][1,j+1], r[isurf][2,j+1], r[isurf][3,j+1])
             # ds = norm(rrs - rls)
-            ds = norm(cross(w[isurf][:,j], rrs - rls)) # Use the spanwise width of the panel
+            dr = rrs - rls
+            @views w_vec = w[isurf][:,j]
+            cross_prod = SVector(w_vec[2]*dr[3] - w_vec[3]*dr[2], w_vec[3]*dr[1] - w_vec[1]*dr[3], w_vec[1]*dr[2] - w_vec[2]*dr[1])
+            ds = norm(cross_prod) # Use the spanwise width of the panel
             # calculate reference location
             rs = (rls + rrs)/2
             # calculate reference chord
@@ -1056,8 +993,13 @@ function lifting_line_coefficients!(cf, cm, system, r, c, w; frame=Body())
                 cmj += cross(rr - rs, cfr)
             end
             # update normalization
-            cfj *= ref.S/(ds*cs)
-            cmj *= ref.S/(ds*cs^2)
+            if normalized
+                cfj *= ref.S/(ds*cs)
+                cmj *= ref.S/(ds*cs^2)
+            else
+                cfj *= ref.S * 0.5*ref.V^2*RHO / ds
+                cmj *= ref.S * 0.5*ref.V^2*RHO / ds
+            end
             # change coordinate frame
             cfj, cmj = body_to_frame(cfj, cmj, ref, fs, frame)
             # save coefficients

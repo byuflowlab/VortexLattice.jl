@@ -13,12 +13,6 @@ using DelimitedFiles
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
 
-include("nonlinear.jl")
-export SectionProperties, grid_to_sections, nonlinear_analysis!
-
-include("rotors.jl")
-export generate_rotor
-
 include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
 export reflect, set_normal
@@ -68,6 +62,9 @@ export body_derivatives, stability_derivatives
 
 include("frames.jl")
 export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, ForwardRightDown
+
+include("rotors.jl")
+export generate_rotor
 
 include("visualization.jl")
 export write_vtk

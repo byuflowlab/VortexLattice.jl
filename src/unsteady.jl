@@ -62,6 +62,62 @@ function (monitor::ForcesMonitor)(system::System, wake, i_step::Int)
     monitor.CM[i_step + 1] = CM
 end
 
+struct PanelForcesMonitor{TF}
+    CF::Array{TF, 4}
+    surface_index::Int
+    ns::Int
+    nc::Int
+end
+
+function PanelForcesMonitor(nt::Int, system::System, TF=Float64; surface_index=1)
+    nc, ns = size(system.surfaces[surface_index])
+    CF = zeros(TF, 3, nc, ns, nt)
+    return PanelForcesMonitor{TF}(CF, surface_index, ns, nc)
+end
+
+function (monitor::PanelForcesMonitor)(system::System, wake, i_step::Int)
+    CF = view(monitor.CF, 1:3, 1:monitor.nc, 1:monitor.ns, i_step + 1)
+    ns = monitor.ns
+    nc = monitor.nc
+    properties = system.properties[monitor.surface_index]
+    for j in 1:ns
+        for i in 1:nc
+            CF[:, i, j] .= properties[i, j].cfb
+        end
+    end
+end
+
+struct LiftingLineCoefficientsMonitor{TF, F}
+    CF::Vector{Array{TF, 3}}
+    CM::Vector{Array{TF, 3}}
+    ns::Vector{Int}
+    frame::F
+    normalized::Bool
+end
+
+function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; frame=Body(), normalized=true)
+    nsurf = length(system.surfaces)
+    ns = zeros(Int, nsurf)
+    CF = Vector{Array{TF, 3}}(undef, nsurf)
+    CM = Vector{Array{TF, 3}}(undef, nsurf)
+    for isurf in 1:nsurf
+        ns[isurf] = size(system.surfaces[isurf], 2)
+        CF[isurf] = zeros(TF, 3, ns[isurf], nt)
+        CM[isurf] = zeros(TF, 3, ns[isurf], nt)
+    end
+    return LiftingLineCoefficientsMonitor{TF,typeof(frame)}(CF, CM, ns, frame, normalized)
+end
+
+function (monitor::LiftingLineCoefficientsMonitor)(system::System, wake, i_step::Int)
+    cf, cm = lifting_line_coefficients(system; frame=monitor.frame, normalized=monitor.normalized)
+    for isurf in 1:length(system.surfaces)
+        CF = view(monitor.CF[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
+        CM = view(monitor.CM[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
+        CF .= cf[isurf]
+        CM .= cm[isurf]
+    end
+end
+
 struct FrameForcesMonitor{TF,F}
     CF::Vector{SVector{3,TF}}
     CM::Vector{SVector{3,TF}}
@@ -171,7 +227,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
         vtk_args=(trailing_vortices=false, write_wakes=false), vtk_postshed=false,
         fmm_wake_args=(), fmm_vehicle_args=(),
-        derivatives=false, nonlinear_analysis=false, nonlinear_args=(),
+        derivatives=false,
         eta=0.3, 
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         particle_unsteady_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
@@ -179,7 +235,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors=(),
         calculate_influence_matrix=true,
-        polars=nothing, frames_index=fill(-1, length(system.surfaces)) # viscous correction
+        polars=nothing, frames_index=fill(-1, length(system.surfaces)), # viscous correction
+        verbose=true
     )
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
@@ -235,7 +292,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     i_step = 0
     println()
     for t in t_range
-        print("\r\tstep $(i_step)/$(length(t_range)-1) at time $(t)\033[K")
+        verbose && print("\r\tstep $(i_step)/$(length(t_range)-1) at time $(t)\033[K")
         
         #------- reset system -------#
 
@@ -360,12 +417,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         dΓdt .+= Γ # add newly computed circulation
         dΓdt ./= dt # divide by corresponding time step
 
-        #--- nonlinear airfoil analysis ---#
-        if nonlinear_analysis
-            call_near_field_forces!(system)
-            nonlinear_analysis!(system, ref, fs; nonlinear_args...)
-        end
-
         #--- vehicle-on-all ---#
 
         # solve n-body problem
@@ -376,12 +427,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         # @show V[1][1,1] V[1][1,end]
         # throw(ErrorException("STOP HERE"))
 
-        #--- forces and moments ---#
-
-        if nonlinear_analysis
-            update_section_forces!(system)
-        end
-
         # compute transient forces on each panel (if necessary)
         if derivatives
             near_field_forces_derivatives!(properties, dproperties,
@@ -389,16 +434,14 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
                 additional_velocity, Vh, Vv, symmetric, nwake,
                 surface_id, wake_finite_core, wake_shedding_locations,
                 trailing_vortices, xhat,
-                calculate_vlm_induced=false,
-                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
+                calculate_vlm_induced=false) # we've already calculated the induced velocity
                                                             # in vehicle_on_all!
         else
             near_field_forces!(properties, current_surfaces, wakes,
                 ref, fs, Γ; dΓdt=nothing, additional_velocity, Vh, Vv,
                 symmetric, nwake, surface_id, wake_finite_core,
                 wake_shedding_locations, trailing_vortices, xhat,
-                calculate_vlm_induced=false,
-                skip_nonlinear_surfaces=nonlinear_analysis) # we've already calculated the induced velocity
+                calculate_vlm_induced=false) # we've already calculated the induced velocity
                                              # in vehicle_on_all!
         end
 

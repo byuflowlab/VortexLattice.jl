@@ -1,0 +1,9 @@
+property,file,description
+chorddist,DTU10MW_chorddist.csv,Chord distribution
+pitchdist,DTU10MW_pitchdist.csv,Pitch distribution
+sweepdist,DTU10MW_sweepdist.csv,AC sweep distribution
+heightdist,DTU10MW_curvedist.csv,AC curve distribution
+airfoil_files,DTU10MW_airfoils.csv,Airfoil distribution
+airfoil_reference,DTU10MW_centers.csv,Airfoil references
+spl_k,5,Spline order
+spl_s,1.0e-8,Spline smoothing

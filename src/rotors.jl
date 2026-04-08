@@ -2,7 +2,7 @@
 """
     generate_rotor(rotor_file::String, data_path="."; optargs...)
 
-Generate a grids, ratios, sections, invert_normals from a rotor file. Explained in the docs:
+Generate a grids, ratios from a rotor file. Explained in the docs:
 
  # Arguments
  - `rotor_file`: File with rotor parameters
@@ -139,14 +139,11 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     ns=10, nc=1,
     spacing_s=VortexLattice.Sine(),
     spacing_c=VortexLattice.Uniform(),
-    initial_azimuthal_angle = 0.0) # radians
-
-    clockwise_mod = (-1)^clockwise
-    if turbine_flag == clockwise
-        invert = false
-    else
-        invert = true
-    end
+    RPM=0.0,
+    rotor_name="rotor",
+    frames = Vector{VortexLattice.ReferenceFrame{Float64}}(undef, 0),
+    surface_index = collect(1:B),
+    parent_index = -1) # radians
 
     yle = chorddist[:,1] .* Rtip
     if zero_at_root
@@ -154,10 +151,9 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     end
 
     chord = FLOWMath.linear(chorddist[:,1] .* Rtip, chorddist[:,2] .* Rtip, yle)
-    theta = FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]) * clockwise_mod, yle)
+    theta = .-FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]), yle)
     xle = .-FLOWMath.linear(sweepdist[:,1] .* Rtip, sweepdist[:,2] .* Rtip, yle)
     zle = .-FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
-    invert_normals = fill(invert, B)
 
     if size(airfoil_reference,1) < length(yle)
         if length(airfoil_reference) != 1
@@ -168,20 +164,23 @@ function _generate_rotor(Rtip, Rhub, B::Int,
 
     grid, ratio = wing_to_grid(xle,yle,zle,chord,theta,zeros(length(yle)),
                     ns,nc;reference_line=airfoil_reference,
-                    spacing_s=spacing_s, spacing_c=spacing_c, invert_cambers=invert)
+                    spacing_s=spacing_s, spacing_c=spacing_c)
+
+    translate!(grid, SVector{3}( -chord[1]*0.5,0.0, 0.0))
+    R = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
+    VortexLattice.rotate!(grid, R)
 
     grids = Vector{typeof(grid)}(undef,B)
     ratios = Vector{typeof(ratio)}(undef,B)
-    Rotate_grid!(grid, -pi/2 * clockwise_mod, 2)
 
-    Rotate_grid!(grid, initial_azimuthal_angle, 1)
     grids[1] = deepcopy(grid)
     ratios[1] = deepcopy(ratio)
 
     diff_angle = 2π/B
+    R1 = VortexLattice.Rodrigues(SVector{3}(1.0, 0.0, 0.0), diff_angle)
     for i = 2:B
-        Rotate_grid!(grid, diff_angle, 1)
-        grids[i] = deepcopy(grid)
+        grids[i] = deepcopy(grids[i-1])
+        VortexLattice.rotate!(grids[i], R1)
     end
 
     surfaces = Vector{Matrix{SurfacePanel{Float64}}}(undef,B)
@@ -202,53 +201,47 @@ function _generate_rotor(Rtip, Rhub, B::Int,
         contours[rfli] = contour
     end
     airfoils, contours = redo_airfoils(airfoils,contours,surfaces[1]; interpolate=interpolate_airfoils)
-
-    section = grid_to_sections(grids[1], airfoils; ratios=ratios[1], contours)
-    sections = Vector{typeof(section)}(undef,B)
-    sections[1] = deepcopy(section)
-    for i = 2:B
-        sections[i] = deepcopy(section)
+    polar = Vector{Polar{eltype(airfoils[1].alpha)}}(undef, length(airfoils))
+    for i in eachindex(airfoils)
+        polar[i] = Polar(rad2deg.(airfoils[i].alpha), airfoils[i].cl, airfoils[i].cd)
     end
-    return grids, ratios, sections, invert_normals
+    polars = Vector{typeof(polar)}(undef,B)
+    for i in eachindex(polars)
+        polars[i] = deepcopy(polar)
+    end
+
+    frames = add_rotor_frames!(frames, rotor_name, parent_index, surface_index, RPM, B)
+
+    return grids, ratios, polars, frames
 end
 
-function Rotate_grid!(grid::Array{Float64,3}, angle, axis::Int)
-    if angle == 0.0
-        return grid
-    end
-    R = RotationMatrix(angle, axis)
-    for k = axes(grid,3)
-        for j = axes(grid,2)
-            grid[:,j,k] = R*grid[:,j,k]
-        end
-    end
-    return grid
-end
+function add_rotor_frames!(frames::Vector{ReferenceFrame{TF}}, rotor_name, parent_index, surface_index, RPM, B) where TF
+    origin = SVector{3}(0.0, 0.0, 0.0)
 
-function RotationMatrix(angle, axis::Int)
-    st, ct = sincos(angle)
-    if axis == 1
-        return [1 0 0; 0 ct -st; 0 st ct]
-    elseif axis == 2
-        return [ct 0 st; 0 1 0; -st 0 ct]
-    elseif axis == 3
-        return [ct -st 0; st ct 0; 0 0 1]
-    else
-        error("Invalid axis")
-    end
-end
+    frame = ReferenceFrame(origin,
+            zero(SVector{3,TF}), # v
+            SVector{3,TF}(1.0, 0.0, 0.0), # ω_axis
+            -RPM * 2 * pi / 60, # ω
+            SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), # R
+            SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), # Rp2g
+            rotor_name, # name
+            parent_index, # parent_index
+            Int[], # child_indices
+            surface_index, # surface_index
+    )
+    push!(frames, frame)
+    rotor_index = length(frames)
 
-function MirrorGrid!(grid::Array{Float64,3}, axis::Int)
-    if axis == 1
-        grid[1,:,:] = -grid[1,:,:]
-    elseif axis == 2
-        grid[2,:,:] = -grid[2,:,:]
-    elseif axis == 3
-        grid[3,:,:] = -grid[3,:,:]
-    else
-        error("Invalid axis")
+    R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    Rot = VortexLattice.Rodrigues(SVector{3}(1.0, 0.0, 0.0), 2π/B)
+
+    for i in 1:B
+        add_frame!(frames, "$rotor_name-blade-$i", rotor_index, origin, [surface_index[i]];
+            R = R,
+        )
+        R = R * Rot
     end
-    return grid
+    return frames
 end
 
 function redo_airfoils(airfoils, contours, surface; interpolate=false)

@@ -214,7 +214,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     v_induced += props[i,j].velocity * ref.V # convert from non-dimensionalized velocity
 
                     # accumulate aerodynamic force contribution from this bound vortex
-                    cf += props[i,j].cfb
+                    cf += props[i,j].cfb * 0.5*RHO*ref.V^2 * ref.S
                 end
 
                 # average dynamic pressure over the section
@@ -297,7 +297,8 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # sum and written back into Γ.
                 Γ_b_new_accum = zero(TF)
                 for i in axes(surface, 1)
-                    (; gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise) = props[i,j]
+                    # unpack props
+                    (; gamma, velocity, cfb, cfl, cfr) = props[i,j]
 
                     # local effective velocity at the bound vortex midpoint
                     # (props.velocity is stored as Vi/ref.V; see nearfield.jl:554)
@@ -325,10 +326,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     props[i,j] = PanelProperties(
                         gamma,
                         velocity,
-                        cfb_new,
-                        cfl,
-                        cfr,
-                        velocity_from_streamwise
+                        cfb_new,  # apply lift correction factor to bound circulation contribution and add viscous drag
+                        cfl, # * f_cl,  # apply lift correction factor to left edge contribution
+                        cfr, # * f_cl,  # apply lift correction factor to right edge contribution
                     )
 
                     # reconstruct panel circulation by cumulative sum of

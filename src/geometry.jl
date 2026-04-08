@@ -806,8 +806,16 @@ function update_surface_panels!(surface, grid;
         r4n = SVector(grid[1,2,j+1], grid[2,2,j+1], grid[3,2,j+1]) # bottom right
 
         # also get chord length for setting finite core size
-        cl = norm(grid[:,end,j] - grid[:,1,j])
-        cr = norm(grid[:,end,j+1] - grid[:,1,j+1])
+        dx_l = grid[1,size(grid,2),j] - grid[1,1,j]
+        dy_l = grid[2,size(grid,2),j] - grid[2,1,j]
+        dz_l = grid[3,size(grid,2),j] - grid[3,1,j]
+        cl = sqrt(dx_l*dx_l + dy_l*dy_l + dz_l*dz_l)
+        
+        dx_r = grid[1,size(grid,2),j+1] - grid[1,1,j+1]
+        dy_r = grid[2,size(grid,2),j+1] - grid[2,1,j+1]
+        dz_r = grid[3,size(grid,2),j+1] - grid[3,1,j+1]
+        cr = sqrt(dx_r*dx_r + dy_r*dy_r + dz_r*dz_r)
+        
         c = (cl + cr)/2
 
         for i = 1:nc-1

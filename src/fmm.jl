@@ -7,7 +7,7 @@
 #         nc, ns = size(surfaces[k])
 #         i += nc * ns
 #     end
-    
+
 #     nc, ns = size(surfaces[i_surf])
 #     n += (j-1) * nc + i
 #     return n
@@ -32,7 +32,7 @@ function fmm_to_vlm_index(system::System, n)
 end
 
 function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System, i_body)
-    
+
     # vlm index
     i_surf, i, j = fmm_to_vlm_index(system, i_body)
 
@@ -61,9 +61,9 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System
         # adjust gamma index
         i_Γ += (j-1) * nc + i
 
-        # whether or not to include bottom bound vortex
-        # include_bottom_vortex = i != nc 
-        # ^^^ this really isn't necessary since it is always used
+        # always include the bottom bound vortex for regular panels;
+        # the wake interface panel's top edge cancels it for trailing-edge rows
+        include_bottom_vortex = true
 
     else # wake interface panel
 
@@ -79,8 +79,11 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System
         # adjust gamma index
         i_Γ += nc * j
 
+        # always include all sides of the wake interface panel
+        include_bottom_vortex = true
+
     end
-        
+
     # core size
     core_size = panel.core_size
 
@@ -93,12 +96,12 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System
     buffer[12:14,i_buffer] .= rbr
     buffer[15:17,i_buffer] .= rbl
     buffer[18,i_buffer] = core_size
-    # buffer[19,i_buffer] = one(eltype(buffer)) # always include bottom vortex
+    buffer[19,i_buffer] = include_bottom_vortex
 
 end
 
 function FastMultipole.data_per_body(system::System)
-    return 18
+    return 19
 end
 
 # function reset!(system::System{TF}) where TF
@@ -124,7 +127,9 @@ end
 
 FastMultipole.has_vector_potential(system::System) = true
 
-function FastMultipole.get_n_bodies(system::System) 
+FastMultipole.get_n_bodies(sys::AbstractVector{<:AbstractMatrix}) = sum(size(m, 2) for m in sys)
+
+function FastMultipole.get_n_bodies(system::System)
     n_bodies = length(system.Γ) # regular panels
     # add wake interface panels
     for isurf in eachindex(system.surfaces)
@@ -150,7 +155,7 @@ end
 function FastMultipole.body_to_multipole!(system::System, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
     # loop over bodies
     for i_body in bodies_index
-       
+
         # extract vertices from buffer
         rtl = FastMultipole.get_vertex(buffer, system, i_body, 1)
         rtr = FastMultipole.get_vertex(buffer, system, i_body, 2)
@@ -159,6 +164,7 @@ function FastMultipole.body_to_multipole!(system::System, multipole_coefficients
 
         # extract strength from buffer
         gamma = FastMultipole.get_strength(buffer, system, i_body)[1]
+        include_bottom = buffer[19, i_body] > 0.0
 
         # top bound vortex
         body_to_multipole_vl!(multipole_coefficients, harmonics, rtl, rtr, center, gamma, expansion_order)
@@ -169,54 +175,40 @@ function FastMultipole.body_to_multipole!(system::System, multipole_coefficients
         # left vortex
         body_to_multipole_vl!(multipole_coefficients, harmonics, rbl, rtl, center, gamma, expansion_order)
 
-        # bottom bound vortex
-        # if buffer[19, i_body] > 0.0 # omit trailing edge vortices # always include bottom vortex
-        body_to_multipole_vl!(multipole_coefficients, harmonics, rbr, rbl, center, gamma, expansion_order)
-        # end
+        # bottom bound vortex (omit trailing edge of regular panels)
+        if include_bottom
+            body_to_multipole_vl!(multipole_coefficients, harmonics, rbr, rbl, center, gamma, expansion_order)
+        end
 
     end
 end
 
 function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::System, source_buffer, source_index) where {PS,VS,GS}
-    @inbounds for j_target in target_index
-        target = FastMultipole.get_position(target_system, j_target)
-        v = zero(SVector{3,eltype(target_system)})
-        @inbounds for i_source in source_index
-            v1 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
-            v2 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
-            v3 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 3)
-            v4 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 4)
-            gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
-            cs = source_buffer[18, i_source]
-            # include_bottom = source_buffer[19, i_source] > 0.0
+    @inbounds for i_source in source_index
+        v1 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
+        v2 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
+        v3 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 3)
+        v4 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 4)
+        gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
+        cs = source_buffer[18, i_source]
+        include_bottom = source_buffer[19, i_source] > 0.0
 
+        @inbounds for j_target in target_index
+            target = FastMultipole.get_position(target_system, j_target)
             if VS
-                this_v = bound_induced_velocity(target-v1, target-v2, true, cs)
-                this_v += bound_induced_velocity(target-v2, target-v3, true, cs)
-                # if include_bottom
-                    this_v += bound_induced_velocity(target-v3, target-v4, true, cs)
-                # end
-                this_v += bound_induced_velocity(target-v4, target-v1, true, cs)
-                v += this_v * gamma
+                v = bound_induced_velocity(target-v1, target-v2, true, cs)
+                v += bound_induced_velocity(target-v2, target-v3, true, cs)
+                if include_bottom
+                    v += bound_induced_velocity(target-v3, target-v4, true, cs)
+                end
+                v += bound_induced_velocity(target-v4, target-v1, true, cs)
+                FastMultipole.set_gradient!(target_system, j_target, v * gamma)
             end
-        end
-        if VS
-            FastMultipole.set_gradient!(target_system, j_target, v)
         end
     end
 end
 
 function FastMultipole.buffer_to_target_system!(target_system::System, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
-    # get values
-    # TF = eltype(target_buffer)
-    # scalar_potential = PS ? FastMultipole.get_scalar_potential(target_buffer, i_buffer) : zero(TF)
-    # velocity = VS ? FastMultipole.get_velocity(target_buffer, i_buffer) : zero(SVector{3,TF})
-    # velocity_gradient = GS ? FastMultipole.get_velocity_gradient(target_buffer, i_buffer) : zero(SMatrix{3,3,TF,9})
-
-    # update system
-    # target_system.potential[i_POTENTIAL[1], i_target] = scalar_potential
-
-    # target_system.potential[i_VELOCITY, i_target] .= velocity
     @warn "A VortexLattice.System object should not be used as a target in an FMM call."
 end
 
@@ -245,7 +237,7 @@ function fmm_to_vlm_index(filaments::FilamentWrapper, n)
 end
 
 function FastMultipole.source_system_to_buffer!(buffer, i_buffer, filaments::FilamentWrapper, i_body)
-    
+
     # vlm index
     wakes = filaments.wakes
     i_surf, i, j = fmm_to_vlm_index(filaments, i_body)
@@ -293,7 +285,7 @@ end
 function FastMultipole.body_to_multipole!(filaments::FilamentWrapper, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
     # loop over bodies
     for i_body in bodies_index
-       
+
         # extract vertices from buffer
         rtl = FastMultipole.get_vertex(buffer, filaments, i_body, 1)
         rtr = FastMultipole.get_vertex(buffer, filaments, i_body, 2)

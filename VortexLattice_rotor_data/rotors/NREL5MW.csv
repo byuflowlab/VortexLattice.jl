@@ -1,0 +1,5 @@
+property, file, description
+Rtip,63,(m) Radius of blade tip
+Rhub,11.75,(m) Radius of hub
+B,3,Number of blades
+blade,NREL5MW_blade.csv, Blade file

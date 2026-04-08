@@ -67,7 +67,7 @@ Re_07rR = rho * chord_07rR * v_07rR / mu
 
 cl_visc, cd_visc, cdp_visc, cm_visc, conv = solve_alpha(alpha, Re_07rR; mach=0.0, iter=50, ncrit=1, reinit=false, xtrip=(1.0,1.0))
 
-@show cl_inv, cl_visc, cd_visc
+# @show cl_inv, cl_visc, cd_visc
 
 # generate full polars
 alpha_range = range(-10.0, stop=15.0, length=41)
@@ -86,7 +86,7 @@ ax2.plot(alpha_range, cls_visc ./ cls_inv)
 # generate correction functions
 function get_viscous_corrections(filename)
     data = readdlm(filename, ',', skipstart=0)
-    @show data
+    # @show data
     cls_inv = data[:,1]
     cls_visc = data[:,2]
     cds_visc = data[:,3]
@@ -111,7 +111,7 @@ end
 
 function get_viscous_corrections2(filename)
     data = readdlm(filename, ',', skipstart=0)
-    @show data
+    # @show data
     cls_inv = data[:,1]
     cls_visc = data[:,2]
     cds_visc = data[:,3]

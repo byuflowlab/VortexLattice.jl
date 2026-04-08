@@ -308,8 +308,9 @@ rotational_velocity
 rotational_velocity(r, fs::Freestream, ref::Reference) = rotational_velocity(r, fs.Omega, ref.r)
 
 function rotational_velocity(r, Omega, rref) 
-    Ω = [-Omega[1], Omega[2], -Omega[3]]  # swap signs for p and r to follow standard dynamics convention
-    return cross(r - rref, Ω)
+    tmp = r - rref
+    # swap signs for p and r to follow standard dynamics convention
+    return SVector(tmp[2]*(-Omega[3]) - tmp[3]*Omega[2], tmp[3]*(-Omega[1]) - tmp[1]*(-Omega[3]), tmp[1]*Omega[2] - tmp[2]*(-Omega[1]))
 end
 
 """

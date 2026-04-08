@@ -73,7 +73,7 @@ function plot_stuff(ARs = [10, 20, 40, 80, 160, 320, 640])
     alphas = range(0.0, 10.0, length=11) .* pi/180
     cls_list = zeros(length(alphas), length(ARs))
     for (i,AR) in enumerate(ARs)
-        @show AR
+        # @show AR
         ns = 2 * AR
         nc = 6
         system, ref = get_system(AR; ns, nc)
@@ -99,7 +99,7 @@ function get_CL_circ(system::System{TF}, alpha, vinf_vec) where TF
     Vinf = 1.0
     ref = Reference(Sref, cref, bref, rref, Vinf)
     l = get_CL(system, ref, alpha)
-    @show l
+    # @show l
 
     # choose which spanwise section to analyze
     nc, ns = size(system.surfaces[1])
@@ -140,7 +140,7 @@ function get_CL_circ(system::System{TF}, alpha, vinf_vec) where TF
             # project bound vortex onto y axis of this frame
             ds = R * (surface[i,j].rtr - surface[i,j].rtl)
             dy = abs(ds[2]) / norm(ds)
-            @show dy
+            # @show dy
 
             # accumulate circulation contribution from this bound vortex
             γ += system.Γ[iΓ] * dy
@@ -163,29 +163,29 @@ function get_CL_circ(system::System{TF}, alpha, vinf_vec) where TF
         te = SVector(grid[1,end,j+1], grid[2,end,j+1], grid[3,end,j+1])
         c += norm(le - te)
         c *= 0.5
-        @show c
+        # @show c
         
         # project aerodynamic force into xz plane
-        @show cf
+        # @show cf
         cf = R * cf # rotate into this frame
-        @show cf
+        # @show cf
         
         # get 2-D lift magnitude of this section
         l_2d_norm = sqrt(cf[1]*cf[1] + cf[3]*cf[3])
 
         # force per length
         l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl)
-        @show l_2d_norm
+        # @show l_2d_norm
         
         # calculate effective cl
         cl_vlm = 2 * VortexLattice.RHO * γ * γ / (l_2d_norm * c) * sign(γ)
         # cls_new[j] = cl_vlm
 
-        @show cl_vlm
+        # @show cl_vlm
 
         # check velocity
         this_v = l_2d_norm / (VortexLattice.RHO * γ)
-        @show this_v, norm(v_induced) # checks out
+        # @show this_v, norm(v_induced) # checks out
 
     # return cls_new
     return cl_vlm
@@ -202,18 +202,18 @@ AR = 100
 ns = 3 * AR
 nc = 1
 system, ref = get_system(AR; ns, nc)
-@show ref.V ref.S ref.c ref.b
+# @show ref.V ref.S ref.c ref.b
 alpha = 10.0 * pi/180
 vinf_vec = SVector(ref.V * cos(alpha), 0.0, ref.V * sin(alpha))
 
 println("\nBefore New Stuff\n")
 CL_vlm = get_CL(system, ref, alpha)
 L_vlm = CL_vlm * 0.5 * VortexLattice.RHO * ref.V^2 * ref.S
-@show L_vlm
-@show system.properties[1][1,ns>>1].cfb
+# @show L_vlm
+# @show system.properties[1][1,ns>>1].cfb
 
 CL_circulation = get_CL_circ(system, alpha, vinf_vec)
 
-@show CL_vlm
-@show CL_circulation
-@show 2 * pi * alpha
+# @show CL_vlm
+# @show CL_circulation
+# @show 2 * pi * alpha

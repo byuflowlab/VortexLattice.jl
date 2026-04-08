@@ -16,16 +16,17 @@ speedofsound    = 342.35                    # (m/s) speed of sound
 magVinf         = J*RPM/60*(2*R) * 0.0
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
 
-ns = 20
+ns = 40
 nc = 1
 
-grids, ratios, sections, invert_normals = VortexLattice.generate_rotor("DJI9443.csv", data_path; 
+grids, ratios, polars, frames = VortexLattice.generate_rotor("DJI9443.csv", data_path; 
                                                             turbine_flag=false, 
                                                             clockwise=true, 
                                                             ns, 
                                                             nc, 
                                                             spacing_s=Uniform(), 
-                                                            interpolate_airfoils=true);
+                                                            interpolate_airfoils=true,
+                                                            RPM=RPM,);
 
 # generate surface panels for propeller
 xle_p1 = [-0.007760952, -0.00912684020509993, -0.01054884338296846, -0.011250349849440629, -0.011772865802853139, -0.012119569829317039, -0.012290082732736044, -0.012268795505995866, -0.012043987625913162, -0.011895522315499299, -0.011461081868185891, -0.010904219636113025, -0.010404176972364522, -0.009799134225632307, -0.00927010352088215, -0.009051792223013484, -0.008616634170407296, -0.008196262641487507, -0.007893374592914745, -0.007768353692954446, -0.007640989960027567, -0.0073486327398695215, -0.007153683499931082, -0.006766626723735409, -0.006228888689944864, -0.00288816]
@@ -47,10 +48,8 @@ spacing_c_p1 = Uniform()
 mirror_p1 = false
 p1grid1, p1ratio1 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
     mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-p1ratio1 = zeros(2, size(p1grid1, 2)-1, size(p1grid1, 3)-1) .+ [0.5;0.75]
 p1grid2, p1ratio2 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
     mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-p1ratio2 = zeros(2, size(p1grid2, 2)-1, size(p1grid2, 3)-1) .+ [0.5;0.75]
 translate!(p1grid1, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
 translate!(p1grid2, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
 R1_b1 = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
@@ -66,11 +65,11 @@ vtk_grid("debug_grid", testgrid) do vtk
     vtk["ptdata"] = reshape(p1grid1[1,:,:], size(p1grid1,2), size(p1grid1,3), 1)
 end
 
-grids = [p1grid1, p1grid2]
-ratios = [p1ratio1, p1ratio2]
+# grids = [p1grid1, p1grid2]
+# ratios = [p1ratio1, p1ratio2]
 
 core_size = 1e-3
-system = System(grids; ratios, sections, core_size);
+system = System(grids; ratios, core_size);
 # system = System(grids; ratios, sections);
 
 Sref = 2.0
@@ -93,16 +92,18 @@ steady_analysis!(system, system.reference[], system.freestream[]; symmetric=fals
 
 write_vtk("rotor_hover_initial", system; write_wakes=false, trailing_edge_list=fill(false, length(system.surfaces)));
 
-frames = ReferenceFrame(system;
-        origin = SVector{3}(0.0, 0.0, 0.0),
-        v = SVector{3}(0.0, 0.0, 0.0),
-        ω_axis = SVector{3}(1.0, 0.0, 0.0),
-        ω = -RPM * 2 * pi / 60,
-        R = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
-        name = "vehicle",
-        child_index = Int[],
-        dependent_index = collect(1:length(system.surfaces))
-    )
+# frames = ReferenceFrame(system;
+#         origin = SVector{3}(0.0, 0.0, 0.0),
+#         v = SVector{3}(0.0, 0.0, 0.0),
+#         ω_axis = SVector{3}(1.0, 0.0, 0.0),
+#         ω = -RPM * 2 * pi / 60,
+#         R = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+#         name = "vehicle",
+#         child_index = Int[],
+#         dependent_index = collect(1:length(system.surfaces))
+#     )
+
+# display(frames[1])
 
 n_revs = 10
 ttot = n_revs / (RPM / 60)
@@ -119,19 +120,25 @@ sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 # cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
 # cl_alpha0, delta_cl_fun, cd_visc_fun = get_viscous_corrections2("corrections.csv")
 
-filename = "corrections.csv"
-data = readdlm(filename, ',', skipstart=0)
-cls_inv = data[:,1]
-cls_visc = data[:,2]
-cds_visc = data[:,3]
-alphas = data[:,4]
+# filename = "corrections.csv"
+# data = readdlm(filename, ',', skipstart=0)
+# @show data
+# cls_inv = data[:,1]
+# cls_visc = data[:,2]
+# cds_visc = data[:,3]
+# alphas = data[:,4]
 
 # polar = VortexLattice.Polar(alphas, cls_visc, cds_visc .* 0.0)
 
 # get section_rs
-section_rs = (yle_p1[1:end-1] .+ yle_p1[2:end]) .* 0.5 ./ yle_p1[end]
-blade_files = fill("dji_9443_airfoils.csv", 2)
-polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
+# section_rs = (yle_p1[1:end-1] .+ yle_p1[2:end]) .* 0.5 ./ yle_p1[end]
+# section_rs = collect(LinRange(0.0, 1.0, ns+1))
+# section_rs = (section_rs[1:end-1] .+ section_rs[2:end]) .* 0.5
+# blade_files = fill("dji_9443_airfoils.csv", 2)
+# polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
+# @show length(polars[1])
+# display(polars[1][1])
+# error()
 
 # or just use the same polar for all sections
 # polars = fill(polar, size(system.surfaces, 2))
@@ -162,7 +169,7 @@ polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
 
 monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
 benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
-            monitors, name = "rotorhover", 
+            monitors, name = "rotorhover_new", 
             # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
             # particle_trailing_methods=fill(VortexLattice.OverlapPPS(overlap, p_per_step), length(system.surfaces)),
             particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),

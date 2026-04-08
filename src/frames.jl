@@ -96,6 +96,32 @@ function rotate_translate!(system::System, i, origin, Rω, dx)
     end
 end
 
+function rotate_translate!(system::System{TF}, i, origin::SVector{3}, Rω::SMatrix{3,3}, dx::SVector{3}) where TF
+    # get grid
+    grid::Array{TF,3} = system.grids[i]
+
+    # grid size
+    _, nc, ns = size(grid)
+
+    # rotate/translate
+    for i in 1:ns
+        for j in 1:nc
+            # relative to origin
+            for k in 1:3
+                grid[k,j,i] -= origin[k]
+            end
+
+            # rotate
+            grid[:,j,i] .= Rω * SVector{3}(grid[1,j,i], grid[2,j,i], grid[3,j,i])
+
+            # translate and shift origin back
+            for k in 1:3
+                grid[k,j,i] += dx[k] + origin[k]
+            end
+        end
+    end
+end
+
 function Rodrigues(axis, angle::TF) where TF
     s, c = sincos(-angle)
     t = 1 - c
