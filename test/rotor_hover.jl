@@ -121,7 +121,6 @@ sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 
 filename = "corrections.csv"
 data = readdlm(filename, ',', skipstart=0)
-@show data
 cls_inv = data[:,1]
 cls_visc = data[:,2]
 cds_visc = data[:,3]
@@ -183,6 +182,7 @@ benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, 
 
 # post-process
 Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
+Ts .*= (0.5 * VortexLattice.RHO * ref.V^2 * ref.S)
 CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
 # fig = figure("CT")
 # fig.clear()

@@ -1,19 +1,35 @@
 struct Polar{TF}
     alphas::Vector{TF}
-    # cls_inv::Vector{TF}
-    # cls_delta::Vector{TF}
+    cls_inv::Vector{TF}
+    cls_delta::Vector{TF}
     cls_visc::Vector{TF}
     cds_visc::Vector{TF}
-    # cl_alpha0::TF
-    # m_inv::TF
-end
-
-function Polar(alphas, cls_visc, cds_visc)
-    return Polar{eltype(cls_inv)}(alphas, cls_visc, cds_visc)
 end
 
 """
-    get_polars(section_rs, rotor_file, TF=Float64; data_path)
+    Polar(alphas, cls_visc, cds_visc)
+
+Construct a `Polar` from a viscous polar table. Inviscid lift is taken as the
+thin-airfoil approximation `cl_inv = 2π·α` (with `alphas` in degrees), and the
+additive correction table is precomputed as `cls_delta = cls_visc - cls_inv`.
+This allows the viscous correction to be applied as a smooth additive lookup
+indexed by inviscid `cl`, rather than as a ratio `cl_visc / cl_inv`.
+"""
+function Polar(alphas, cls_visc, cds_visc)
+    TF = eltype(cls_visc)
+    cls_inv = TF(2π) .* (alphas .* TF(π/180))  # thin-airfoil: cl_inv = 2π·α[rad]
+    cls_delta = cls_visc .- cls_inv
+    return Polar{TF}(alphas, cls_inv, cls_delta, cls_visc, cds_visc)
+end
+
+function Polar{TF}(alphas, cls_visc, cds_visc) where TF
+    cls_inv = TF(2π) .* (alphas .* TF(π/180))  # thin-airfoil: cl_inv = 2π·α[rad]
+    cls_delta = cls_visc .- cls_inv
+    return Polar{TF}(TF.(alphas), cls_inv, cls_delta, TF.(cls_visc), TF.(cds_visc))
+end
+
+"""
+    get_polars2(section_rs, rotor_file, TF=Float64; data_path)
 
 Generates a vector of vectors of `::Polar` objects for use in the `viscous!` function.
 
@@ -98,14 +114,36 @@ function get_polars2(section_rs::Vector{<:Vector}, rotor_files, TF=Float64; data
 end
 
 """
-    viscous!(properties, Γ, dΓdt, surfaces, grids, frames, frames_index, viscous_ratio_cl, viscous_ratio_cd)
+    viscous!(properties, Γ, dΓdt, surfaces, grids, frames, frames_index, polars, ref, dt)
 
-Apply viscous corrections to the aerodynamic forces and circulation strengths based on the provided viscous correction functions `viscous_ratio_cl` and `viscous_ratio_cd`.
-The corrections are applied to the `properties` of each panel, as well as the circulation strengths `Γ` and their time derivatives `dΓdt`.
+Apply viscous corrections to the aerodynamic forces and circulation strengths
+using sectional airfoil polar data. The corrections are applied to each
+surface's panel `properties`, to the circulation strengths `Γ`, and to their
+time derivatives `dΓdt`.
 
-Note: dΓdt should contain -Γ from the PREVIOUS timestep
+If `polars === nothing`, this function returns without modifying its inputs.
+
+Note: `dΓdt` should contain `-Γ` from the previous timestep.
+
+## Arguments
+
+- `properties`: panel aerodynamic properties to be updated in place
+- `Γ`: panel circulation strengths, updated in place
+- `dΓdt`: circulation time derivative workspace, updated in place
+- `surfaces`: surface panel geometry
+- `grids`: grid coordinates for each surface
+- `frames`: reference frames for each surface
+- `frames_index`: map from surfaces to entries in `frames`
+- `polars`: sectional viscous polar data for each surface, or `nothing` to skip
+  viscous corrections
+- `ref`: aerodynamic reference quantities used for dimensional scaling
+- `dt`: timestep used to convert the updated `Γ` values into `dΓdt`
+
+## Returns
+
+Mutates `properties`, `Γ`, and `dΓdt` in place and returns `nothing`.
 """
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polars::Vector{<:Vector{<:Polar}}, ref::Reference, dt) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polars::Vector{<:Vector{<:Polar}}, ref::Reference, dt) where TF
     # properties contains:
     # * cf
     # surface contains:
@@ -119,6 +157,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
 
     # index for circulation strengths
     iΓ = 1
+
+    # dynamic pressure for dimensionalizing forces
+    q = 0.5 * RHO * ref.V * ref.V
 
     # loop over surfaces
     for isurf in eachindex(surfaces)
@@ -155,6 +196,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 # extract the polar for this section
                 polar = polar_array[j]
 
+                # initialize dynamic pressure
+                q_local = zero(TF)
+
                 # loop over chordwise panels in this section
                 for i in axes(surface, 1)
 
@@ -167,11 +211,16 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                     iΓ += 1
 
                     # accumulate induced velocity contribution at this bound vortex
-                    v_induced += props[i,j].velocity # TODO: what if system.reference[].v != 1.0?
+                    v_induced += props[i,j].velocity * ref.V # convert from non-dimensionalized velocity
 
                     # accumulate aerodynamic force contribution from this bound vortex
                     cf += props[i,j].cfb
                 end
+
+                # average dynamic pressure over the section
+                v_induced /= size(surface, 1) # average induced velocity over the section
+                v_local = norm(v_induced) # local velocity magnitude at this section
+                q_local = 0.5 * RHO * v_local * v_local
 
                 # get chord length
                 le = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
@@ -184,6 +233,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 c += norm(le - te)
                 c *= 0.5
 
+                # convert summed force coefficient back to dimensional force
+                cf *= q * ref.S
+
                 # project aerodynamic force into xz plane
                 cf = R * cf # rotate into this frame
 
@@ -191,85 +243,106 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, su
                 l_2d_norm = sqrt(cf[1]*cf[1] + cf[3]*cf[3])
 
                 # force per length
-                l_2d_norm /= norm(surface[end,j].rtr - surface[1,j].rtl)
+                l_2d_norm /= abs(( R * (surface[1,j].rtl - surface[1,j].rtr) )[2])
 
                 # calculate effective cl predicted by the VLM, = 2π * α_eff
-                cl_vlm = -2 * RHO * γ * γ / (l_2d_norm * c) * sign(γ)
+                cl_vlm = -2 * RHO * γ * (γ / (l_2d_norm + eps(l_2d_norm))) / c * sign(γ)
 
                 # get effective α
                 α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
 
-                # refer to polar for viscous cl
-                cl_star = FLOWMath.linear(polar.alphas, polar.cls_visc, α_eff)
+                # additive viscous correction: Δcl(cl_inv), indexed by the
+                # inviscid cl so the table stays smooth near zero lift
+                Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
 
-                # # correct for alpha=0 cl, inviscid lift slope, and viscous correction
-                # cl_star = polar.m_inv / (2*pi) * cl_vlm + polar.cl_alpha0
-                # cl_star = cl_star + FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_star)
+                # lift direction in the strip xz plane: perpendicular to local
+                # flow projected into xz. well-defined whenever there is any
+                # freestream over the section.
+                v_induced_strip = R * v_induced
+                dhat_strip = SVector(v_induced_strip[1], 0.0, v_induced_strip[3])
+                dhat_strip /= norm(dhat_strip)
+                lhat_strip = SVector(-dhat_strip[3], 0.0, dhat_strip[1])
 
-                # get viscous lift correction factor
-                f_cl = cl_star / cl_vlm
-                # f_cl = clamp(f_cl, 0.0, 1.0)
-                # @show j, cl_star / cl_vlm, cl_star, cl_vlm, polar.m_inv, polar.cl_alpha0
+                # lift direction in the global frame (used to project the
+                # globally-stored cfb / Δs / V vectors below)
+                lhat = Rp * lhat_strip
 
-                # get direction of viscous drag
-                v_induced = R * v_induced # rotate into this frame
-                dhat = SVector(v_induced[1], 0.0, v_induced[3])
-                dhat /= norm(dhat)
+                # spanwise extent of this strip (used to convert Δcl → ΔL)
+                Δs_y = ( R * (surface[1,j].rtl - surface[1,j].rtr) )[2]
 
-                # get viscous drag coefficient
-                # cd = FLOWMath.linear(polar.cls_visc, polar.cds_visc, cl_star)
+                # strip-level prescribed dimensional lift increment
+                nc = size(surface, 1)
+                Δl_strip = Δcl * q_local * c * Δs_y
+
+                # viscous drag (currently disabled by *0.0; see VISCOUS_BUGS.md #5)
                 cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff) * 0.0
-
-                # get magnitude of viscous drag
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
+                d_viscous = (d_viscous_mag / nc) * (Rp * dhat_strip)
 
-                # get viscous drag vector
-                d_viscous = d_viscous_mag * dhat
-
-                # distribute evenly over chordwise panels
-                d_viscous /= size(surface, 1)
-
-                # rotate back into global frame
-                d_viscous = Rp * d_viscous
-
-                # apply viscous corrections to aerodynamic force on each panel
+                # ---- per-segment additive correction ------------------------
+                # The strip's prescribed dimensional lift increment Δl_strip is
+                # distributed equally across the nc chordwise bound segments.
+                # For each segment we solve the local Kutta-Joukowski relation
+                #
+                #     l_j_new = ρ ((V_j × Δs_j) · l̂) γ_j_new
+                #
+                # for the new bound-vortex circulation γ_j_new, using the local
+                # effective velocity V_j and bound-vortex segment Δs_j that
+                # nearfield.jl uses to compute panel forces. This guarantees
+                # that the downstream cfb is exactly consistent with γ_j_new.
+                #
+                # γ_j here is the *segment* (bound-vortex) circulation
+                # Γ_b,i = Γ[i] - Γ[i-1] (with Γ_b,1 = Γ[1]). After solving for
+                # all γ_j_new, panel circulations are recovered by cumulative
+                # sum and written back into Γ.
+                Γ_b_new_accum = zero(TF)
                 for i in axes(surface, 1)
-                    # unpack props
                     (; gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise) = props[i,j]
 
-                    # decompose cfb into 2-d and remaining components
-                    cfb_2d = R * cfb
-                    # cfb_strip = SVector{3,TF}(cfb_2d[1], 0.0, cfb_2d[3])
-                    # cfb_remaining = SVector{3,TF}(0.0, cfb_2d[2], 0.0)
+                    # local effective velocity at the bound vortex midpoint
+                    # (props.velocity is stored as Vi/ref.V; see nearfield.jl:554)
+                    Vj = velocity * ref.V
 
-                    # apply lift correction factor to bound circulation contribution and add viscous drag
-                    cfb_new = Rp * (SVector{3,TF}(cfb_2d[1] * f_cl, 0.0, cfb_2d[3] * f_cl) + SVector{3,TF}(0, cfb_2d[2], 0)) + d_viscous
+                    # bound vortex segment vector (global frame)
+                    Δsj = top_vector(surface[i,j])
 
-                    # reassemble properties
-                    # @show cfb_strip, cfb_remaining
-                    # @show f_cl, cfb, cfb_new, d_viscous
+                    # KJ projection onto the lift direction
+                    cross_jl = cross(Vj, Δsj)
+                    proj_j = dot(cross_jl, lhat)
+
+                    # existing inviscid lift on this segment (dimensional)
+                    l_j = dot(cfb, lhat) * q * ref.S
+
+                    # new segment circulation from local KJ
+                    γ_j_new = (l_j + Δl_strip / nc) / (RHO * proj_j)
+
+                    # recompute the bound-vortex contribution to cfb directly
+                    # from γ_j_new so cfb stays exactly consistent with the
+                    # corrected circulation (matches nearfield.jl form
+                    # F_b = ρ Γ_b (V × Δs)). preserves cfl/cfr untouched.
+                    cfb_new = (RHO * γ_j_new) * cross_jl / (q * ref.S) + d_viscous
+
                     props[i,j] = PanelProperties(
                         gamma,
                         velocity,
-                        cfb_new,  # apply lift correction factor to bound circulation contribution and add viscous drag
-                        cfl, # * f_cl,  # apply lift correction factor to left edge contribution
-                        cfr, # * f_cl,  # apply lift correction factor to right edge contribution
+                        cfb_new,
+                        cfl,
+                        cfr,
                         velocity_from_streamwise
                     )
-                end
 
-                # apply viscous correction to circulation strengths and their time derivatives
-                @show j, f_cl, α_eff, cl_vlm, cl_star
-                Γ[iΓ-size(surface,1):iΓ-1] .*= f_cl
+                    # reconstruct panel circulation by cumulative sum of
+                    # segment circulations: Γ[i] = Σ_{k≤i} γ_k_new
+                    Γ_b_new_accum += γ_j_new
+                    Γ[iΓ - nc + (i - 1)] = Γ_b_new_accum
+                end
             end
-            dΓdt .+= Γ
-            dΓdt ./= dt
         else
-            iΓ += size(surface, 1) * size(surface, 2) # skip circulation strengths for this surface
+            iΓ += size(surfaces[isurf], 1) * size(surfaces[isurf], 2) # skip circulation strengths for this surface
         end
     end
 end
 
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Nothing, ref) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Nothing, ref, dt) where TF
     return nothing
 end

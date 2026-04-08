@@ -233,8 +233,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
     # begin simulation
     i_step = 0
+    println()
     for t in t_range
-        println("\tstep $(i_step)/$(length(t_range)-1) at time $(t)")
+        print("\r\tstep $(i_step)/$(length(t_range)-1) at time $(t)\033[K")
         
         #------- reset system -------#
 
@@ -347,7 +348,6 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
         # save (negative) previous circulation in dΓdt
         dΓdt .= .-Γ
-        dΓdt_wake .= .-Γ
 
         # solve for the new circulation
         if derivatives
@@ -405,7 +405,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #------- apply viscous corrections (if set) -------#
 
         Γ_wake .= Γ
-        viscous!(properties, Γ_wake, dΓdt_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
+        viscous!(properties, Γ_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
+        dΓdt_wake .+= Γ_wake
+        dΓdt_wake ./= dt
         # Γ .= Γ_wake
         
         #------- other solvers -------#
@@ -475,6 +477,8 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
             shed_wake!(wake, system,  dt, Γ_wake, dΓdt,
                 particle_trailing_methods, particle_unsteady_methods)
+
+            dΓdt_wake .= -Γ_wake # store negative of current circulation for next step's shedding
 
             # update wake shedding locations based on wake and vehicle
             # accounts for vehicle-induced, wake-induced, freestream,
