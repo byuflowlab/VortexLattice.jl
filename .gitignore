@@ -66,3 +66,6 @@ avl3.35
 *.h5
 test/rotor_hover.jl
 CLAUDE.md
+
+test/panel_particle_wake_output
+vortex_lattice_simulation/

@@ -327,16 +327,26 @@ function update_probes!(system::System{TF}) where TF
         i_probe += 1
     end
 
-    # V (just the first row of vertices)
-    for wake in system.wakes
-        for j in 1:size(wake, 2)
-            # println("\t\tHolmes: adding wake probe at ", wake[1, j].rtl)
-            # println("\t\t\twake_shedding_locations: ", system.wake_shedding_locations[1][j])
-            system.probes.position[i_probe] = wake[1, j].rtl
+    # V (just the first row of vertices); fall back to wake_shedding_locations
+    # when the buffer has no active rows (nwake==0 at simulation start)
+    for (k, wake) in enumerate(system.wakes)
+        ns_k = size(wake, 2)
+        if size(wake, 1) > 0 && system.nwake[k] > 0
+            for j in 1:ns_k
+                system.probes.position[i_probe] = wake[1, j].rtl
+                i_probe += 1
+            end
+            system.probes.position[i_probe] = wake[1, end].rtr
+            i_probe += 1
+        else
+            wsl = system.wake_shedding_locations[k]
+            for j in 1:ns_k
+                system.probes.position[i_probe] = wsl[j]
+                i_probe += 1
+            end
+            system.probes.position[i_probe] = wsl[ns_k + 1]
             i_probe += 1
         end
-        system.probes.position[i_probe] = wake[1, end].rtr
-        i_probe += 1
     end
 
     return system.probes

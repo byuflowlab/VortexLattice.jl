@@ -223,6 +223,96 @@ function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:Abst
 end
 
 """
+    write_vtk(name, system::System, idx, t; overwrite=false)
+
+Append one time step of `system`'s body geometry to a ParaView PVD collection.
+The `.pvd` file is written at `name.pvd` and per-step multiblock files are
+routed to a `name/` subdirectory as `name.{idx}.vtm`, with one block per
+surface.
+"""
+function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false)
+
+    _parent, _base = splitdir(name)
+    subdir = joinpath(_parent, _base)
+    mkpath(subdir)
+    block_name = joinpath(subdir, _base)
+
+    paraview_collection(name; append=!overwrite) do pvd
+        vtm = vtk_multiblock(block_name * "_$idx.vtm")
+        for i = 1:length(system.surfaces)
+            write_vtk!(vtm, system.surfaces[i], system.properties[i];
+                trailing_edge = true,
+                trailing_vortices = false,
+                symmetric = system.symmetric[i])
+        end
+        pvd[t] = vtm
+    end
+
+    return nothing
+end
+
+"""
+    write_vtk(name, wake::PanelParticleWake, idx, t; overwrite=false)
+
+Append one time step of the buffer-overflow wake to ParaView PVD collections.
+Writes the panel portion to `name.pvd` (per-step `.vtm` under `name/`, one VTS
+block per surface) and the particle portion to `name_particles.pvd` (per-step
+`.vtp` under `name_particles/`).
+"""
+function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; overwrite::Bool=false)
+
+    # --- panel wake ---
+    _parent, _base = splitdir(name)
+    subdir = joinpath(_parent, _base)
+    mkpath(subdir)
+    block_name = joinpath(subdir, _base)
+
+    paraview_collection(name; append=!overwrite) do pvd
+        vtm = vtk_multiblock(block_name * "_$idx.vtm")
+        for i = 1:length(wake.wakes)
+            n = wake.nwake[i]
+            n == 0 && continue
+            wake_view = view(wake.wakes[i], 1:n, :)
+            write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false)
+        end
+        pvd[t] = vtm
+    end
+
+    # --- particle wake ---
+    particles_pvd = joinpath(_parent, _base * "_particles")
+    particles_subdir = particles_pvd
+    mkpath(particles_subdir)
+    particles_block = joinpath(particles_subdir, _base * "_particles")
+
+    np = wake.pfield.np
+    X = view(wake.pfield.particles, FLOWVPM.X_INDEX, 1:np)
+    cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:max(np,1))]
+
+    vtp_filename = particles_block * "_$idx.vtp"
+    if np > 0
+        vtp = WriteVTK.vtk_grid(vtp_filename, X, cells)
+        vtp["gamma", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.GAMMA_INDEX, 1:np)
+        vtp["sigma", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.SIGMA_INDEX, 1:np)
+        vtp["vol", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.VOL_INDEX, 1:np)
+        vtp["circulation", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.CIRCULATION_INDEX, 1:np)
+        vtp["velocity", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.U_INDEX, 1:np)
+        vtp["vorticity", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.VORTICITY_INDEX, 1:np)
+        vtp["velocity_gradient", WriteVTK.VTKPointData()] =
+            reshape(view(wake.pfield.particles, FLOWVPM.J_INDEX, 1:np), 3, 3, np)
+    else
+        X_empty = zeros(eltype(wake.pfield.particles), 3, 0)
+        vtp = WriteVTK.vtk_grid(vtp_filename, X_empty,
+            Vector{WriteVTK.MeshCell{WriteVTK.PolyData.Verts, UnitRange{Int}}}())
+    end
+
+    pvd_particles = paraview_collection(particles_pvd; append=!overwrite)
+    pvd_particles[t] = vtp
+    WriteVTK.vtk_save(pvd_particles)
+
+    return nothing
+end
+
+"""
     write_vtk!(vtmfile, surface, [surface_properties]; kwargs...)
 
 Writes geometry to Paraview files for visualization.
@@ -590,6 +680,7 @@ Writes geometry to Paraview files for visualization.
 function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
     symmetric,
     trailing_vortices = false,
+    trailing_edge = true,
     xhat = SVector(1, 0, 0),
     wake_length = 10,
     surface_circulation = zeros(size(wake, 2)),
@@ -699,6 +790,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
         vtkfile["circulation"] = reshape(gamma_v, :)
     end
 
+    if trailing_vortices || trailing_edge
     if trailing_vortices
 
         # trailing vortices points as a grid
@@ -788,6 +880,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
 
         # circulation strength
         vtkfile["circulation"] = reshape(gamma_t, :)
+    end
     end
 
     return nothing

@@ -19,6 +19,11 @@ export reflect, set_normal
 
 include("wake.jl")
 export Wake
+export PanelParticleWake
+export WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS
+export IntegrationScheme, EulerScheme, RK3Scheme
+
+include("panel_particle_wake.jl")
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine

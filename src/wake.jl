@@ -800,6 +800,316 @@ function shed_wake!(wakes::AbstractVector{<:AbstractMatrix}, wake_shedding_locat
     return wakes
 end
 
+#--- Wake Shedding Methods ---#
+
+"""
+    WakeSheddingMethod
+
+Abstract supertype for particle-shedding strategies used by
+[`PanelParticleWake`](@ref).
+"""
+abstract type WakeSheddingMethod end
+
+"""No particle shedding."""
+struct NoShed <: WakeSheddingMethod end
+
+"""Gaussian particle shedding with prescribed smoothing width `sigma`."""
+struct SigmaPPS{TF} <: WakeSheddingMethod
+    sigma::TF
+    p_per_step::Int
+end
+
+"""Overlap-based particle shedding with target overlap ratio."""
+struct OverlapPPS{TF} <: WakeSheddingMethod
+    overlap::TF
+    p_per_step::Int
+end
+
+function _shed_particles!(pfield, r1, r2, Γ, method::OverlapPPS)
+    dist = norm(r2 - r1)
+    dist < eps(typeof(dist)) && return nothing
+    sigma = dist * method.overlap / method.p_per_step
+    return _shed_particles!(pfield, r1, r2, Γ, SigmaPPS(sigma, method.p_per_step))
+end
+
+function _shed_particles!(pfield, r1, r2, Γ, method::SigmaPPS)
+    sigma = method.sigma
+    p_per_step = method.p_per_step
+    distance_vector = (r2 - r1) / p_per_step
+    Xp = r1 + distance_vector * 0.5
+    Γp = Γ * distance_vector
+    for _ in 1:p_per_step
+        FLOWVPM.add_particle(pfield, Xp, Γp, sigma; circulation=Γ)
+        Xp += distance_vector
+    end
+end
+
+function _shed_particles!(pfield, r1, r2, Γ, ::NoShed)
+    return nothing
+end
+
+#--- Panel + Particle Wake ---#
+
+"""
+    PanelParticleWake(system; optargs...)
+
+Hybrid wake model that combines VortexLattice's panel wake buffer with a
+FLOWVPM particle field. The panel buffer holds the most recent `nwakerows` of
+shed vorticity; once the buffer fills, the oldest row is converted to vortex
+particles on each subsequent shed. The panel arrays are aliased from `system`
+so existing VLM kernels continue to operate on the same storage.
+"""
+struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF, TFW}
+    wakes::Vector{Matrix{WakePanel{TF}}}
+    wake_shedding_locations::Vector{Vector{SVector{3,TF}}}
+    wake_velocities::Vector{Matrix{SVector{3,TF}}}
+    nwake::Vector{Int}
+    nwakerows::Int
+    overflowed::Base.RefValue{Bool}
+    pfield::TPF
+    trailing_edge_filaments::TFW
+    method_trailing::Vector{MT}
+    method_unsteady::Vector{MU}
+    prev_bottom_gamma::Vector{Vector{TF}}
+    eta::TF
+end
+
+function PanelParticleWake(system;
+        nwakerows::Int=3,
+        max_particles::Int=10_000,
+        eta::Real=0.3,
+        method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
+        method_unsteady::WakeSheddingMethod=OverlapPPS(1.3, 2),
+    )
+
+    TF = eltype(system.wake_shedding_locations[1][1])
+    nsurf = length(system.surfaces)
+
+    # Verify the System was allocated with the right wake buffer size.
+    for i in 1:nsurf
+        @assert size(system.wakes[i], 1) == nwakerows "System.wakes[$i] has " *
+            "$(size(system.wakes[i], 1)) rows but PanelParticleWake expects " *
+            "nwakerows=$nwakerows. Rebuild the System with nw=fill($nwakerows, nsurf)."
+    end
+
+    # Alias panel-wake storage from System (shared arrays — not copies).
+    wakes = system.wakes
+    wake_shedding_locations = system.wake_shedding_locations
+    wake_velocities = system.V             # persistent wake-node velocity buffer
+    nwake = zeros(Int, nsurf)              # active rows (grows 0 → nwakerows)
+    overflowed = Ref(false)
+
+    # Particle field (FLOWVPM)
+    pfield = FLOWVPM.ParticleField(max_particles, TF;
+        fmm=FLOWVPM.FMM(autotune_reg_error=false))
+
+    # Trailing-edge filament wrapper for FMM coupling
+    trailing_edge_filaments = FilamentWrapper(system.wakes)
+
+    # Per-surface shedding methods (plan spec)
+    method_trailing_vec = [method_trailing for _ in 1:nsurf]
+    method_unsteady_vec = [method_unsteady for _ in 1:nsurf]
+
+    # Per-surface memory of the previously-converted oldest row's circulation
+    # (one entry per spanwise panel). Used by _convert_to_particles! as Γ_tm1.
+    prev_bottom_gamma = [zeros(TF, size(system.wakes[i], 2)) for i in 1:nsurf]
+
+    return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments)}(
+        wakes, wake_shedding_locations, wake_velocities, nwake, nwakerows, overflowed, pfield,
+        trailing_edge_filaments, method_trailing_vec, method_unsteady_vec, prev_bottom_gamma, TF(eta),
+    )
+end
+
+"""
+    reset!(w::PanelParticleWake)
+
+Zero the wake-node velocity buffer and reset the particle field velocity/Jacobian
+and SFS properties. Preserves particle positions, strengths, and panel geometry.
+"""
+function reset!(w::PanelParticleWake)
+    # zero wake-node velocities (panel wake)
+    for V in w.wake_velocities
+        fill!(V, zero(eltype(V)))
+    end
+
+    # reset particle velocity and Jacobian fields (preserve position and strength)
+    FLOWVPM._reset_particles(w.pfield)
+
+    # reset particle SFS properties
+    FLOWVPM._reset_particles_sfs(w.pfield)
+
+    return w
+end
+
+"""
+    update_TE!(w::PanelParticleWake, system::System)
+
+Snap the first row of wake panels to the current `wake_shedding_locations`,
+preserving the bottom edge, core size, and circulation of each panel. Mirrors
+FLOWPanel's `update_TE!`: a pure geometric alignment, freestream-independent.
+
+The freestream-based update of `wake_shedding_locations` itself lives in the
+propagate step (see `update_wake_shedding_locations_unsteady!`).
+"""
+function update_TE!(w::PanelParticleWake, system)
+    for isurf in eachindex(w.wakes)
+        w.nwake[isurf] == 0 && continue   # no active wake rows yet
+        wake = w.wakes[isurf]
+        wsl = w.wake_shedding_locations[isurf]
+        ns = length(wsl) - 1
+        for j in 1:ns
+            rtl = wsl[j]
+            rtr = wsl[j+1]
+            rbl = bottom_left(wake[1, j])
+            rbr = bottom_right(wake[1, j])
+            core_size = get_core_size(wake[1, j])
+            gamma = circulation_strength(wake[1, j])
+            wake[1, j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+        end
+    end
+    return w
+end
+
+"""
+    propagate!(w::PanelParticleWake, dt; scheme=EulerScheme(), Vinf=nothing, relax=true)
+
+Convect the wake forward by `dt`: translate active wake panels by their stored
+node velocities (`w.wake_velocities`) and advance the particle field using the
+selected `IntegrationScheme`. If `Vinf` is provided it is seeded onto every
+active particle via `apply_freestream!` before the integration step. Matches
+FLOWPanel's two-part `propagate!(PanelParticleWake, dt)`.
+"""
+function propagate!(w::PanelParticleWake, dt;
+        scheme=EulerScheme(), Vinf=nothing, relax=true)
+    # panel wake — translate nodes via stored wake_velocities (only active rows)
+    for i_surf in eachindex(w.wakes)
+        w.nwake[i_surf] == 0 && continue
+        translate_wake!(w.wakes[i_surf], w.wake_velocities[i_surf], dt;
+            nwake = w.nwake[i_surf])
+    end
+
+    # apply freestream to particles (once, pre-step) if requested
+    Vinf === nothing || apply_freestream!(w, Vinf)
+
+    # convect particles via selected scheme
+    _integrate_particles!(w, dt, scheme; relax)
+
+    return w
+end
+
+"""
+    _convert_to_particles!(w::PanelParticleWake)
+
+Convert the oldest active row of each surface's panel wake into vortex
+particles in `w.pfield`. After conversion, `w.prev_bottom_gamma[isurf]` is
+updated with the row's circulations so the next call can form `Γ - Γ_tm1`.
+"""
+function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
+    for isurf in eachindex(w.wakes)
+        w.nwake[isurf] == w.nwakerows || continue
+        nlast = w.nwake[isurf]
+        wake = w.wakes[isurf]
+        ns = size(wake, 2)
+        method_t = w.method_trailing[isurf]
+        method_u = w.method_unsteady[isurf]
+        prev_gamma = w.prev_bottom_gamma[isurf]
+
+        r1_le_first = top_left(wake[nlast, 1])
+        rend_le     = top_right(wake[nlast, ns])
+        wraps = norm(r1_le_first - rend_le) < 5 * eps(TF)
+        Γ_last = wraps ? circulation_strength(wake[nlast, ns]) : zero(TF)
+
+        for j in 1:ns
+            panel = wake[nlast, j]
+            Γ     = circulation_strength(panel)
+            r1_le = top_left(panel)
+            r1_te = bottom_left(panel)
+            r2_te = bottom_right(panel)
+
+            _shed_particles!(w.pfield, r1_le, r1_te, Γ - Γ_last, method_t)
+
+            Γ_tm1 = prev_gamma[j]
+            _shed_particles!(w.pfield, r1_te, r2_te, Γ - Γ_tm1, method_u)
+
+            Γ_last = Γ
+            prev_gamma[j] = Γ
+        end
+
+        if !wraps
+            panel = wake[nlast, ns]
+            Γ     = circulation_strength(panel)
+            r_le  = top_right(panel)
+            r_te  = bottom_right(panel)
+            _shed_particles!(w.pfield, r_le, r_te, -Γ, method_t)
+        end
+    end
+    return w
+end
+
+"""
+    shed_wake!(w::PanelParticleWake, system::System, dt, Gamma)
+
+Advance the hybrid wake one step: convert the oldest row of any surface whose
+buffer is full into particles, shed a new row of wake panels at the trailing
+edge, and grow `nwake` until the buffer is saturated.
+"""
+function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
+    for isurf in eachindex(w.wakes)
+        if w.nwake[isurf] == w.nwakerows
+            w.overflowed[] = true
+        end
+    end
+
+    _convert_to_particles!(w)
+
+    iΓ = 0
+    for isurf in eachindex(w.wakes)
+        surface = system.surfaces[isurf]
+        wake    = w.wakes[isurf]
+        wsl     = w.wake_shedding_locations[isurf]
+        nc, ns  = size(surface)
+        ls      = LinearIndices((nc, ns))
+
+        # save propagated row-1 top nodes before the shift overwrites them
+        if w.nwake[isurf] > 0
+            saved_rtl = [top_left(wake[1, j]) for j in 1:ns]
+            saved_rtr = [top_right(wake[1, j]) for j in 1:ns]
+        end
+
+        nkeep = min(w.nwake[isurf], w.nwakerows - 1)
+        for j = 1:ns, i = nkeep:-1:1
+            wake[i+1, j] = wake[i, j]
+        end
+
+        for j = 1:ns
+            rtl = wsl[j]
+            rtr = wsl[j+1]
+            if w.nwake[isurf] > 0
+                rbl = saved_rtl[j]
+                rbr = saved_rtr[j]
+            else
+                rbl = rtl + w.wake_velocities[isurf][1, j]   * dt
+                rbr = rtr + w.wake_velocities[isurf][1, j+1] * dt
+            end
+            core_size = get_core_size(surface[end, j])
+            gamma = Gamma[iΓ + ls[end, j]]
+            wake[1, j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+        end
+
+        if w.nwake[isurf] == 0
+            initial_wake_panels!([wake], [wsl], [surface], w.eta)
+        end
+
+        iΓ += length(surface)
+
+        if w.nwake[isurf] < w.nwakerows
+            w.nwake[isurf] += 1
+        end
+    end
+
+    return w
+end
+
 """
     rowshift!(A)
 
