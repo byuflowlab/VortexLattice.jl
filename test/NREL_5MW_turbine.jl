@@ -87,7 +87,7 @@ function main()
     monitor1 = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system; normalized=false)
     monitors = (monitor, monitor1)
     Ωinf(_) = SVector{3,Float64}(0.0, 0.0, 0.0)
-    wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
                 wake_type=PanelParticleWake,
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),

@@ -70,10 +70,9 @@ function update_wake_shedding_locations!(wakes, wake_shedding_locations,
             # loop through first row of wake panels
             for j = 1:ns
                 # update wake panel with wake shedding location coordinates
+                # preserve other wake panel coordinates
                 rtl = wake_shedding_locations[isurf][j]
                 rtr = wake_shedding_locations[isurf][j+1]
-
-                # preserve other wake panel coordinates
                 rbl = bottom_left(wakes[isurf][1,j])
                 rbr = bottom_right(wakes[isurf][1,j])
 
@@ -111,9 +110,6 @@ function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations
         surface = surfaces[isurf]
         wake = wakes[isurf]
 
-        # scale wsl (temporarily contains previous trailing edge location) by eta 
-        wsl .*= eta
-
         # update wake shedding location
         for j = 1:ns+1
 
@@ -141,7 +137,7 @@ function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations
             end
 
             # update wake shedding location coordinates
-            wsl[j] += (1-eta) * rte + eta*V*dt
+            wsl[j] = rte + eta*V*dt
 
         end
 
@@ -172,12 +168,13 @@ function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations
     return wakes, wake_shedding_locations
 end
 
-function initial_wake_panels!(wakes, wake_shedding_locations, surfaces, eta)
+function initial_wake_panels!(wakes, wake_shedding_locations, surfaces, Γ, eta)
     for isurf in eachindex(surfaces)
         wsl = wake_shedding_locations[isurf]
         surface = surfaces[isurf]
         wake = wakes[isurf]
         nc, ns = size(surface)
+        ls = LinearIndices((nc, ns))
 
         # get trailing edge point
         rte = bottom_left(surface[nc,1])
@@ -185,9 +182,9 @@ function initial_wake_panels!(wakes, wake_shedding_locations, surfaces, eta)
         # wsl point
         rwsl = wsl[1]
 
-        # extend to the end of the wake panel
+        # extend from the trailing edge to the end of the wake panel
         dx = rwsl - rte
-        rbl_wake = rwsl + dx / eta
+        rbl_wake = rte + dx / eta
 
         for j in 1:ns
             
@@ -197,15 +194,15 @@ function initial_wake_panels!(wakes, wake_shedding_locations, surfaces, eta)
             # wsl point
             rwsl = wsl[j+1]
 
-            # extend to the end of the wake panel
+            # extend from the trailing edge to the end of the wake panel
             dx = rwsl - rte
-            rbr_wake = rwsl + dx / eta
+            rbr_wake = rte + dx / eta
 
             # update wake panel with wake shedding location coordinates
-            rtl = top_left(wake[1,j])
-            rtr = top_right(wake[1,j])
-            core_size = get_core_size(wake[1,j])
-            gamma = circulation_strength(wake[1,j])
+            rtl = wsl[j]
+            rtr = wsl[j+1]
+            core_size = get_core_size(surface[nc, j])
+            gamma = Γ[ls[nc, j]]
 
             # replace the old wake panel
             wake[1,j] = WakePanel(rtl, rtr, rbl_wake, rbr_wake, core_size, gamma)
@@ -578,25 +575,33 @@ function get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
                 vΓ = view(Γ, jΓ+1:jΓ+Ns)
 
                 # induced velocity from this surface
-                wake_velocities[isurf][I] += induced_velocity(rc, surfaces[jsurf], vΓ;
+                v_surface = induced_velocity(rc, surfaces[jsurf], vΓ;
                     finite_core = surface_id[isurf] != surface_id[jsurf],
                     wake_shedding_locations = wake_shedding_locations[jsurf],
                     symmetric = symmetric[jsurf],
                     trailing_vortices = false,
                     xhat = xhat)
+                wake_velocities[isurf][I] += v_surface
 
                 # add induced velocity from the wake
                 if same_surface
-                    # vertex location on wake
-                    J = CartesianIndex(I[1], js)
+                    nc_wake = max(nwake[jsurf] - 1, 0)
+                    if nc_wake > 1
+                        # vertex location on wake
+                        J = CartesianIndex(I[1], js)
 
-                    # induced velocity from wake on its own vertex
-                    wake_velocities[isurf][I] += induced_velocity(J, wakes[jsurf];
-                        finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
-                        symmetric = symmetric[jsurf],
-                        nc = nwake[jsurf],
-                        trailing_vortices = trailing_vortices[jsurf],
-                        xhat = xhat)
+                        # induced velocity from wake on its own vertex
+                        v_wake = induced_velocity(J, wakes[jsurf];
+                            finite_core = wake_finite_core[jsurf] || surface_id[isurf] != surface_id[jsurf],
+                            symmetric = symmetric[jsurf],
+                            nc = nc_wake,
+                            trailing_vortices = trailing_vortices[jsurf],
+                            xhat = xhat)
+                        wake_velocities[isurf][I] += v_wake
+                        if isurf == 1 && I == CartesianIndex(2, 2)
+                            @info "wake velocity contributions" jsurf same_surface v_surface v_wake total=wake_velocities[isurf][I]
+                        end
+                    end
                 else
                     # induced velocity from wake on another wake's vertex
                     wake_velocities[isurf][I] += induced_velocity(rc, wakes[jsurf];
@@ -1094,10 +1099,6 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
             core_size = get_core_size(surface[end, j])
             gamma = Gamma[iΓ + ls[end, j]]
             wake[1, j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
-        end
-
-        if w.nwake[isurf] == 0
-            initial_wake_panels!([wake], [wsl], [surface], w.eta)
         end
 
         iΓ += length(surface)

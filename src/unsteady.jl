@@ -198,25 +198,26 @@ function check_for_nans(system::System)
             error("NaN detected in velocity due to trailing edge motion on surface $isurf")
         end
         wake = system.wakes[isurf]
-        for i in eachindex(wake)
-            panel = wake[i]
-            if any(isnan.(panel.core_size))
-                error("NaN detected in wake panel core size on surface $isurf, panel $i")
+        nw_active = system.nwake[isurf]
+        for j in 1:size(wake, 2), i in 1:nw_active
+            panel = wake[i, j]
+            if isnan(panel.core_size)
+                error("NaN detected in wake panel core size on surface $isurf, panel ($i,$j)")
             end
-            if any(isnan.(panel.gamma))
-                error("NaN detected in wake panel circulation on surface $isurf, panel $i")
+            if isnan(panel.gamma)
+                error("NaN detected in wake panel circulation on surface $isurf, panel ($i,$j)")
             end
             if any(isnan.(panel.rtl))
-                error("NaN detected in wake panel rtl on surface $isurf, panel $i")
+                error("NaN detected in wake panel rtl on surface $isurf, panel ($i,$j)")
             end
             if any(isnan.(panel.rbl))
-                error("NaN detected in wake panel rbl on surface $isurf, panel $i")
+                error("NaN detected in wake panel rbl on surface $isurf, panel ($i,$j)")
             end
             if any(isnan.(panel.rtr))
-                error("NaN detected in wake panel rtr on surface $isurf, panel $i")
+                error("NaN detected in wake panel rtr on surface $isurf, panel ($i,$j)")
             end
             if any(isnan.(panel.rbr))
-                error("NaN detected in wake panel rbr on surface $isurf, panel $i")
+                error("NaN detected in wake panel rbr on surface $isurf, panel ($i,$j)")
             end
         end
     end
@@ -333,17 +334,13 @@ function simulate!(system::System, wake::PanelParticleWake,
         # time step for this iteration
         dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
 
-        # on the first step, seed wake_shedding_locations from the trailing edge
+        # on the first step, seed wake_shedding_locations with eta-offset points
+        # to avoid degenerate wake-interface panels at the trailing edge
         if i_step == 0
-            for isurf in eachindex(system.surfaces)
-                surface = system.surfaces[isurf]
-                wsl = system.wake_shedding_locations[isurf]
-                nc_s, ns_s = size(surface)
-                for j in 1:ns_s
-                    wsl[j] = bottom_left(surface[nc_s, j])
-                end
-                wsl[ns_s + 1] = bottom_right(surface[nc_s, ns_s])
-            end
+            additional_velocity = nothing
+            update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+                system.surfaces, ref, system.freestream[], dt,
+                additional_velocity, Vte, system.nwake, wake.eta)
         end
 
         #------- wake coupling + body solve -------#
@@ -475,12 +472,32 @@ function simulate!(system::System, wake::PanelParticleWake,
         Ω_next = Ωinf(t_range[idx])
         system.freestream[] = velocity_to_freestream(vinf_next, Ω_next)
 
-        # update wsl: TE + eta * V * dt (without snapping row-1 geometry)
-        _update_wsl!(system.wake_shedding_locations, system.surfaces,
-            system.freestream[], dt, wake.eta)
+        # refresh kinematic TE velocity at the propagated configuration so
+        # the next shed location includes body motion, not just freestream.
+        for isurf in 1:length(system.surfaces)
+            Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
+            Vh[isurf]  .= Ref(zero(eltype(Vh[isurf])))
+            Vv[isurf]  .= Ref(zero(eltype(Vv[isurf])))
+            Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
+        end
+        kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
 
-        # shed a new row of wake panels / overflow into particles
-        shed_wake!(wake, system, dt, Γ_wake)
+        # update shedding points for the next step using full TE convection
+        update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
+            system.surfaces, ref, system.freestream[], dt, additional_velocity,
+            Vte, system.nwake, wake.eta)
+
+        # Form the first wake row between steps 0 and 1 using the body-aware
+        # shedding locations; subsequent rows use the normal shedding routine.
+        if i_step == 0
+            initial_wake_panels!(wake.wakes, system.wake_shedding_locations,
+                system.surfaces, Γ_wake, wake.eta)
+            for isurf in eachindex(wake.nwake)
+                wake.nwake[isurf] < wake.nwakerows && (wake.nwake[isurf] += 1)
+            end
+        else
+            shed_wake!(wake, system, dt, Γ_wake)
+        end
 
         i_step += 1
     end
@@ -628,9 +645,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
             additional_velocity = nothing
             update_wake_shedding_locations!(wakes, wake_shedding_locations,
                 current_surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
-            
-            # initial wake panels are an extension of the Kutta panel for the first timestep
-            initial_wake_panels!(wakes, wake_shedding_locations, current_surfaces, eta)
+
+            # seed the first wake row so the wake probes stay off the trailing edge
+            initial_wake_panels!(wakes, wake_shedding_locations, current_surfaces, Γ, eta)
         end
         
         # update trailing edge filaments with the previous circulation solution

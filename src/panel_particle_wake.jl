@@ -198,8 +198,9 @@ function wake_on_all!(system, wake::PanelParticleWake,
         fmm!((wake.pfield, system.probes), (wake.pfield,);
             hessian=SVector{2}(true, false), fmm_wake_args...)
     elseif nfil > 0
-        fmm!((system.probes,), (trailing_edge_filaments,);
-            hessian=SVector{1}(false), fmm_wake_args...)
+        for V in system.V
+            fill!(V, zero(eltype(V)))
+        end
     end
     probes_to_surfaces!(system)
     return wake
