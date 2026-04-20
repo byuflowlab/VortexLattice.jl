@@ -864,7 +864,7 @@ shed vorticity; once the buffer fills, the oldest row is converted to vortex
 particles on each subsequent shed. The panel arrays are aliased from `system`
 so existing VLM kernels continue to operate on the same storage.
 """
-struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF, TFW}
+struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF, TFW, TFWakeFMM, TVehicleFMM}
     wakes::Vector{Matrix{WakePanel{TF}}}
     wake_shedding_locations::Vector{Vector{SVector{3,TF}}}
     wake_velocities::Vector{Matrix{SVector{3,TF}}}
@@ -873,6 +873,8 @@ struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF
     overflowed::Base.RefValue{Bool}
     pfield::TPF
     trailing_edge_filaments::TFW
+    fmm_wake::TFWakeFMM
+    fmm_vehicle::TVehicleFMM
     method_trailing::Vector{MT}
     method_unsteady::Vector{MU}
     prev_bottom_gamma::Vector{Vector{TF}}
@@ -880,9 +882,12 @@ struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF
 end
 
 function PanelParticleWake(system;
-        nwakerows::Int=3,
+        nwakerows::Int=2,
         max_particles::Int=10_000,
         eta::Real=0.3,
+        fmm::FLOWVPM.FMM=FLOWVPM.FMM(),
+        fmm_wake::Union{Nothing, FLOWVPM.FMM}=nothing,
+        fmm_vehicle::Union{Nothing, FLOWVPM.FMM}=nothing,
         method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
         method_unsteady::WakeSheddingMethod=OverlapPPS(1.3, 2),
     )
@@ -906,10 +911,17 @@ function PanelParticleWake(system;
 
     # Particle field (FLOWVPM)
     pfield = FLOWVPM.ParticleField(max_particles, TF;
-        fmm=FLOWVPM.FMM(autotune_reg_error=false))
+        fmm=fmm)
+
+    fmm_wake = something(fmm_wake, fmm)
+    fmm_vehicle = something(fmm_vehicle, fmm)
 
     # Trailing-edge filament wrapper for FMM coupling
     trailing_edge_filaments = FilamentWrapper(system.wakes)
+
+    # Independent runtime FMM states for wake and vehicle coupling.
+    fmm_wake = Base.RefValue{FLOWVPM.FMM}(fmm_wake)
+    fmm_vehicle = Base.RefValue{FLOWVPM.FMM}(fmm_vehicle)
 
     # Per-surface shedding methods (plan spec)
     method_trailing_vec = [method_trailing for _ in 1:nsurf]
@@ -919,9 +931,9 @@ function PanelParticleWake(system;
     # (one entry per spanwise panel). Used by _convert_to_particles! as Γ_tm1.
     prev_bottom_gamma = [zeros(TF, size(system.wakes[i], 2)) for i in 1:nsurf]
 
-    return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments)}(
+    return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments), typeof(fmm_wake), typeof(fmm_vehicle)}(
         wakes, wake_shedding_locations, wake_velocities, nwake, nwakerows, overflowed, pfield,
-        trailing_edge_filaments, method_trailing_vec, method_unsteady_vec, prev_bottom_gamma, TF(eta),
+        trailing_edge_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec, prev_bottom_gamma, TF(eta),
     )
 end
 

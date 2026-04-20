@@ -71,6 +71,52 @@ end
 
 PanelBufferFilaments(w::PanelParticleWake) = PanelBufferFilaments(w.wakes, w.nwake)
 
+function _fmm_kwargs(fmm::FLOWVPM.FMM, useGPU::Int)
+    return (
+        expansion_order = max(fmm.p - 1, 0),
+        leaf_size_source = max(fmm.ncrit, fmm.min_ncrit),
+        multipole_acceptance = fmm.theta,
+        error_tolerance = FastMultipole.PowerRelativeGradient{fmm.relative_tolerance, fmm.absolute_tolerance, true}(),
+        tune = true,
+        nearfield_device = (useGPU > 0),
+    )
+end
+
+function _update_fmm_autotune!(w::PanelParticleWake, which::Symbol, fmm_args)
+    fmm_state = which === :wake ? w.fmm_wake : w.fmm_vehicle
+    fmm = fmm_state[]
+    optargs = fmm_args[1]
+
+    new_p = fmm.autotune_p ? optargs.expansion_order + 1 : fmm.p
+    if new_p < fmm.p
+        new_p = fmm.p
+    end
+
+    new_ncrit = fmm.autotune_ncrit ? optargs.leaf_size_source[1] : fmm.ncrit
+
+    new_fmm = FLOWVPM.FMM(
+        p = new_p,
+        ncrit = new_ncrit,
+        theta = fmm.theta,
+        shrink_recenter = fmm.shrink_recenter,
+        relative_tolerance = fmm.relative_tolerance,
+        absolute_tolerance = fmm.absolute_tolerance,
+        autotune_p = fmm.autotune_p,
+        autotune_ncrit = fmm.autotune_ncrit,
+        autotune_reg_error = fmm.autotune_reg_error,
+        default_rho_over_sigma = fmm.default_rho_over_sigma,
+        min_ncrit = fmm.min_ncrit,
+    )
+
+    if which === :wake
+        w.fmm_wake[] = new_fmm
+    else
+        w.fmm_vehicle[] = new_fmm
+    end
+
+    return nothing
+end
+
 Base.eltype(::PanelBufferFilaments{TF}) where TF = TF
 
 function _active_to_matrix_index(pbf::PanelBufferFilaments, n)
@@ -192,11 +238,15 @@ function wake_on_all!(system, wake::PanelParticleWake,
     np = FLOWVPM.get_np(wake.pfield)
     nfil = FastMultipole.get_n_bodies(trailing_edge_filaments)
     if np > 0 && nfil > 0
-        fmm!((wake.pfield, system.probes), (wake.pfield, trailing_edge_filaments);
+        fmm_args = fmm!((wake.pfield, system.probes), (wake.pfield, trailing_edge_filaments);
+            _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_wake_args...)
+        _update_fmm_autotune!(wake, :wake, fmm_args)
     elseif np > 0
-        fmm!((wake.pfield, system.probes), (wake.pfield,);
+        fmm_args = fmm!((wake.pfield, system.probes), (wake.pfield,);
+            _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_wake_args...)
+        _update_fmm_autotune!(wake, :wake, fmm_args)
     elseif nfil > 0
         for V in system.V
             fill!(V, zero(eltype(V)))
@@ -218,8 +268,10 @@ function vehicle_on_all!(system, wake::PanelParticleWake,
     update_probes!(system)
     np = FLOWVPM.get_np(wake.pfield)
     if np > 0
-        fmm!((wake.pfield, system.probes), (system,);
+        fmm_args = fmm!((wake.pfield, system.probes), (system,);
+            _fmm_kwargs(wake.fmm_vehicle[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_vehicle_args...)
+        _update_fmm_autotune!(wake, :vehicle, fmm_args)
     else
         fmm!((system.probes,), (system,);
             hessian=SVector{1}(false), fmm_vehicle_args...)

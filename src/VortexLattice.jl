@@ -75,6 +75,7 @@ include("visualization.jl")
 export write_vtk
 
 include("fmm.jl")
+export fmm
 
 include("viscous.jl")
 

@@ -37,7 +37,7 @@ function main()
 
 
     core_size = 1e-3
-    nwakerows = 3
+    nwakerows = 2
     system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
     Sref = 1.0
@@ -87,7 +87,24 @@ function main()
     monitor1 = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system; normalized=false)
     monitors = (monitor, monitor1)
     Ωinf(_) = SVector{3,Float64}(0.0, 0.0, 0.0)
-    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+
+    fmm_wake = VortexLattice.fmm(;
+        p = 12,
+        ncrit = 3,
+        autotune_p = true,
+        autotune_ncrit = true,
+        autotune_reg_error = true
+    )
+
+    fmm_vehicle = VortexLattice.fmm(;
+        p = 12,
+        ncrit = 3,
+        autotune_p = true,
+        autotune_ncrit = true,
+        autotune_reg_error = true
+    )
+
+    @profview_allocs wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
                 wake_type=PanelParticleWake,
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),
@@ -100,6 +117,8 @@ function main()
                 frames_index=fill(1, length(system.surfaces)),
                 verbose=true,
                 max_particles=50000,
+                fmm_wake=fmm_wake,
+                fmm_vehicle=fmm_vehicle,
             )
     # RHO = 1
     # R = 63.0

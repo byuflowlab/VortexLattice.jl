@@ -154,12 +154,22 @@ function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
         nwakerows::Int=size(system.wakes[1], 1),
         max_particles::Int=10_000,
         eta::Real=0.3,
+        fmm::FLOWVPM.FMM=FLOWVPM.FMM(p=6),
+        fmm_wake::Union{Nothing, FLOWVPM.FMM}=nothing,
+        fmm_vehicle::Union{Nothing, FLOWVPM.FMM}=nothing,
         method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
         method_unsteady::WakeSheddingMethod=OverlapPPS(1.3, 2),
         kwargs...)
 
     wake = PanelParticleWake(system;
-        nwakerows, max_particles, eta, method_trailing, method_unsteady)
+        nwakerows=nwakerows,
+        max_particles=max_particles,
+        eta=eta,
+        fmm=fmm,
+        fmm_wake=fmm_wake,
+        fmm_vehicle=fmm_vehicle,
+        method_trailing=method_trailing,
+        method_unsteady=method_unsteady)
 
     simulate!(system, wake, frames, maneuver!, Vinf, t_range, Ωinf; kwargs...)
 
@@ -270,6 +280,9 @@ function simulate!(system::System, wake::PanelParticleWake,
         polars=nothing, frames_index=fill(-1, length(system.surfaces)),
         verbose=true,
     )
+    # Validate wake configuration
+    @assert wake.nwakerows >= 1 "PanelParticleWake requires nwakerows >= 1, got $(wake.nwakerows)"
+
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
         mkpath(path)
@@ -282,6 +295,10 @@ function simulate!(system::System, wake::PanelParticleWake,
 
     # nwake-aware filament wrapper over the active panel-buffer rows
     trailing_edge_filaments = PanelBufferFilaments(wake)
+
+    # persistent VTK writers avoid reopening/parsing PVD files every step
+    bodies_writer = isnothing(path) ? nothing : _init_system_vtk_writer(joinpath(path, name * "_bodies"); overwrite=true)
+    wake_writer = isnothing(path) ? nothing : _init_wake_vtk_writer(joinpath(path, name * "_wake"); overwrite=true)
 
     # constant system params
     symmetric = system.symmetric
@@ -442,10 +459,8 @@ function simulate!(system::System, wake::PanelParticleWake,
         #------- save state + monitors -------#
 
         if !isnothing(path)
-            write_vtk(joinpath(path, name * "_bodies"), system, i_step, t;
-                overwrite = i_step == 0)
-            write_vtk(joinpath(path, name * "_wake"), wake, i_step, t;
-                overwrite = i_step == 0)
+            _append_system_vtk!(bodies_writer, system, i_step, t)
+            _append_wake_vtk!(wake_writer, wake, i_step, t)
         end
 
         for monitor in monitors
@@ -500,6 +515,11 @@ function simulate!(system::System, wake::PanelParticleWake,
         end
 
         i_step += 1
+    end
+
+    if !isnothing(path)
+        _save_system_vtk_writer!(bodies_writer)
+        _save_wake_vtk_writer!(wake_writer)
     end
 
     return wake

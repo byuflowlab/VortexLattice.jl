@@ -230,23 +230,41 @@ The `.pvd` file is written at `name.pvd` and per-step multiblock files are
 routed to a `name/` subdirectory as `name.{idx}.vtm`, with one block per
 surface.
 """
-function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false)
+mutable struct _SystemVTKWriterState
+    pvd
+    block_name::String
+end
 
+function _init_system_vtk_writer(name::String; overwrite::Bool=false)
     _parent, _base = splitdir(name)
     subdir = joinpath(_parent, _base)
     mkpath(subdir)
     block_name = joinpath(subdir, _base)
+    pvd = paraview_collection(name; append=!overwrite)
+    return _SystemVTKWriterState(pvd, block_name)
+end
 
-    paraview_collection(name; append=!overwrite) do pvd
-        vtm = vtk_multiblock(block_name * "_$idx.vtm")
-        for i = 1:length(system.surfaces)
-            write_vtk!(vtm, system.surfaces[i], system.properties[i];
-                trailing_edge = true,
-                trailing_vortices = false,
-                symmetric = system.symmetric[i])
-        end
-        pvd[t] = vtm
+function _append_system_vtk!(writer::_SystemVTKWriterState, system::System, idx::Int, t::Real)
+    vtm = vtk_multiblock(writer.block_name * "_$idx.vtm")
+    for i = 1:length(system.surfaces)
+        write_vtk!(vtm, system.surfaces[i], system.properties[i];
+            trailing_edge = true,
+            trailing_vortices = false,
+            symmetric = system.symmetric[i])
     end
+    writer.pvd[t] = vtm
+    return nothing
+end
+
+function _save_system_vtk_writer!(writer::_SystemVTKWriterState)
+    WriteVTK.vtk_save(writer.pvd)
+    return nothing
+end
+
+function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false)
+    writer = _init_system_vtk_writer(name; overwrite)
+    _append_system_vtk!(writer, system, idx, t)
+    _save_system_vtk_writer!(writer)
 
     return nothing
 end
@@ -259,36 +277,46 @@ Writes the panel portion to `name.pvd` (per-step `.vtm` under `name/`, one VTS
 block per surface) and the particle portion to `name_particles.pvd` (per-step
 `.vtp` under `name_particles/`).
 """
-function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; overwrite::Bool=false)
+mutable struct _WakeVTKWriterState
+    panel_pvd
+    panel_block_name::String
+    particles_pvd
+    particles_block::String
+end
 
-    # --- panel wake ---
+function _init_wake_vtk_writer(name::String; overwrite::Bool=false)
     _parent, _base = splitdir(name)
-    subdir = joinpath(_parent, _base)
-    mkpath(subdir)
-    block_name = joinpath(subdir, _base)
 
-    paraview_collection(name; append=!overwrite) do pvd
-        vtm = vtk_multiblock(block_name * "_$idx.vtm")
-        for i = 1:length(wake.wakes)
-            n = wake.nwake[i]
-            n == 0 && continue
-            wake_view = view(wake.wakes[i], 1:n, :)
-            write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false)
-        end
-        pvd[t] = vtm
+    panel_subdir = joinpath(_parent, _base)
+    mkpath(panel_subdir)
+    panel_block_name = joinpath(panel_subdir, _base)
+    panel_pvd = paraview_collection(name; append=!overwrite)
+
+    particles_pvd_name = joinpath(_parent, _base * "_particles")
+    mkpath(particles_pvd_name)
+    particles_block = joinpath(particles_pvd_name, _base * "_particles")
+    particles_pvd = paraview_collection(particles_pvd_name; append=!overwrite)
+
+    return _WakeVTKWriterState(panel_pvd, panel_block_name, particles_pvd, particles_block)
+end
+
+function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake, idx::Int, t::Real)
+    # panel wake
+    vtm = vtk_multiblock(writer.panel_block_name * "_$idx.vtm")
+    for i = 1:length(wake.wakes)
+        n = wake.nwake[i]
+        n == 0 && continue
+        wake_view = view(wake.wakes[i], 1:n, :)
+        write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false)
     end
+    writer.panel_pvd[t] = vtm
 
-    # --- particle wake ---
-    particles_pvd = joinpath(_parent, _base * "_particles")
-    particles_subdir = particles_pvd
-    mkpath(particles_subdir)
-    particles_block = joinpath(particles_subdir, _base * "_particles")
-
+    # particle wake
     np = wake.pfield.np
     X = view(wake.pfield.particles, FLOWVPM.X_INDEX, 1:np)
-    cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:max(np,1))]
+    cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:max(np, 1))]
 
-    vtp_filename = particles_block * "_$idx.vtp"
+    vtp_filename = writer.particles_block * "_$idx.vtp"
     if np > 0
         vtp = WriteVTK.vtk_grid(vtp_filename, X, cells)
         vtp["gamma", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.GAMMA_INDEX, 1:np)
@@ -304,10 +332,21 @@ function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; ove
         vtp = WriteVTK.vtk_grid(vtp_filename, X_empty,
             Vector{WriteVTK.MeshCell{WriteVTK.PolyData.Verts, UnitRange{Int}}}())
     end
+    writer.particles_pvd[t] = vtp
 
-    pvd_particles = paraview_collection(particles_pvd; append=!overwrite)
-    pvd_particles[t] = vtp
-    WriteVTK.vtk_save(pvd_particles)
+    return nothing
+end
+
+function _save_wake_vtk_writer!(writer::_WakeVTKWriterState)
+    WriteVTK.vtk_save(writer.panel_pvd)
+    WriteVTK.vtk_save(writer.particles_pvd)
+    return nothing
+end
+
+function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; overwrite::Bool=false)
+    writer = _init_wake_vtk_writer(name; overwrite)
+    _append_wake_vtk!(writer, wake, idx, t)
+    _save_wake_vtk_writer!(writer)
 
     return nothing
 end

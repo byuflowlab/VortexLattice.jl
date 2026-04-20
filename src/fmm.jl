@@ -1,5 +1,13 @@
 #------- FastMultipole compatibility functions for System -------#
 
+"""
+    fmm(; kwargs...)
+
+Convenience constructor for `FLOWVPM.FMM` so callers can configure the FMM
+through `VortexLattice` without importing `FLOWVPM` directly.
+"""
+fmm(; kwargs...) = FLOWVPM.FMM(; kwargs...)
+
 # function vlm_to_fmm_index(system::System, i_surf, i, j)
 #     surfaces = system.surfaces
 #     n = 0
