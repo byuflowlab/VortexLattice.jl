@@ -108,7 +108,7 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
-    probes::FastMultipole.ProbeSystem{TF}
+    probes::FastMultipole.ProbeSystemStatic{TF}
     core_size::TF
 end
 

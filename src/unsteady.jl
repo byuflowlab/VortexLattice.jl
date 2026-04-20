@@ -297,9 +297,6 @@ function simulate!(system::System, wake::PanelParticleWake,
     trailing_edge_filaments = PanelBufferFilaments(wake)
 
     # persistent VTK writers avoid reopening/parsing PVD files every step
-    bodies_writer = isnothing(path) ? nothing : _init_system_vtk_writer(joinpath(path, name * "_bodies"); overwrite=true)
-    wake_writer = isnothing(path) ? nothing : _init_wake_vtk_writer(joinpath(path, name * "_wake"); overwrite=true)
-
     # constant system params
     symmetric = system.symmetric
     surface_id = system.surface_id
@@ -459,8 +456,8 @@ function simulate!(system::System, wake::PanelParticleWake,
         #------- save state + monitors -------#
 
         if !isnothing(path)
-            _append_system_vtk!(bodies_writer, system, i_step, t)
-            _append_wake_vtk!(wake_writer, wake, i_step, t)
+            write_vtk(joinpath(path, name * "_bodies"), system, i_step, t; overwrite=i_step==0)
+            write_vtk(joinpath(path, name * "_wake"), wake, i_step, t; overwrite=i_step==0)
         end
 
         for monitor in monitors
@@ -515,11 +512,6 @@ function simulate!(system::System, wake::PanelParticleWake,
         end
 
         i_step += 1
-    end
-
-    if !isnothing(path)
-        _save_system_vtk_writer!(bodies_writer)
-        _save_wake_vtk_writer!(wake_writer)
     end
 
     return wake

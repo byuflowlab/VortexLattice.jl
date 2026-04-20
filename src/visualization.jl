@@ -282,6 +282,9 @@ mutable struct _WakeVTKWriterState
     panel_block_name::String
     particles_pvd
     particles_block::String
+    particle_cells
+    particle_empty_points
+    particle_empty_cells
 end
 
 function _init_wake_vtk_writer(name::String; overwrite::Bool=false)
@@ -297,7 +300,12 @@ function _init_wake_vtk_writer(name::String; overwrite::Bool=false)
     particles_block = joinpath(particles_pvd_name, _base * "_particles")
     particles_pvd = paraview_collection(particles_pvd_name; append=!overwrite)
 
-    return _WakeVTKWriterState(panel_pvd, panel_block_name, particles_pvd, particles_block)
+    particle_cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:1)]
+    particle_empty_points = zeros(Float64, 3, 0)
+    particle_empty_cells = Vector{WriteVTK.MeshCell{WriteVTK.PolyData.Verts, UnitRange{Int}}}()
+
+    return _WakeVTKWriterState(panel_pvd, panel_block_name, particles_pvd, particles_block,
+        particle_cells, particle_empty_points, particle_empty_cells)
 end
 
 function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake, idx::Int, t::Real)
@@ -314,7 +322,8 @@ function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake,
     # particle wake
     np = wake.pfield.np
     X = view(wake.pfield.particles, FLOWVPM.X_INDEX, 1:np)
-    cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:max(np, 1))]
+    cells = writer.particle_cells
+    cells[1] = WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:max(np, 1))
 
     vtp_filename = writer.particles_block * "_$idx.vtp"
     if np > 0
@@ -325,12 +334,9 @@ function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake,
         vtp["circulation", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.CIRCULATION_INDEX, 1:np)
         vtp["velocity", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.U_INDEX, 1:np)
         vtp["vorticity", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.VORTICITY_INDEX, 1:np)
-        vtp["velocity_gradient", WriteVTK.VTKPointData()] =
-            reshape(view(wake.pfield.particles, FLOWVPM.J_INDEX, 1:np), 3, 3, np)
+        vtp["velocity_gradient", WriteVTK.VTKPointData()] = view(wake.pfield.particles, FLOWVPM.J_INDEX, 1:np)
     else
-        X_empty = zeros(eltype(wake.pfield.particles), 3, 0)
-        vtp = WriteVTK.vtk_grid(vtp_filename, X_empty,
-            Vector{WriteVTK.MeshCell{WriteVTK.PolyData.Verts, UnitRange{Int}}}())
+        vtp = WriteVTK.vtk_grid(vtp_filename, writer.particle_empty_points, writer.particle_empty_cells)
     end
     writer.particles_pvd[t] = vtp
 
@@ -380,11 +386,18 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
     trailing_edge = true,
     xhat = SVector(1, 0, 0),
     wake_length = 10,
-    wake_circulation = zeros(size(surface, 2)),
-    metadata = Dict())
+    wake_circulation = nothing,
+    metadata = nothing)
 
     # get float type
     TF = eltype(eltype(surface))
+
+    # Precompute string keys once to avoid repeated per-block string allocations.
+    metadata_items = if isnothing(metadata)
+        nothing
+    else
+        [(string(key), value) for (key, value) in pairs(metadata)]
+    end
 
     # check to make sure `symmetric` is provided if `properties` is provided
     @assert !(!isnothing(properties) && isnothing(symmetric)) "Keyword argument `symmetric` is required when optional argument `properties` is provided"
@@ -424,6 +437,12 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
         ]) for j = 1:ns+1 for i = 1:nc]
 
     # now extract data (if applicable)
+    gamma_h_flat = nothing
+    v_h_flat = nothing
+    cf_h_flat = nothing
+    gamma_v_flat = nothing
+    cf_v_flat = nothing
+
     if !isnothing(properties)
         # horizontal bound vortex circulation strength
         gamma_h = Matrix{TF}(undef, nc, ns)
@@ -511,26 +530,35 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
                 cf_v[:,i,end] = properties[i,end].cfr
             end
         end
+
+        # Reuse flat views in VTK writes to avoid repeated reshape allocations.
+        gamma_h_flat = vec(gamma_h)
+        v_h_flat = reshape(v_h, 3, :)
+        cf_h_flat = reshape(cf_h, 3, :)
+        gamma_v_flat = vec(gamma_v)
+        cf_v_flat = reshape(cf_v, 3, :)
     end
 
     # horizontal bound vortices
     vtk_grid(vtmfile, points, lines_h) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
 
         if !isnothing(properties)
             # circulation strength
-            vtkfile["circulation"] = reshape(gamma_h, :)
+            vtkfile["circulation"] = gamma_h_flat
 
             # local velocity
-            vtkfile["velocity"] = reshape(v_h, 3, :)
+            vtkfile["velocity"] = v_h_flat
 
             # force coefficient
-            vtkfile["force"] = reshape(cf_h, 3, :)
+            vtkfile["force"] = cf_h_flat
         end
     end
 
@@ -538,16 +566,18 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
     vtk_grid(vtmfile, points, lines_v) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
         if !isnothing(properties)
             # circulation strength
-            vtkfile["circulation"] = reshape(gamma_v, :)
+            vtkfile["circulation"] = gamma_v_flat
 
             # force coefficient
-            vtkfile["force"] = reshape(cf_v, 3, :)
+            vtkfile["force"] = cf_v_flat
         end
     end
 
@@ -564,8 +594,10 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
     vtk_grid(vtmfile, points_cp, cells_cp) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
         # add normal
@@ -594,20 +626,17 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
 
         li = LinearIndices((2, ns+1))
 
-        # horizontal bound vortices
-        lines_h = [MeshCell(PolyData.Lines(), [li[1,j], li[1,j+1]]) for j = 1:ns]
-
-        # vertical bound vortices
-        lines_v = [MeshCell(PolyData.Lines(), [li[1,j], li[2,j]]) for j = 1:ns+1]
-
-        # combine
-        lines_t = vcat(lines_h, lines_v)
+        # trailing-edge and trailing-vortex line cells
+        lines_t = Vector{MeshCell}(undef, ns + (ns + 1))
+        for j = 1:ns
+            lines_t[j] = MeshCell(PolyData.Lines(), [li[1,j], li[1,j+1]])
+        end
+        for j = 1:ns+1
+            lines_t[ns + j] = MeshCell(PolyData.Lines(), [li[1,j], li[2,j]])
+        end
 
         # now extract data (if applicable)
         if !isnothing(properties)
-            # horizontal bound vortex circulation strength
-            gamma_h = zeros(ns)
-
             # vertical bound vortex circulation strength
             gamma_v = Vector{TF}(undef, ns+1)
             current_gamma = properties[end,1].gamma
@@ -640,8 +669,10 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
                 gamma_v[end] = previous_gamma
             end
 
-            # combine
-            gamma_t = vcat(gamma_h, gamma_v)
+            # combine without temporary vectors
+            gamma_t = Vector{TF}(undef, 2ns + 1)
+            fill!(view(gamma_t, 1:ns), zero(TF))
+            gamma_t[ns+1:end] .= gamma_v
         end
 
     else
@@ -667,7 +698,8 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
                     if symmetric && on_symmetry_plane(bottom_left(surface[end,j]), bottom_right(surface[end,j]))
                         gamma_t[j] = 0.0
                     else
-                        gamma_t[j] = wake_circulation[j] - properties[end,j].gamma
+                        wake_gamma = isnothing(wake_circulation) ? zero(TF) : wake_circulation[j]
+                        gamma_t[j] = wake_gamma - properties[end,j].gamma
                     end
                 end
             end
@@ -681,8 +713,10 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
         vtk_grid(vtmfile, points_t, lines_t) do vtkfile
 
             # add metadata
-            for (key, value) in pairs(metadata)
-                vtkfile[string(key)] = value
+            if !isnothing(metadata_items)
+                for (key, value) in metadata_items
+                    vtkfile[key] = value
+                end
             end
 
             if !isnothing(properties)
@@ -722,8 +756,8 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
     trailing_edge = true,
     xhat = SVector(1, 0, 0),
     wake_length = 10,
-    surface_circulation = zeros(size(wake, 2)),
-    metadata=Dict())
+    surface_circulation = nothing,
+    metadata = nothing)
 
     # do nothing if no wake panels are present
     if isempty(wake)
@@ -735,7 +769,12 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
 
     # get wake dimensions
     nc, ns = size(wake)
-    N = length(wake)
+    # Precompute string keys once to avoid repeated per-block string allocations.
+    metadata_items = if isnothing(metadata)
+        nothing
+    else
+        [(string(key), value) for (key, value) in pairs(metadata)]
+    end
 
     # extract geometry as a grid
     xyz = Array{TF, 4}(undef, 3, nc+1, ns+1, 1)
@@ -770,7 +809,7 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
     # horizontal bound vortex circulation strength
     gamma_h = Matrix{TF}(undef, nc, ns)
     for i in 1:nc, j = 1:ns
-        previous_gamma = i == 1 ? surface_circulation[j] : wake[i-1, j].gamma
+        previous_gamma = i == 1 ? (isnothing(surface_circulation) ? zero(TF) : surface_circulation[j]) : wake[i-1, j].gamma
         current_gamma = wake[i,j].gamma
         if symmetric && on_symmetry_plane(top_left(wake[nc, ns]), top_right(wake[nc, ns]))
             gamma_h[i,j] = 0.0
@@ -778,6 +817,8 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
             gamma_h[i,j] = current_gamma - previous_gamma
         end
     end
+
+    gamma_h_flat = vec(gamma_h)
 
     # vertical bound vortex circulation strength
     gamma_v = Matrix{TF}(undef, nc, ns+1)
@@ -805,28 +846,34 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
         end
     end
 
+    gamma_v_flat = vec(gamma_v)
+
     # horizontal bound vortices
     vtk_grid(vtmfile, points, lines_h) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
         # circulation strength
-        vtkfile["circulation"] = reshape(gamma_h, :)
+        vtkfile["circulation"] = gamma_h_flat
     end
 
     # vertical bound vortices
     vtk_grid(vtmfile, points, lines_v) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
         # circulation strength
-        vtkfile["circulation"] = reshape(gamma_v, :)
+        vtkfile["circulation"] = gamma_v_flat
     end
 
     if trailing_vortices || trailing_edge
@@ -846,17 +893,14 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
 
         li = LinearIndices((2, ns+1))
 
-        # horizontal bound vortices
-        lines_h = [MeshCell(PolyData.Lines(), [li[1,j], li[1,j+1]]) for j = 1:ns]
-
-        # vertical bound vortices
-        lines_v = [MeshCell(PolyData.Lines(), [li[1,j], li[2,j]]) for j = 1:ns+1]
-
-        # combine
-        lines_t = vcat(lines_h, lines_v)
-
-        # horizontal bound vortex circulation strength
-        gamma_h = zeros(ns)
+        # trailing-edge and trailing-vortex line cells
+        lines_t = Vector{MeshCell}(undef, ns + (ns + 1))
+        for j = 1:ns
+            lines_t[j] = MeshCell(PolyData.Lines(), [li[1,j], li[1,j+1]])
+        end
+        for j = 1:ns+1
+            lines_t[ns + j] = MeshCell(PolyData.Lines(), [li[1,j], li[2,j]])
+        end
 
         # vertical bound vortex circulation strength
         gamma_v = Vector{TF}(undef, ns+1)
@@ -877,13 +921,15 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
         end
         previous_gamma = current_gamma
         if symmetric && on_symmetry_plane(bottom_right(wake[end,end]))
-            gamma_v[j] = 0.0
+            gamma_v[end] = 0.0
         else
             gamma_v[end] = previous_gamma
         end
 
-        # combine
-        gamma_t = vcat(gamma_h, gamma_v)
+        # combine without temporary vectors
+        gamma_t = Vector{TF}(undef, 2ns + 1)
+        fill!(view(gamma_t, 1:ns), zero(TF))
+        gamma_t[ns+1:end] .= gamma_v
 
     else
 
@@ -913,12 +959,14 @@ function write_vtk!(vtmfile, wake::AbstractMatrix{<:WakePanel};
     vtk_grid(vtmfile, points_t, lines_t) do vtkfile
 
         # add metadata
-        for (key, value) in pairs(metadata)
-            vtkfile[string(key)] = value
+        if !isnothing(metadata_items)
+            for (key, value) in metadata_items
+                vtkfile[key] = value
+            end
         end
 
         # circulation strength
-        vtkfile["circulation"] = reshape(gamma_t, :)
+        vtkfile["circulation"] = gamma_t
     end
     end
 
