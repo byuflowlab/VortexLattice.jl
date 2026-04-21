@@ -9,6 +9,7 @@ using CCBlade
 using FastMultipole
 using FLOWVPM
 using DelimitedFiles
+using ReadVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -73,6 +74,7 @@ export generate_rotor
 
 include("visualization.jl")
 export write_vtk
+export write_restart_checkpoint, read_restart_checkpoint_info, restore_restart!
 
 include("fmm.jl")
 export fmm

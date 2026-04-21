@@ -1,6 +1,7 @@
 using Test
 using VortexLattice
 using LinearAlgebra
+using StaticArrays
 
 ztol = sqrt(eps())
 
@@ -1445,5 +1446,86 @@ end
 end
 
 #------- additional tests -------#
+
+@testset "PanelParticleWake Restart (Short)" begin
+    function _build_short_restart_case()
+        grid, ratios = wing_to_grid([0.0, 0.0], [-1.0, 1.0], [0.0, 0.0],
+            [1.0, 1.0], [0.0, 0.0], [0.0, 0.0], 2, 1;
+            mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+
+        system = System([grid]; nw=[2], ratios=[ratios])
+        system.reference[] = Reference(2.0, 1.0, 2.0, [0.0, 0.0, 0.0], 10.0)
+        system.freestream[] = Freestream(10.0, 0.0, 0.0, [0.0, 0.0, 0.0])
+
+        for isurf in eachindex(system.surfaces)
+            VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
+                ratios=system.ratios[isurf], fcore=(c, Δs) -> system.core_size)
+        end
+
+        frames = ReferenceFrame(system;
+            origin=SVector{3,Float64}(0.0, 0.0, 0.0),
+            v=SVector{3,Float64}(0.0, 0.0, 0.0),
+            ω_axis=SVector{3,Float64}(1.0, 0.0, 0.0),
+            ω=0.0,
+            R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0,
+                                     0.0, 1.0, 0.0,
+                                     0.0, 0.0, 1.0),
+            name="vehicle",
+            child_index=Int[],
+            dependent_index=collect(1:length(system.surfaces)))
+        maneuver!(frames, system, wake, t) = nothing
+        Uinf(t) = SVector{3,Float64}(10.0, 0.0, 0.0)
+        Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
+        t_range = collect(0.0:0.05:0.10)
+
+        return system, frames, maneuver!, Uinf, Ωinf, t_range
+    end
+
+    full_dir = mktempdir()
+    restart_dir = mktempdir()
+
+    system_full, frames_full, maneuver_full, Uinf_full, Ωinf_full, t_range = _build_short_restart_case()
+    wake_full = simulate!(system_full, frames_full, maneuver_full, Uinf_full, t_range, Ωinf_full;
+        wake_type=PanelParticleWake,
+        nwakerows=2,
+        max_particles=400,
+        eta=0.3,
+        method_trailing=OverlapPPS(1.3, 2),
+        method_unsteady=OverlapPPS(1.3, 2),
+        name="full_run",
+        path=full_dir,
+        verbose=false)
+
+    system_part, frames_part, maneuver_part, Uinf_part, Ωinf_part, _ = _build_short_restart_case()
+    simulate!(system_part, frames_part, maneuver_part, Uinf_part, t_range[1:2], Ωinf_part;
+        wake_type=PanelParticleWake,
+        nwakerows=2,
+        max_particles=400,
+        eta=0.3,
+        method_trailing=OverlapPPS(1.3, 2),
+        method_unsteady=OverlapPPS(1.3, 2),
+        name="restart_run",
+        path=restart_dir,
+        verbose=false)
+
+    system_restart, frames_restart, maneuver_restart, Uinf_restart, Ωinf_restart, _ = _build_short_restart_case()
+    wake_restart = simulate!(system_restart, frames_restart, maneuver_restart, Uinf_restart, t_range, Ωinf_restart;
+        wake_type=PanelParticleWake,
+        nwakerows=2,
+        max_particles=400,
+        eta=0.3,
+        method_trailing=OverlapPPS(1.3, 2),
+        method_unsteady=OverlapPPS(1.3, 2),
+        name="restart_run",
+        path=restart_dir,
+        restart_from=joinpath(restart_dir, "restart_run"),
+        restart_idx=1,
+        verbose=false)
+
+    @test wake_full.nwake == wake_restart.nwake
+    @test wake_full.overflowed[] == wake_restart.overflowed[]
+    @test wake_full.pfield.np == wake_restart.pfield.np
+    @test isapprox(system_full.Γ, system_restart.Γ; atol=0, rtol=0)
+end
 
 include("fmm_test.jl")

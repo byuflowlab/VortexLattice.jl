@@ -235,6 +235,405 @@ mutable struct _SystemVTKWriterState
     block_name::String
 end
 
+mutable struct _RestartCheckpointWriterState
+    dir::String
+    index_file::String
+end
+
+function _restart_checkpoint_prefix(name::String)
+    base = endswith(name, ".pvd") ? name[1:end-4] : name
+    if endswith(base, "_bodies")
+        return base[1:end-7]
+    end
+    return base
+end
+
+function _init_restart_checkpoint_writer(name::String; overwrite::Bool=false)
+    prefix = _restart_checkpoint_prefix(name)
+    dir = prefix * "_restart_vtk"
+    mkpath(dir)
+    index_file = joinpath(dir, "index.tsv")
+    if overwrite || !isfile(index_file)
+        open(index_file, "w") do io
+            println(io, "idx\ttime\tfile")
+        end
+    end
+    return _RestartCheckpointWriterState(dir, index_file)
+end
+
+function _flatten_reference_frames(frames::AbstractVector{<:ReferenceFrame}, TF)
+    nframes = length(frames)
+    frame_x = Vector{TF}(undef, 3nframes)
+    frame_v = Vector{TF}(undef, 3nframes)
+    frame_axis = Vector{TF}(undef, 3nframes)
+    frame_omega = Vector{TF}(undef, nframes)
+    frame_R = Vector{TF}(undef, 9nframes)
+    frame_Rp2g = Vector{TF}(undef, 9nframes)
+    for i in 1:nframes
+        i3 = 3(i - 1)
+        i9 = 9(i - 1)
+        frame = frames[i]
+        frame_x[i3+1:i3+3] .= frame.x
+        frame_v[i3+1:i3+3] .= frame.v
+        frame_axis[i3+1:i3+3] .= frame.ω_axis
+        frame_omega[i] = frame.ω
+        frame_R[i9+1:i9+9] .= vec(frame.R)
+        frame_Rp2g[i9+1:i9+9] .= vec(frame.Rp2g)
+    end
+    return frame_x, frame_v, frame_axis, frame_omega, frame_R, frame_Rp2g
+end
+
+function _flatten_wake_panels(wakes, TF)
+    dims = Vector{TF}(undef, 2length(wakes))
+    n_panels = sum(length, wakes)
+    rtl = Vector{TF}(undef, 3n_panels)
+    rtr = Vector{TF}(undef, 3n_panels)
+    rbl = Vector{TF}(undef, 3n_panels)
+    rbr = Vector{TF}(undef, 3n_panels)
+    core = Vector{TF}(undef, n_panels)
+    gamma = Vector{TF}(undef, n_panels)
+    ip = 0
+    for isurf in eachindex(wakes)
+        wake = wakes[isurf]
+        nr, ns = size(wake)
+        dims[2isurf-1] = nr
+        dims[2isurf] = ns
+        for j in 1:ns, i in 1:nr
+            ip += 1
+            i3 = 3(ip - 1)
+            panel = wake[i, j]
+            rtl[i3+1:i3+3] .= panel.rtl
+            rtr[i3+1:i3+3] .= panel.rtr
+            rbl[i3+1:i3+3] .= panel.rbl
+            rbr[i3+1:i3+3] .= panel.rbr
+            core[ip] = panel.core_size
+            gamma[ip] = panel.gamma
+        end
+    end
+    return dims, rtl, rtr, rbl, rbr, core, gamma
+end
+
+function _flatten_wsl(wsl, TF)
+    dims = Vector{TF}(undef, length(wsl))
+    npts = sum(length, wsl)
+    data = Vector{TF}(undef, 3npts)
+    ip = 0
+    for isurf in eachindex(wsl)
+        dims[isurf] = length(wsl[isurf])
+        for p in wsl[isurf]
+            ip += 1
+            i3 = 3(ip - 1)
+            data[i3+1:i3+3] .= p
+        end
+    end
+    return dims, data
+end
+
+function _flatten_wake_velocities(wake_velocities, TF)
+    dims = Vector{TF}(undef, 2length(wake_velocities))
+    npts = 0
+    for V in wake_velocities
+        npts += length(V)
+    end
+    data = Vector{TF}(undef, 3npts)
+    ip = 0
+    for isurf in eachindex(wake_velocities)
+        V = wake_velocities[isurf]
+        nr, ns = size(V)
+        dims[2isurf-1] = nr
+        dims[2isurf] = ns
+        for j in 1:ns, i in 1:nr
+            ip += 1
+            i3 = 3(ip - 1)
+            data[i3+1:i3+3] .= V[i, j]
+        end
+    end
+    return dims, data
+end
+
+function _flatten_grids(grids, TF)
+    dims = Vector{TF}(undef, 3length(grids))
+    nvals = 0
+    for grid in grids
+        nvals += length(grid)
+    end
+    data = Vector{TF}(undef, nvals)
+    i0 = 0
+    for isurf in eachindex(grids)
+        grid = grids[isurf]
+        n1, n2, n3 = size(grid)
+        dims[3isurf-2] = n1
+        dims[3isurf-1] = n2
+        dims[3isurf] = n3
+        n = length(grid)
+        data[i0+1:i0+n] .= vec(grid)
+        i0 += n
+    end
+    return dims, data
+end
+
+function _append_restart_checkpoint!(writer::_RestartCheckpointWriterState, idx::Int, t::Real,
+        system::System, wake::PanelParticleWake, frames::AbstractVector)
+    TF = eltype(system.Γ)
+    fname = "restart_" * lpad(string(idx), 8, '0') * ".vtp"
+    fpath = joinpath(writer.dir, fname)
+
+    fs = system.freestream[]
+    frame_x, frame_v, frame_axis, frame_omega, frame_R, frame_Rp2g =
+        _flatten_reference_frames(frames, TF)
+    wake_dims, wake_rtl, wake_rtr, wake_rbl, wake_rbr, wake_core, wake_gamma =
+        _flatten_wake_panels(wake.wakes, TF)
+    wsl_dims, wsl_data = _flatten_wsl(wake.wake_shedding_locations, TF)
+    wake_vel_dims, wake_vel_data = _flatten_wake_velocities(wake.wake_velocities, TF)
+    grid_dims, grid_data = _flatten_grids(system.grids, TF)
+    prev_bottom_gamma = vcat((copy(g) for g in wake.prev_bottom_gamma)...)
+    np = wake.pfield.np
+    pfield_particles = vec(copy(view(wake.pfield.particles, :, 1:np)))
+    pfield_dims = TF[size(wake.pfield.particles, 1), np]
+    pfield_time = TF[wake.pfield.t, wake.pfield.nt]
+
+    points = zeros(TF, 3, 1)
+    cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:1)]
+    vtk_grid(fpath[1:end-4], points, cells) do vtkfile
+        vtkfile["restart_idx", WriteVTK.VTKFieldData()] = TF[idx]
+        vtkfile["restart_time", WriteVTK.VTKFieldData()] = TF[t]
+        vtkfile["freestream", WriteVTK.VTKFieldData()] = TF[fs.Vinf, fs.alpha, fs.beta, fs.Omega[1], fs.Omega[2], fs.Omega[3]]
+        vtkfile["Gamma", WriteVTK.VTKFieldData()] = copy(system.Γ)
+        vtkfile["dGamma_dt", WriteVTK.VTKFieldData()] = copy(system.dΓdt)
+        vtkfile["nwake_active", WriteVTK.VTKFieldData()] = TF.(wake.nwake)
+        vtkfile["wake_overflowed", WriteVTK.VTKFieldData()] = TF[wake.overflowed[] ? 1 : 0]
+        vtkfile["prev_bottom_gamma", WriteVTK.VTKFieldData()] = prev_bottom_gamma
+        vtkfile["frame_count", WriteVTK.VTKFieldData()] = TF[length(frames)]
+        vtkfile["frame_x", WriteVTK.VTKFieldData()] = frame_x
+        vtkfile["frame_v", WriteVTK.VTKFieldData()] = frame_v
+        vtkfile["frame_omega_axis", WriteVTK.VTKFieldData()] = frame_axis
+        vtkfile["frame_omega", WriteVTK.VTKFieldData()] = frame_omega
+        vtkfile["frame_R", WriteVTK.VTKFieldData()] = frame_R
+        vtkfile["frame_Rp2g", WriteVTK.VTKFieldData()] = frame_Rp2g
+        vtkfile["wake_dims", WriteVTK.VTKFieldData()] = wake_dims
+        vtkfile["wake_rtl", WriteVTK.VTKFieldData()] = wake_rtl
+        vtkfile["wake_rtr", WriteVTK.VTKFieldData()] = wake_rtr
+        vtkfile["wake_rbl", WriteVTK.VTKFieldData()] = wake_rbl
+        vtkfile["wake_rbr", WriteVTK.VTKFieldData()] = wake_rbr
+        vtkfile["wake_core", WriteVTK.VTKFieldData()] = wake_core
+        vtkfile["wake_gamma", WriteVTK.VTKFieldData()] = wake_gamma
+        vtkfile["wsl_dims", WriteVTK.VTKFieldData()] = wsl_dims
+        vtkfile["wake_shedding_locations", WriteVTK.VTKFieldData()] = wsl_data
+        vtkfile["wake_vel_dims", WriteVTK.VTKFieldData()] = wake_vel_dims
+        vtkfile["wake_velocities", WriteVTK.VTKFieldData()] = wake_vel_data
+        vtkfile["grid_dims", WriteVTK.VTKFieldData()] = grid_dims
+        vtkfile["grid_data", WriteVTK.VTKFieldData()] = grid_data
+        vtkfile["pfield_dims", WriteVTK.VTKFieldData()] = pfield_dims
+        vtkfile["pfield_time", WriteVTK.VTKFieldData()] = pfield_time
+        vtkfile["pfield_particles", WriteVTK.VTKFieldData()] = pfield_particles
+    end
+
+    open(writer.index_file, "a") do io
+        println(io, "$(idx)\t$(t)\t$(fname)")
+    end
+    return nothing
+end
+
+"""
+    write_restart_checkpoint(name, idx, t, system, wake, frames; overwrite=false)
+
+Write a full VTK restart checkpoint that can be resumed later with
+[`restore_restart!`](@ref).
+"""
+function write_restart_checkpoint(name::String, idx::Int, t::Real,
+        system::System, wake::PanelParticleWake, frames::AbstractVector;
+        overwrite::Bool=false)
+    writer = _init_restart_checkpoint_writer(name; overwrite)
+    _append_restart_checkpoint!(writer, idx, t, system, wake, frames)
+    return nothing
+end
+
+function _latest_restart_checkpoint_entry(index_file::String)
+    lines = readlines(index_file)
+    length(lines) <= 1 && error("No restart checkpoint entries found in $(index_file)")
+    entry = split(lines[end], '\t')
+    length(entry) == 3 || error("Malformed restart checkpoint index entry: $(lines[end])")
+    return (idx=parse(Int, entry[1]), t=parse(Float64, entry[2]), file=entry[3])
+end
+
+function _find_restart_checkpoint_entry(index_file::String, idx::Int)
+    for line in Iterators.drop(eachline(index_file), 1)
+        entry = split(line, '\t')
+        length(entry) == 3 || continue
+        if parse(Int, entry[1]) == idx
+            return (idx=idx, t=parse(Float64, entry[2]), file=entry[3])
+        end
+    end
+    error("Restart checkpoint entry not found for idx=$(idx) in $(index_file)")
+end
+
+function _restart_getdata(field_data, key::String)
+    haskey(field_data, key) || error("Missing restart checkpoint field: $(key)")
+    value = field_data[key]
+    return value isa ReadVTK.VTKDataArray ? ReadVTK.get_data(value) : value
+end
+
+"""
+    read_restart_checkpoint_info(name; idx=nothing)
+
+Read a VTK restart checkpoint and return `(idx, t, data)`.
+"""
+function read_restart_checkpoint_info(name::String; idx::Union{Nothing,Int}=nothing)
+    prefix = _restart_checkpoint_prefix(name)
+    dir = prefix * "_restart_vtk"
+    index_file = joinpath(dir, "index.tsv")
+    isfile(index_file) || error("Restart checkpoint index not found: $(index_file)")
+
+    entry = isnothing(idx) ? _latest_restart_checkpoint_entry(index_file) :
+        _find_restart_checkpoint_entry(index_file, idx)
+    fpath = joinpath(dir, entry.file)
+    isfile(fpath) || error("Restart checkpoint file not found: $(fpath)")
+
+    vtk = ReadVTK.VTKFile(fpath)
+    field_data = ReadVTK.get_field_data(vtk)
+    data = Dict{String,Any}()
+    for (key, value) in field_data
+        data[key] = ReadVTK.get_data(value)
+    end
+
+    return (idx=entry.idx, t=entry.t, data=data)
+end
+
+"""
+    restore_restart!(system, wake, frames, name; idx=nothing)
+
+Load a VTK restart checkpoint and apply it in one call. Returns `(idx, t)` for
+the resolved restart step.
+"""
+function restore_restart!(system::System{TF}, wake::PanelParticleWake{TF},
+        frames::AbstractVector{<:ReferenceFrame{TF}}, name::String;
+        idx::Union{Nothing,Int}=nothing) where TF
+    info = read_restart_checkpoint_info(name; idx)
+    data = info.data
+
+    fs = TF.(_restart_getdata(data, "freestream"))
+    system.freestream[] = Freestream(fs[1], fs[2], fs[3], SVector{3,TF}(fs[4], fs[5], fs[6]))
+    system.Γ .= TF.(_restart_getdata(data, "Gamma"))
+    system.dΓdt .= TF.(_restart_getdata(data, "dGamma_dt"))
+
+    wake.nwake .= Int.(round.(TF.(_restart_getdata(data, "nwake_active"))))
+    wake.overflowed[] = Int(round(TF(_restart_getdata(data, "wake_overflowed")[1]))) != 0
+
+    prev = TF.(_restart_getdata(data, "prev_bottom_gamma"))
+    i0 = 0
+    for isurf in eachindex(wake.prev_bottom_gamma)
+        n = length(wake.prev_bottom_gamma[isurf])
+        wake.prev_bottom_gamma[isurf] .= view(prev, i0+1:i0+n)
+        i0 += n
+    end
+
+    nframes = Int(round(TF(_restart_getdata(data, "frame_count")[1])))
+    nframes == length(frames) || error("Frame count mismatch during restart restore")
+    frame_x = TF.(_restart_getdata(data, "frame_x"))
+    frame_v = TF.(_restart_getdata(data, "frame_v"))
+    frame_axis = TF.(_restart_getdata(data, "frame_omega_axis"))
+    frame_omega = TF.(_restart_getdata(data, "frame_omega"))
+    frame_R = TF.(_restart_getdata(data, "frame_R"))
+    frame_Rp2g = TF.(_restart_getdata(data, "frame_Rp2g"))
+    for i in 1:nframes
+        i3 = 3(i - 1)
+        i9 = 9(i - 1)
+        frame_old = frames[i]
+        x = SVector{3,TF}(view(frame_x, i3+1:i3+3))
+        v = SVector{3,TF}(view(frame_v, i3+1:i3+3))
+        omega_axis = SVector{3,TF}(view(frame_axis, i3+1:i3+3))
+        omega = frame_omega[i]
+        R = SMatrix{3,3,TF,9}(Tuple(view(frame_R, i9+1:i9+9)))
+        Rp2g = SMatrix{3,3,TF,9}(Tuple(view(frame_Rp2g, i9+1:i9+9)))
+        frames[i] = ReferenceFrame(x, v, omega_axis, omega, R, Rp2g,
+            frame_old.name, frame_old.parent_index, frame_old.child_index, frame_old.dependent_index)
+    end
+
+    wake_dims = Int.(round.(TF.(_restart_getdata(data, "wake_dims"))))
+    rtl = TF.(_restart_getdata(data, "wake_rtl"))
+    rtr = TF.(_restart_getdata(data, "wake_rtr"))
+    rbl = TF.(_restart_getdata(data, "wake_rbl"))
+    rbr = TF.(_restart_getdata(data, "wake_rbr"))
+    core = TF.(_restart_getdata(data, "wake_core"))
+    gamma = TF.(_restart_getdata(data, "wake_gamma"))
+    ip = 0
+    for isurf in eachindex(wake.wakes)
+        nr = wake_dims[2isurf-1]
+        ns = wake_dims[2isurf]
+        size(wake.wakes[isurf]) == (nr, ns) || error("Wake shape mismatch during restart restore")
+        for j in 1:ns, i in 1:nr
+            ip += 1
+            i3 = 3(ip - 1)
+            wake.wakes[isurf][i, j] = WakePanel{TF}(
+                SVector{3,TF}(view(rtl, i3+1:i3+3)),
+                SVector{3,TF}(view(rtr, i3+1:i3+3)),
+                SVector{3,TF}(view(rbl, i3+1:i3+3)),
+                SVector{3,TF}(view(rbr, i3+1:i3+3)),
+                core[ip], gamma[ip])
+        end
+    end
+
+    wsl_dims = Int.(round.(TF.(_restart_getdata(data, "wsl_dims"))))
+    wsl_data = TF.(_restart_getdata(data, "wake_shedding_locations"))
+    ip = 0
+    for isurf in eachindex(wake.wake_shedding_locations)
+        n = wsl_dims[isurf]
+        length(wake.wake_shedding_locations[isurf]) == n || error("Wake shedding shape mismatch during restart restore")
+        for i in 1:n
+            ip += 1
+            i3 = 3(ip - 1)
+            wake.wake_shedding_locations[isurf][i] = SVector{3,TF}(view(wsl_data, i3+1:i3+3))
+        end
+    end
+
+    wake_vel_dims = Int.(round.(TF.(_restart_getdata(data, "wake_vel_dims"))))
+    wake_vel_data = TF.(_restart_getdata(data, "wake_velocities"))
+    ip = 0
+    for isurf in eachindex(wake.wake_velocities)
+        nr = wake_vel_dims[2isurf-1]
+        ns = wake_vel_dims[2isurf]
+        size(wake.wake_velocities[isurf]) == (nr, ns) || error("Wake velocity shape mismatch during restart restore")
+        for j in 1:ns, i in 1:nr
+            ip += 1
+            i3 = 3(ip - 1)
+            wake.wake_velocities[isurf][i, j] = SVector{3,TF}(view(wake_vel_data, i3+1:i3+3))
+        end
+    end
+
+    grid_dims = Int.(round.(TF.(_restart_getdata(data, "grid_dims"))))
+    grid_data = TF.(_restart_getdata(data, "grid_data"))
+    i0 = 0
+    for isurf in eachindex(system.grids)
+        n1 = grid_dims[3isurf-2]
+        n2 = grid_dims[3isurf-1]
+        n3 = grid_dims[3isurf]
+        size(system.grids[isurf]) == (n1, n2, n3) || error("Grid shape mismatch during restart restore")
+        n = n1 * n2 * n3
+        system.grids[isurf] .= reshape(view(grid_data, i0+1:i0+n), n1, n2, n3)
+        i0 += n
+        update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
+            ratios=system.ratios[isurf],
+            fcore=(c, Δs) -> system.core_size)
+    end
+
+    pfield_dims = Int.(round.(TF.(_restart_getdata(data, "pfield_dims"))))
+    pfield_time = TF.(_restart_getdata(data, "pfield_time"))
+    pfield_particles = TF.(_restart_getdata(data, "pfield_particles"))
+    nrows = pfield_dims[1]
+    np = pfield_dims[2]
+    size(wake.pfield.particles, 1) == nrows || error("Particle buffer row count mismatch during restart restore")
+    np <= size(wake.pfield.particles, 2) || error("Particle buffer overflow during restart restore")
+    wake.pfield.particles[:, :] .= zero(TF)
+    if np > 0
+        wake.pfield.particles[:, 1:np] .= reshape(pfield_particles, nrows, np)
+    end
+    wake.pfield.np = np
+    wake.pfield.t = pfield_time[1]
+    wake.pfield.nt = Int(round(pfield_time[2]))
+
+    return (idx=info.idx, t=info.t)
+end
+
 function _init_system_vtk_writer(name::String; overwrite::Bool=false)
     _parent, _base = splitdir(name)
     subdir = joinpath(_parent, _base)
@@ -244,13 +643,14 @@ function _init_system_vtk_writer(name::String; overwrite::Bool=false)
     return _SystemVTKWriterState(pvd, block_name)
 end
 
-function _append_system_vtk!(writer::_SystemVTKWriterState, system::System, idx::Int, t::Real)
+function _append_system_vtk!(writer::_SystemVTKWriterState, system::System, idx::Int, t::Real; metadata=nothing)
     vtm = vtk_multiblock(writer.block_name * "_$idx.vtm")
     for i = 1:length(system.surfaces)
         write_vtk!(vtm, system.surfaces[i], system.properties[i];
             trailing_edge = true,
             trailing_vortices = false,
-            symmetric = system.symmetric[i])
+            symmetric = system.symmetric[i],
+            metadata = metadata)
     end
     writer.pvd[t] = vtm
     return nothing
@@ -261,9 +661,9 @@ function _save_system_vtk_writer!(writer::_SystemVTKWriterState)
     return nothing
 end
 
-function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false)
+function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false, metadata=nothing)
     writer = _init_system_vtk_writer(name; overwrite)
-    _append_system_vtk!(writer, system, idx, t)
+    _append_system_vtk!(writer, system, idx, t; metadata)
     _save_system_vtk_writer!(writer)
 
     return nothing
@@ -308,14 +708,14 @@ function _init_wake_vtk_writer(name::String; overwrite::Bool=false)
         particle_cells, particle_empty_points, particle_empty_cells)
 end
 
-function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake, idx::Int, t::Real)
+function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake, idx::Int, t::Real; metadata=nothing)
     # panel wake
     vtm = vtk_multiblock(writer.panel_block_name * "_$idx.vtm")
     for i = 1:length(wake.wakes)
         n = wake.nwake[i]
         n == 0 && continue
         wake_view = view(wake.wakes[i], 1:n, :)
-        write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false)
+        write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false, metadata=metadata)
     end
     writer.panel_pvd[t] = vtm
 
@@ -338,6 +738,7 @@ function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake,
     else
         vtp = WriteVTK.vtk_grid(vtp_filename, writer.particle_empty_points, writer.particle_empty_cells)
     end
+
     writer.particles_pvd[t] = vtp
 
     return nothing
@@ -349,9 +750,9 @@ function _save_wake_vtk_writer!(writer::_WakeVTKWriterState)
     return nothing
 end
 
-function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; overwrite::Bool=false)
+function write_vtk(name::String, wake::PanelParticleWake, idx::Int, t::Real; overwrite::Bool=false, metadata=nothing)
     writer = _init_wake_vtk_writer(name; overwrite)
-    _append_wake_vtk!(writer, wake, idx, t)
+    _append_wake_vtk!(writer, wake, idx, t; metadata)
     _save_wake_vtk_writer!(writer)
 
     return nothing

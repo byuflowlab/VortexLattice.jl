@@ -260,6 +260,54 @@ function Base.isnan(val::SVector{N,TF}) where {N,TF}
     return any(isnan.(val))
 end
 
+function _step_metadata(system::System, wake::PanelParticleWake,
+        frames::AbstractVector{<:ReferenceFrame}, i_step::Int, t::Real)
+    fs = system.freestream[]
+    nframes = length(frames)
+
+    frame_x = Vector{eltype(system.Γ)}(undef, 3nframes)
+    frame_v = Vector{eltype(system.Γ)}(undef, 3nframes)
+    frame_axis = Vector{eltype(system.Γ)}(undef, 3nframes)
+    frame_omega = Vector{eltype(system.Γ)}(undef, nframes)
+    frame_R = Vector{eltype(system.Γ)}(undef, 9nframes)
+    frame_Rp2g = Vector{eltype(system.Γ)}(undef, 9nframes)
+
+    for i in 1:nframes
+        i3 = 3(i - 1)
+        i9 = 9(i - 1)
+        frame = frames[i]
+        frame_x[i3+1:i3+3] .= frame.x
+        frame_v[i3+1:i3+3] .= frame.v
+        frame_axis[i3+1:i3+3] .= frame.ω_axis
+        frame_omega[i] = frame.ω
+        frame_R[i9+1:i9+9] .= vec(frame.R)
+        frame_Rp2g[i9+1:i9+9] .= vec(frame.Rp2g)
+    end
+
+    prev_bottom_gamma = vcat((copy(g) for g in wake.prev_bottom_gamma)...)
+
+    return Dict(
+        "restart_idx" => i_step,
+        "restart_time" => t,
+        "freestream_Vinf" => fs.Vinf,
+        "freestream_alpha" => fs.alpha,
+        "freestream_beta" => fs.beta,
+        "freestream_Omega" => collect(fs.Omega),
+        "nwake_active" => copy(wake.nwake),
+        "wake_overflowed" => wake.overflowed[] ? 1 : 0,
+        "prev_bottom_gamma" => prev_bottom_gamma,
+        "Gamma" => copy(system.Γ),
+        "dGamma_dt" => copy(system.dΓdt),
+        "frame_count" => nframes,
+        "frame_x" => frame_x,
+        "frame_v" => frame_v,
+        "frame_omega_axis" => frame_axis,
+        "frame_omega" => frame_omega,
+        "frame_R" => frame_R,
+        "frame_Rp2g" => frame_Rp2g,
+    )
+end
+
 """
     simulate!(system::System, wake::PanelParticleWake, frames, maneuver!, Vinf, t_range,
               Ωinf=(t)->SVector{3}(0,0,0); kwargs...)
@@ -278,6 +326,8 @@ function simulate!(system::System, wake::PanelParticleWake,
         monitors=(),
         calculate_influence_matrix=true,
         polars=nothing, frames_index=fill(-1, length(system.surfaces)),
+    restart_from::Union{Nothing,String}=nothing,
+    restart_idx::Union{Nothing,Int}=nothing,
         verbose=true,
     )
     # Validate wake configuration
@@ -286,6 +336,11 @@ function simulate!(system::System, wake::PanelParticleWake,
     # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
         mkpath(path)
+    end
+
+    restart_state = nothing
+    if !isnothing(restart_from)
+        restart_state = restore_restart!(system, wake, frames, restart_from; idx=restart_idx)
     end
 
     # unpack reference and storage for circulation bookkeeping
@@ -304,10 +359,20 @@ function simulate!(system::System, wake::PanelParticleWake,
     xhat = system.xhat[]
     symmetric .= false
 
+    body_name = isnothing(path) ? nothing : joinpath(path, name * "_bodies")
+    checkpoint_base = isnothing(path) ? name : joinpath(path, name)
+
+    if !isnothing(body_name) && isnothing(restart_state)
+        write_restart_checkpoint(checkpoint_base, 0, t_range[1], system, wake, frames; overwrite=true)
+    end
+
     # begin simulation
     i_step = 0
     println()
-    for t in t_range
+    start_step = isnothing(restart_state) ? 0 : restart_state.idx
+    for (it, t) in enumerate(t_range)
+        i_step = it - 1
+        i_step < start_step && continue
         verbose && println("\tstep $(i_step)/$(length(t_range)-1) at time $(t)")
 
         #------- reset system -------#
@@ -456,8 +521,13 @@ function simulate!(system::System, wake::PanelParticleWake,
         #------- save state + monitors -------#
 
         if !isnothing(path)
-            write_vtk(joinpath(path, name * "_bodies"), system, i_step, t; overwrite=i_step==0)
-            write_vtk(joinpath(path, name * "_wake"), wake, i_step, t; overwrite=i_step==0)
+            metadata = _step_metadata(system, wake, frames, i_step, t)
+            write_vtk(body_name, system, i_step, t;
+                overwrite=isnothing(restart_state) && i_step==0,
+                metadata)
+            write_vtk(joinpath(path, name * "_wake"), wake, i_step, t;
+                overwrite=isnothing(restart_state) && i_step==0,
+                metadata)
         end
 
         for monitor in monitors
@@ -509,6 +579,11 @@ function simulate!(system::System, wake::PanelParticleWake,
             end
         else
             shed_wake!(wake, system, dt, Γ_wake)
+        end
+
+        if !isnothing(body_name) && i_step < length(t_range) - 1
+            write_restart_checkpoint(checkpoint_base, i_step + 1, t_range[idx], system, wake, frames;
+                overwrite=false)
         end
 
         i_step += 1

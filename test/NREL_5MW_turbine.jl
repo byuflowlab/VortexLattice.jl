@@ -121,22 +121,22 @@ function main()
                 fmm_vehicle=fmm_vehicle,
             )
 
-    @profview wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-                wake_type=PanelParticleWake,
-                method_trailing=SigmaPPS(sigma, p_per_step),
-                method_unsteady=SigmaPPS(sigma, p_per_step),
-                eta=0.3,
-                # monitors,
-                name = "NREL5MW",
-                path = save_path,
-                derivatives=false,
-                polars,
-                frames_index=fill(1, length(system.surfaces)),
-                verbose=true,
-                max_particles=50000,
-                fmm_wake=fmm_wake,
-                fmm_vehicle=fmm_vehicle,
-            )
+    # @profview wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+    #             wake_type=PanelParticleWake,
+    #             method_trailing=SigmaPPS(sigma, p_per_step),
+    #             method_unsteady=SigmaPPS(sigma, p_per_step),
+    #             eta=0.3,
+    #             # monitors,
+    #             name = "NREL5MW",
+    #             path = save_path,
+    #             derivatives=false,
+    #             polars,
+    #             frames_index=fill(1, length(system.surfaces)),
+    #             verbose=true,
+    #             max_particles=50000,
+    #             fmm_wake=fmm_wake,
+    #             fmm_vehicle=fmm_vehicle,
+    #         )
     # RHO = 1
     # R = 63.0
     # r = 11.75
