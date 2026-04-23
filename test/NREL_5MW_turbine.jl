@@ -37,7 +37,7 @@ function main()
 
 
     core_size = 1e-3
-    nwakerows = 2
+    nwakerows = 1
     system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
     Sref = 1.0
@@ -75,7 +75,7 @@ function main()
 
     n_revs = 1
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 36
+    timestep_per_rev = 12
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     # t_range = range(start=0.0, stop=ttot/36, length=2)
     overlap = 1.3
@@ -111,32 +111,89 @@ function main()
                 eta=0.3,
                 # monitors,
                 name = "NREL5MW",
-                path = save_path,
+                path = nothing,
+                write_restart = false,
                 derivatives=false,
                 polars,
                 frames_index=fill(1, length(system.surfaces)),
-                verbose=true,
+                verbose=false,
                 max_particles=50000,
                 fmm_wake=fmm_wake,
                 fmm_vehicle=fmm_vehicle,
             )
 
-    # @profview wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-    #             wake_type=PanelParticleWake,
-    #             method_trailing=SigmaPPS(sigma, p_per_step),
-    #             method_unsteady=SigmaPPS(sigma, p_per_step),
-    #             eta=0.3,
-    #             # monitors,
-    #             name = "NREL5MW",
-    #             path = save_path,
-    #             derivatives=false,
-    #             polars,
-    #             frames_index=fill(1, length(system.surfaces)),
-    #             verbose=true,
-    #             max_particles=50000,
-    #             fmm_wake=fmm_wake,
-    #             fmm_vehicle=fmm_vehicle,
-    #         )
+    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+                wake_type=PanelParticleWake,
+                method_trailing=SigmaPPS(sigma, p_per_step),
+                method_unsteady=SigmaPPS(sigma, p_per_step),
+                eta=0.3,
+                # monitors,
+                name = "NREL5MW",
+                path = nothing,
+                write_restart = false,
+                derivatives=false,
+                polars,
+                frames_index=fill(1, length(system.surfaces)),
+                verbose=false,
+                max_particles=50000,
+                fmm_wake=fmm_wake,
+                fmm_vehicle=fmm_vehicle,
+            )
+
+    wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+                wake_type=PanelParticleWake,
+                method_trailing=SigmaPPS(sigma, p_per_step),
+                method_unsteady=SigmaPPS(sigma, p_per_step),
+                eta=0.3,
+                # monitors,
+                name = "NREL5MW",
+                path = save_path,
+                write_restart = true,
+                derivatives=false,
+                polars,
+                frames_index=fill(1, length(system.surfaces)),
+                verbose=false,
+                max_particles=50000,
+                fmm_wake=fmm_wake,
+                fmm_vehicle=fmm_vehicle,
+            )
+
+    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+                wake_type=PanelParticleWake,
+                method_trailing=SigmaPPS(sigma, p_per_step),
+                method_unsteady=SigmaPPS(sigma, p_per_step),
+                eta=0.3,
+                # monitors,
+                name = "NREL5MW",
+                path = save_path,
+                write_restart = true,
+                derivatives=false,
+                polars,
+                frames_index=fill(1, length(system.surfaces)),
+                verbose=false,
+                max_particles=50000,
+                fmm_wake=fmm_wake,
+                fmm_vehicle=fmm_vehicle,
+            )
+
+    @profview wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+                wake_type=PanelParticleWake,
+                method_trailing=SigmaPPS(sigma, p_per_step),
+                method_unsteady=SigmaPPS(sigma, p_per_step),
+                eta=0.3,
+                # monitors,
+                name = "NREL5MW",
+                path = save_path,
+                write_restart = true,
+                derivatives=false,
+                polars,
+                frames_index=fill(1, length(system.surfaces)),
+                verbose=false,
+                max_particles=50000,
+                fmm_wake=fmm_wake,
+                fmm_vehicle=fmm_vehicle,
+            )
+
     # RHO = 1
     # R = 63.0
     # r = 11.75
