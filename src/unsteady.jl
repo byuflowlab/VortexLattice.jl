@@ -486,6 +486,7 @@ function simulate!(system::System, wake::PanelParticleWake,
 
         #------- monitors -------#
 
+        system.near_field_analysis[] = true
         for monitor in monitors
             monitor(system, wake, i_step)
         end
@@ -811,6 +812,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
             # write_vtk(joinpath(path, name * "_filaments_step_$i_step"), trailing_edge_filaments)
         end
 
+        system.near_field_analysis[] = true
         for monitor in monitors
             monitor(system, wake, i_step)
         end

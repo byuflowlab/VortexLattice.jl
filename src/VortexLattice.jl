@@ -79,6 +79,10 @@ export write_restart_checkpoint, read_restart_checkpoint_info, restore_restart!
 include("fmm.jl")
 export fmm
 
+include("fluid_domain.jl")
+export FluidDomainMonitor
+export evaluate_fluid_domain!, evaluate_fluid_domain_from_restarts!
+
 include("viscous.jl")
 
 include("unsteady.jl")

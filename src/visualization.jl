@@ -305,10 +305,14 @@ struct _SurfaceVTKScratch{TF}
     normals::Matrix{TF}     # 3×(nc*ns)
     xyz_t::Matrix{TF}       # 3×2(ns+1), covers both trailing modes
     gamma_t::Vector{TF}     # 2ns+1, covers both trailing modes
+    gamma_hv::Vector{TF}    # nc*ns + nc*(ns+1)
+    cf_hv::Matrix{TF}       # 3 × (nc*ns + nc*(ns+1))
+    v_hv::Matrix{TF}        # 3 × (nc*ns + nc*(ns+1))
 end
 
 function _SurfaceVTKScratch(TF::Type, nc::Int, ns::Int)
     N = nc * ns
+    N_hv = N + nc * (ns + 1)
     _SurfaceVTKScratch{TF}(
         Array{TF,4}(undef, 3, nc+1, ns+1, 1),
         Matrix{TF}(undef, nc, ns),
@@ -320,6 +324,9 @@ function _SurfaceVTKScratch(TF::Type, nc::Int, ns::Int)
         Matrix{TF}(undef, 3, N),
         Matrix{TF}(undef, 3, 2*(ns+1)),
         Vector{TF}(undef, 2*ns+1),
+        Vector{TF}(undef, N_hv),
+        Matrix{TF}(undef, 3, N_hv),
+        Matrix{TF}(undef, 3, N_hv),
     )
 end
 
@@ -969,16 +976,14 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
     # convert grid to points
     points = reshape(xyz, 3, :)
 
-    # now extract bound vortex geometries
-    lines_h = _line_cells_h(nc, ns)
-    lines_v = _line_cells_v(nc, ns)
+    # bound vortex geometries (h+v merged)
+    lines_hv = _line_cells_hv(nc, ns)
+    n_h = nc * ns
+    n_v = nc * (ns + 1)
 
-    # now extract data (if applicable)
-    gamma_h_flat = nothing
-    v_h_flat = nothing
-    cf_h_flat = nothing
-    gamma_v_flat = nothing
-    cf_v_flat = nothing
+    gamma_hv_flat = nothing
+    cf_hv_flat = nothing
+    v_hv_flat = nothing
 
     if !isnothing(properties)
         gamma_h = isnothing(scratch) ? Matrix{TF}(undef, nc, ns) : scratch.gamma_h
@@ -1054,27 +1059,26 @@ function write_vtk!(vtmfile, surface::AbstractMatrix{<:SurfacePanel}, properties
             end
         end
 
-        gamma_h_flat = vec(gamma_h)
-        v_h_flat = reshape(v_h, 3, :)
-        cf_h_flat = reshape(cf_h, 3, :)
-        gamma_v_flat = vec(gamma_v)
-        cf_v_flat = reshape(cf_v, 3, :)
+        gamma_hv = isnothing(scratch) ? Vector{TF}(undef, n_h + n_v) : scratch.gamma_hv
+        cf_hv = isnothing(scratch) ? Matrix{TF}(undef, 3, n_h + n_v) : scratch.cf_hv
+        v_hv = isnothing(scratch) ? Matrix{TF}(undef, 3, n_h + n_v) : scratch.v_hv
+        copyto!(gamma_hv, 1, gamma_h, 1, n_h)
+        copyto!(gamma_hv, n_h + 1, gamma_v, 1, n_v)
+        copyto!(cf_hv, 1, cf_h, 1, 3 * n_h)
+        copyto!(cf_hv, 3 * n_h + 1, cf_v, 1, 3 * n_v)
+        copyto!(v_hv, 1, v_h, 1, 3 * n_h)
+        fill!(view(v_hv, :, n_h + 1:n_h + n_v), zero(TF))
+        gamma_hv_flat = gamma_hv
+        cf_hv_flat = cf_hv
+        v_hv_flat = v_hv
     end
 
-    # horizontal bound vortices
-    vtk_grid(vtmfile, points, lines_h) do vtkfile
+    # bound vortices (h+v merged)
+    vtk_grid(vtmfile, points, lines_hv) do vtkfile
         if !isnothing(properties)
-            vtkfile["circulation"] = gamma_h_flat
-            vtkfile["velocity"] = v_h_flat
-            vtkfile["force"] = cf_h_flat
-        end
-    end
-
-    # vertical bound vortices
-    vtk_grid(vtmfile, points, lines_v) do vtkfile
-        if !isnothing(properties)
-            vtkfile["circulation"] = gamma_v_flat
-            vtkfile["force"] = cf_v_flat
+            vtkfile["circulation"] = gamma_hv_flat
+            vtkfile["velocity"] = v_hv_flat
+            vtkfile["force"] = cf_hv_flat
         end
     end
 

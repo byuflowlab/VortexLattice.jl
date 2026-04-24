@@ -75,7 +75,7 @@ function main()
 
     n_revs = 1
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 12
+    timestep_per_rev = 36
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     # t_range = range(start=0.0, stop=ttot/36, length=2)
     overlap = 1.3
@@ -85,7 +85,17 @@ function main()
 
     monitor = VortexLattice.PanelForcesMonitor(length(t_range), system)
     monitor1 = VortexLattice.LiftingLineCoefficientsMonitor(length(t_range), system; normalized=false)
-    monitors = (monitor, monitor1)
+
+    fd_monitor = FluidDomainMonitor(
+        range(-R, 3R, step=R/2),   # x: upstream to 3 diameters downstream
+        range(-R, R,  step=R/2),   # y: ±1 radius
+        range(-R, R,  step=R/2);   # z: ±1 radius
+        vtk_interval = 5,
+        name = "fluid_domain",
+        path = joinpath(save_path, "fluid_domain"),
+    )
+
+    monitors = (monitor, monitor1, fd_monitor)
     Ωinf(_) = SVector{3,Float64}(0.0, 0.0, 0.0)
 
     fmm_wake = VortexLattice.fmm(;
@@ -145,7 +155,7 @@ function main()
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),
                 eta=0.3,
-                # monitors,
+                monitors,
                 name = "NREL5MW",
                 path = save_path,
                 write_restart = true,
@@ -163,25 +173,7 @@ function main()
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),
                 eta=0.3,
-                # monitors,
-                name = "NREL5MW",
-                path = save_path,
-                write_restart = true,
-                derivatives=false,
-                polars,
-                frames_index=fill(1, length(system.surfaces)),
-                verbose=false,
-                max_particles=50000,
-                fmm_wake=fmm_wake,
-                fmm_vehicle=fmm_vehicle,
-            )
-
-    @profview wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-                wake_type=PanelParticleWake,
-                method_trailing=SigmaPPS(sigma, p_per_step),
-                method_unsteady=SigmaPPS(sigma, p_per_step),
-                eta=0.3,
-                # monitors,
+                monitors,
                 name = "NREL5MW",
                 path = save_path,
                 write_restart = true,
