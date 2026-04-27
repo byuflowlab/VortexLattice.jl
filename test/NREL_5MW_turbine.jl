@@ -27,12 +27,12 @@ function main()
     ns = 20
     nc = 1
 
-    grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data_path; 
-                                                                turbine_flag=false, 
-                                                                clockwise=true, 
-                                                                ns, 
-                                                                nc, 
-                                                                spacing_s=Uniform(), 
+    grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data_path;
+                                                                turbine_flag=false,
+                                                                clockwise=true,
+                                                                ns,
+                                                                nc,
+                                                                spacing_s=Uniform(),
                                                                 interpolate_airfoils=true);
 
 
@@ -77,7 +77,6 @@ function main()
     ttot = n_revs / (RPM / 60)
     timestep_per_rev = 36
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
-    # t_range = range(start=0.0, stop=ttot/36, length=2)
     overlap = 1.3
     p_per_step = 2
     nsteps_per_rev = length(t_range) / n_revs
@@ -99,7 +98,7 @@ function main()
     Ωinf(_) = SVector{3,Float64}(0.0, 0.0, 0.0)
 
     fmm_wake = VortexLattice.fmm(;
-        p = 12,
+        p = 20,
         ncrit = 3,
         autotune_p = true,
         autotune_ncrit = true,
@@ -107,7 +106,7 @@ function main()
     )
 
     fmm_vehicle = VortexLattice.fmm(;
-        p = 12,
+        p = 20,
         ncrit = 3,
         autotune_p = true,
         autotune_ncrit = true,
@@ -119,92 +118,43 @@ function main()
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),
                 eta=0.3,
-                # monitors,
-                name = "NREL5MW",
-                path = nothing,
-                write_restart = false,
-                derivatives=false,
-                polars,
-                frames_index=fill(1, length(system.surfaces)),
-                verbose=false,
-                max_particles=50000,
-                fmm_wake=fmm_wake,
-                fmm_vehicle=fmm_vehicle,
-            )
-
-    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-                wake_type=PanelParticleWake,
-                method_trailing=SigmaPPS(sigma, p_per_step),
-                method_unsteady=SigmaPPS(sigma, p_per_step),
-                eta=0.3,
-                # monitors,
-                name = "NREL5MW",
-                path = nothing,
-                write_restart = false,
-                derivatives=false,
-                polars,
-                frames_index=fill(1, length(system.surfaces)),
-                verbose=false,
-                max_particles=50000,
-                fmm_wake=fmm_wake,
-                fmm_vehicle=fmm_vehicle,
-            )
-
-    wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-                wake_type=PanelParticleWake,
-                method_trailing=SigmaPPS(sigma, p_per_step),
-                method_unsteady=SigmaPPS(sigma, p_per_step),
-                eta=0.3,
                 monitors,
                 name = "NREL5MW",
-                path = save_path,
+                path = nothing,
                 write_restart = true,
                 derivatives=false,
                 polars,
                 frames_index=fill(1, length(system.surfaces)),
-                verbose=false,
+                verbose=true,
                 max_particles=50000,
                 fmm_wake=fmm_wake,
                 fmm_vehicle=fmm_vehicle,
             )
 
-    @time wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
-                wake_type=PanelParticleWake,
-                method_trailing=SigmaPPS(sigma, p_per_step),
-                method_unsteady=SigmaPPS(sigma, p_per_step),
-                eta=0.3,
-                monitors,
-                name = "NREL5MW",
-                path = save_path,
-                write_restart = true,
-                derivatives=false,
-                polars,
-                frames_index=fill(1, length(system.surfaces)),
-                verbose=false,
-                max_particles=50000,
-                fmm_wake=fmm_wake,
-                fmm_vehicle=fmm_vehicle,
-            )
+    # Normal force along the blade
+    RHO = 1.0
+    r_hub = 11.75
+    dr = (R - r_hub) / ns
+    x = r_hub .+ dr * (1:ns)
 
-    # RHO = 1
-    # R = 63.0
-    # r = 11.75
-    # dr = (R - r) / ns
-    # x = r .+ dr * (1:ns)
-    # p = plot()
-    # F_panel = monitors[1].CF[1,1,:,end-1] .* 0.5*RHO*Vinf^2 * ref.S ./ dr #Panel forces monitor
-    # F_lift = monitors[2].CF[1][1,:,end] #Lifting line monitor
-    # p = plot(x,F_panel, legend=true, xlabel="r (m)", ylabel="Force (N)",label="Panel forces")
-    # p = plot(p, x,F_lift, legend=true, xlabel="r (m)", ylabel="Force (N/m)",label="Lifting line forces")
-    # display(p)
+    # Panel forces: CF is (3, nc, ns, nt) — component 1 (axial/thrust), chordwise 1, all spans, last step
+    F_panel = monitors[1].CF[1, 1, :, end] .* (0.5 * RHO * ref.V^2 * ref.S / dr)
+    # Lifting line: normalized=false gives dimensional N/m
+    F_lift = monitors[2].CF[1][1, :, end]
 
-    # Calculate coefficient of thrust using trapz integration
-    # B = 3
-    # T_blade = trapz(x, F)
-    # T_total = B * T_blade
-    # q = 0.5 * rho * magVinf^2
-    # A_disk = pi * R^2
-    # CT = abs(T_total) / (q * A_disk)
-    # println("Turbine thrust coefficient (CT): $CT")
+    p = plot(x, F_panel; xlabel="r (m)", ylabel="Normal force (N/m)", label="Panel forces")
+    plot!(p, x, F_lift; label="Lifting line forces")
+    display(p)
+
+    # Coefficient of thrust vs time
+    B = 3
+    q = 0.5 * rho * magVinf^2
+    A_disk = pi * R^2
+    nt = length(t_range)
+    CT_time = [abs(B * FLOWMath.trapz(x, monitors[2].CF[1][1, :, it])) / (q * A_disk) for it in 1:nt]
+    println("Final CT: $(CT_time[end])")
+
+    p2 = plot(t_range, CT_time; xlabel="t (s)", ylabel="CT", label="CT")
+    display(p2)
 end
 main();

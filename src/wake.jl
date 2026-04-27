@@ -962,8 +962,7 @@ end
     update_TE!(w::PanelParticleWake, system::System)
 
 Snap the first row of wake panels to the current `wake_shedding_locations`,
-preserving the bottom edge, core size, and circulation of each panel. Mirrors
-FLOWPanel's `update_TE!`: a pure geometric alignment, freestream-independent.
+preserving the bottom edge, core size, and circulation of each panel.
 
 The freestream-based update of `wake_shedding_locations` itself lives in the
 propagate step (see `update_wake_shedding_locations_unsteady!`).
@@ -993,8 +992,7 @@ end
 Convect the wake forward by `dt`: translate active wake panels by their stored
 node velocities (`w.wake_velocities`) and advance the particle field using the
 selected `IntegrationScheme`. If `Vinf` is provided it is seeded onto every
-active particle via `apply_freestream!` before the integration step. Matches
-FLOWPanel's two-part `propagate!(PanelParticleWake, dt)`.
+active particle via `apply_freestream!` before the integration step.
 """
 function propagate!(w::PanelParticleWake, dt;
         scheme=EulerScheme(), Vinf=nothing, relax=true)

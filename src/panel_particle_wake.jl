@@ -290,7 +290,7 @@ an `SVector{3}`, tuple, or any 3-indexable.
 function apply_freestream!(w::PanelParticleWake, Vinf)
     np = FLOWVPM.get_np(w.pfield)
     @inbounds for p in 1:np, d in 1:3
-        w.pfield.particles[FLOWVPM.U_INDEX[d], p] = Vinf[d]
+        w.pfield.particles[FLOWVPM.U_INDEX[d], p] += Vinf[d]
     end
     return w
 end

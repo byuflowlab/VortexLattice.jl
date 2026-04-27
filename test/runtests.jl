@@ -1528,4 +1528,37 @@ end
     @test isapprox(system_full.Γ, system_restart.Γ; atol=0, rtol=0)
 end
 
+@testset "FluidDomainMonitor" begin
+    system_fd, frames_fd, maneuver_fd, Uinf_fd, Ωinf_fd, t_range_fd = _build_short_restart_case()
+    fd_dir = mktempdir()
+
+    wake_fd = simulate!(system_fd, frames_fd, maneuver_fd, Uinf_fd, t_range_fd, Ωinf_fd;
+        wake_type=PanelParticleWake,
+        nwakerows=2,
+        max_particles=400,
+        eta=0.3,
+        method_trailing=OverlapPPS(1.3, 2),
+        method_unsteady=OverlapPPS(1.3, 2),
+        name="fd_run",
+        path=fd_dir,
+        verbose=false)
+
+    # Coarse 3×3×3 grid: well upstream/downstream and off to the side
+    monitor_fd = FluidDomainMonitor(
+        [-5.0, 0.0, 5.0], [-1.0, 0.0, 1.0], [-1.0, 0.0, 1.0];
+        vtk_interval=0, name="fd_test", path=fd_dir)
+
+    evaluate_fluid_domain!(monitor_fd, system_fd, wake_fd)
+
+    # All values must be finite
+    @test all(isfinite(v[1]) && isfinite(v[2]) && isfinite(v[3])
+              for v in monitor_fd.velocity)
+    @test all(isfinite(v[1]) && isfinite(v[2]) && isfinite(v[3])
+              for v in monitor_fd.vorticity)
+
+    # Far upstream (x=-5, y=0, z=0) velocity x-component should be close to freestream (10 m/s)
+    Vinf_ref = 10.0
+    @test isapprox(monitor_fd.velocity[1, 2, 2][1], Vinf_ref; rtol=0.15)
+end
+
 include("fmm_test.jl")

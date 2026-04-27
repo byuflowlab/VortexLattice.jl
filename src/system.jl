@@ -181,15 +181,15 @@ Get the number of probes for the given surfaces.
 # Returns
 - Number of probes
 """
-function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}})
+function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}}, nw=zeros(Int, length(surfaces)))
     n = 0
-    for surface in surfaces
+    for (i, surface) in enumerate(surfaces)
         nc, ns = size(surface)
-        n += nc * ns # Vcp
-        n += (nc + 1) * ns # Vh
-        n += nc * (ns + 1) # Vv
-        n += ns + 1 # Vte
-        n += ns + 1 # V (just the first row of vertices)
+        n += nc * ns              # Vcp
+        n += (nc + 1) * ns       # Vh
+        n += nc * (ns + 1)       # Vv
+        n += ns + 1              # Vte
+        n += (nw[i] + 1) * (ns + 1)  # V (all allocated wake node rows)
     end
     return n
 end
@@ -261,7 +261,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     dΓdt = zeros(TF, N)
 
     # get number of probes
-    n_probes = get_n_probes(surfaces)
+    n_probes = get_n_probes(surfaces, nw)
     probes = FastMultipole.ProbeSystem(n_probes, TF)
 
     return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, 
@@ -327,24 +327,30 @@ function update_probes!(system::System{TF}) where TF
         i_probe += 1
     end
 
-    # V (just the first row of vertices); fall back to wake_shedding_locations
-    # when the buffer has no active rows (nwake==0 at simulation start)
+    # V (all allocated wake node rows; inactive rows fall back to wake_shedding_locations)
     for (k, wake) in enumerate(system.wakes)
         ns_k = size(wake, 2)
-        if size(wake, 1) > 0 && system.nwake[k] > 0
+        max_nw = size(wake, 1)
+        nwk = system.nwake[k]
+        wsl = system.wake_shedding_locations[k]
+        for i in 1:max_nw+1
             for j in 1:ns_k
-                system.probes.position[i_probe] = wake[1, j].rtl
+                if nwk > 0 && i <= nwk
+                    system.probes.position[i_probe] = wake[i, j].rtl
+                elseif nwk > 0 && i == nwk + 1
+                    system.probes.position[i_probe] = wake[nwk, j].rbl
+                else
+                    system.probes.position[i_probe] = wsl[j]
+                end
                 i_probe += 1
             end
-            system.probes.position[i_probe] = wake[1, end].rtr
-            i_probe += 1
-        else
-            wsl = system.wake_shedding_locations[k]
-            for j in 1:ns_k
-                system.probes.position[i_probe] = wsl[j]
-                i_probe += 1
+            if nwk > 0 && i <= nwk
+                system.probes.position[i_probe] = wake[i, end].rtr
+            elseif nwk > 0 && i == nwk + 1
+                system.probes.position[i_probe] = wake[nwk, end].rbr
+            else
+                system.probes.position[i_probe] = wsl[ns_k + 1]
             end
-            system.probes.position[i_probe] = wsl[ns_k + 1]
             i_probe += 1
         end
     end
@@ -421,20 +427,26 @@ function probes_to_surfaces!(system::System{TF}) where TF
         i_probe += 1
     end
 
-    # V (just the first row of vertices)
+    # V (all allocated wake node rows; only write to active rows)
     for i_surf in eachindex(system.wakes)
         wake = system.wakes[i_surf]
         V = system.V[i_surf]
-        for j in 1:size(wake, 2)
+        max_nw = size(wake, 1)
+        nwk = system.nwake[i_surf]
+        for i in 1:max_nw+1
+            for j in 1:size(wake, 2)
+                v = system.probes.gradient[i_probe]
+                if i <= nwk + 1
+                    V[i, j] += v
+                end
+                i_probe += 1
+            end
             v = system.probes.gradient[i_probe]
-            # @show v, system.probes.position[i_probe]
-            V[1, j] += v
+            if i <= nwk + 1
+                V[i, end] += v
+            end
             i_probe += 1
         end
-        v = system.probes.gradient[i_probe]
-        # @show v, system.probes.position[i_probe]
-        V[1, end] += v
-        i_probe += 1
     end
 
     return nothing

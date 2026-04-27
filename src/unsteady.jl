@@ -154,7 +154,7 @@ function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
         nwakerows::Int=size(system.wakes[1], 1),
         max_particles::Int=10_000,
         eta::Real=0.3,
-        fmm::FLOWVPM.FMM=FLOWVPM.FMM(),
+        fmm::FLOWVPM.FMM=FLOWVPM.FMM(; p=20),
         fmm_wake::Union{Nothing, FLOWVPM.FMM}=nothing,
         fmm_vehicle::Union{Nothing, FLOWVPM.FMM}=nothing,
         method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
@@ -266,9 +266,6 @@ end
               Ωinf=(t)->SVector{3}(0,0,0); kwargs...)
 
 Drive an unsteady simulation against a buffer-overflow `PanelParticleWake`.
-Mirrors FLOWPanel's `simulate!` loop structure (update_TE → solve → write →
-propagate → shed). Part 5 of the PanelParticleWake port; being assembled in
-sub-steps 5b..5g.
 """
 function simulate!(system::System, wake::PanelParticleWake,
         frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function,
@@ -389,6 +386,9 @@ function simulate!(system::System, wake::PanelParticleWake,
         end
 
         #------- wake coupling + body solve -------#
+
+        # sync active wake-row count so probes cover all active rows
+        system.nwake .= wake.nwake
 
         # snap panel-buffer row-1 geometry to current wake_shedding_locations
         update_TE!(wake, system)

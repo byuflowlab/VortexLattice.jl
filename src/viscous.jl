@@ -214,7 +214,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     v_induced += props[i,j].velocity * ref.V # convert from non-dimensionalized velocity
 
                     # accumulate aerodynamic force contribution from this bound vortex
-                    cf += props[i,j].cfb * 0.5*RHO*ref.V^2 * ref.S
+                    cf += props[i,j].cfb
                 end
 
                 # average dynamic pressure over the section

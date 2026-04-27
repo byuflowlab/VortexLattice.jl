@@ -70,3 +70,6 @@ CLAUDE.md
 test/panel_particle_wake_output
 test/restart_visual_compare_output
 vortex_lattice_simulation/
+rotor_hover_simulation/
+*_bodies_log.csv
+rotor_hover_*.csv

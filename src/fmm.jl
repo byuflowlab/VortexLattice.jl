@@ -6,7 +6,7 @@
 Convenience constructor for `FLOWVPM.FMM` so callers can configure the FMM
 through `VortexLattice` without importing `FLOWVPM` directly.
 """
-fmm(; kwargs...) = FLOWVPM.FMM(; kwargs...)
+fmm(; p=20, kwargs...) = FLOWVPM.FMM(; p=p, kwargs...)
 
 # function vlm_to_fmm_index(system::System, i_surf, i, j)
 #     surfaces = system.surfaces

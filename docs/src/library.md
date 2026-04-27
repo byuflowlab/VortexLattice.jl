@@ -85,6 +85,29 @@ stability_derivatives
 ### Visualization
 ```@docs
 write_vtk
+write_restart_checkpoint
+read_restart_checkpoint_info
+restore_restart!
+FluidDomainMonitor
+evaluate_fluid_domain!
+evaluate_fluid_domain_from_restarts!
+```
+
+### Unsteady Simulation
+```@docs
+simulate!
+PanelParticleWake
+WakeSheddingMethod
+NoShed
+SigmaPPS
+OverlapPPS
+EulerScheme
+ReferenceFrame
+propagate_kinematics!
+fmm
+ForcesMonitor
+PanelForcesMonitor
+LiftingLineCoefficientsMonitor
 ```
 
 ## Private API

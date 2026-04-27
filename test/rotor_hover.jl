@@ -1,6 +1,5 @@
 using VortexLattice
 using StaticArrays
-# using PythonPlot
 using DelimitedFiles
 
 data_path="./VortexLattice_rotor_data"
@@ -15,64 +14,31 @@ mu              = 1.85508e-5                # (kg/ms) air dynamic viscosity
 speedofsound    = 342.35                    # (m/s) speed of sound
 magVinf         = J*RPM/60*(2*R) * 0.0
 Uinf(t) = SVector{3,Float64}(-1.0, 0.0, 0.0) * magVinf
+Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
 
 ns = 40
 nc = 1
 
-grids, ratios, polars, frames = VortexLattice.generate_rotor("DJI9443.csv", data_path; 
-                                                            turbine_flag=false, 
-                                                            clockwise=true, 
-                                                            ns, 
-                                                            nc, 
-                                                            spacing_s=Uniform(), 
+grids, ratios, polars, frames = VortexLattice.generate_rotor("DJI9443.csv", data_path;
+                                                            turbine_flag=false,
+                                                            clockwise=true,
+                                                            ns,
+                                                            nc,
+                                                            spacing_s=Uniform(),
                                                             interpolate_airfoils=true,
                                                             RPM=RPM,);
 
-# generate surface panels for propeller
-xle_p1 = [-0.007760952, -0.00912684020509993, -0.01054884338296846, -0.011250349849440629, -0.011772865802853139, -0.012119569829317039, -0.012290082732736044, -0.012268795505995866, -0.012043987625913162, -0.011895522315499299, -0.011461081868185891, -0.010904219636113025, -0.010404176972364522, -0.009799134225632307, -0.00927010352088215, -0.009051792223013484, -0.008616634170407296, -0.008196262641487507, -0.007893374592914745, -0.007768353692954446, -0.007640989960027567, -0.0073486327398695215, -0.007153683499931082, -0.006766626723735409, -0.006228888689944864, -0.00288816]
-yle_p1 = [0.004874435999999999, 0.01093368, 0.01699296, 0.0204, 0.02305212, 0.0264, 0.0288, 0.0291114, 0.0324, 0.035170679999999996, 0.04122984, 0.04728912, 0.0533484, 0.05940756, 0.06546684, 0.07152612, 0.07758527999999999, 0.08364456, 0.08970383999999999, 0.095763, 0.10182228, 0.10788155999999999, 0.11394072, 0.11639999999999999, 0.1176, 0.12]
-zle_p1 = [0.0017399304062728094, 0.001033148694103248, 5.515520297142833e-5, -0.00039695657142857163, -0.0007488910010571427, -0.0011093118561081603, -0.0013439497122163205, -0.0013743939740463542, -0.0013387395267986484, -0.0012032992967165625, -0.0005335055964156584, 4.7425651801566416e-5, 0.0006065310797702348, 0.0009497390876361914, 0.0012103887940491129, 0.0013988792124036567, 0.0016551317107757106, 0.0019260359731138059, 0.0021145239782349853, 0.0023030049522443858, 0.0024916919017199017, 0.0026830811171171167, 0.002821339876272293, 0.002859589115700257, 0.002878252743800171, 0.0029155799999999996]
-chord_p1 = [0.0144, 0.020876759999999998, 0.02597172, 0.028706999999999996, 0.030367079999999998, 0.031616399999999996, 0.03180876, 0.03178992, 0.031150079999999997, 0.030362519999999997, 0.02841924, 0.02627268, 0.02442492, 0.02249088, 0.0207618, 0.01945428, 0.0179046, 0.01653588, 0.015304680000000001, 0.01429284, 0.013367519999999999, 0.01233264, 0.011391324, 0.01069332, 0.009962628, 0.005859876]
-theta_p1 = [-0.26234070166665546, -0.31991308290106085, -0.3419082713692357, -0.3454966520785375, -0.3454966520785375, -0.3395274176652338, -0.3327597060800743, -0.3319272068845572, -0.3232074235076193, -0.3148776834780317, -0.29334247725428353, -0.2746396431003036, -0.25713950069538405, -0.23847750818494157, -0.22117737756768568, -0.20365437888236765, -0.18562387512780293, -0.16783277004609531, -0.15107104792086348, -0.1357267208862114, -0.12474499791294327, -0.11647593523729516, -0.11181989297684268, -0.10931562044809875, -0.105924650504665, -0.09440346297697169]
-phi_p1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-ns_p1 = ns
-nc_p1 = nc
+nwakerows = 3
+core_size = 1e-3
+system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
-# camber function
-# x_camber, camber = get_camber(x, y)
-camber_func = (xc) -> 0.0 # FLOWMath.linear(x_camber, camber, xc)
-
-fc_p1 = fill(camber_func, length(yle_p1)) # camberline function for each section
-spacing_s_p1 = Uniform()
-spacing_c_p1 = Uniform()
-mirror_p1 = false
-p1grid1, p1ratio1 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
-    mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-p1grid2, p1ratio2 = wing_to_grid(xle_p1, yle_p1, zle_p1, chord_p1, theta_p1, phi_p1, ns_p1, nc_p1;
-    mirror=mirror_p1, fc=fc_p1, spacing_s=spacing_s_p1, spacing_c=spacing_c_p1)
-translate!(p1grid1, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
-translate!(p1grid2, SVector{3}(-chord_p1[1]*0.5, 0.0, 0.0))
-R1_b1 = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
-VortexLattice.rotate!(p1grid1, R1_b1)
-R1_b2 = VortexLattice.Rodrigues(SVector{3}(1.0,0,0), pi*1.0) * R1_b1
-VortexLattice.rotate!(p1grid2, R1_b2)
-
-# debug geometry
-using VortexLattice.WriteVTK
-testgrid = zeros(size(p1grid1,1), size(p1grid1,2), size(p1grid1,3), 1)
-testgrid[:,:,:,1] .= p1grid1
-vtk_grid("debug_grid", testgrid) do vtk
-    vtk["ptdata"] = reshape(p1grid1[1,:,:], size(p1grid1,2), size(p1grid1,3), 1)
+for isurf in eachindex(system.surfaces)
+    VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
+        ratios=system.ratios[isurf],
+        fcore=(c, Δs) -> system.core_size)
 end
 
-# grids = [p1grid1, p1grid2]
-# ratios = [p1ratio1, p1ratio2]
-
-core_size = 1e-3
-system = System(grids; ratios, core_size);
-# system = System(grids; ratios, sections);
-
-Sref = 2.0
+Sref = 1.0
 cref = 1.0
 bref = 1.0
 rref = [0.0, 0.0, 0.0]
@@ -80,32 +46,17 @@ Vinf = 1.0
 ref = Reference(Sref, cref, bref, rref, Vinf)
 system.reference[] = ref
 
-# freestream parameters
 alpha = 0.0
 beta = 0.0
-Omega = [RPM * 2*pi/60; 0.0; 0.0]
 Omega = [0; 0.0; 0.0]
 fs = Freestream(magVinf, alpha, beta, Omega)
 system.freestream[] = fs
 
-steady_analysis!(system, system.reference[], system.freestream[]; symmetric=false);
+save_path = abspath(joinpath(@__DIR__, "..", "rotor_hover_simulation"))
+isdir(save_path) && rm(save_path, recursive=true, force=true)
+mkpath(save_path)
 
-write_vtk("rotor_hover_initial", system; write_wakes=false, trailing_edge_list=fill(false, length(system.surfaces)));
-
-# frames = ReferenceFrame(system;
-#         origin = SVector{3}(0.0, 0.0, 0.0),
-#         v = SVector{3}(0.0, 0.0, 0.0),
-#         ω_axis = SVector{3}(1.0, 0.0, 0.0),
-#         ω = -RPM * 2 * pi / 60,
-#         R = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
-#         name = "vehicle",
-#         child_index = Int[],
-#         dependent_index = collect(1:length(system.surfaces))
-#     )
-
-# display(frames[1])
-
-n_revs = 10
+n_revs = 5
 ttot = n_revs / (RPM / 60)
 timestep_per_rev = 36
 t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
@@ -114,94 +65,48 @@ p_per_step = 2
 nsteps_per_rev = length(t_range) / n_revs
 sigma = overlap * 2*pi*R / (nsteps_per_rev*p_per_step)
 
-# generate correction functions
-#### include("polar_correction.jl") # generates cl_correction and cd_correction functions based on XFOIL data for the airfoil sections at 70% span
+fmm_wake = VortexLattice.fmm(;
+    ncrit = 3,
+    p = 25,
+    autotune_p = true,
+    autotune_ncrit = true,
+    autotune_reg_error = false,
+)
 
-# cl_correction, cd_correction = get_viscous_corrections("corrections.csv")
-# cl_alpha0, delta_cl_fun, cd_visc_fun = get_viscous_corrections2("corrections.csv")
-
-# filename = "corrections.csv"
-# data = readdlm(filename, ',', skipstart=0)
-# @show data
-# cls_inv = data[:,1]
-# cls_visc = data[:,2]
-# cds_visc = data[:,3]
-# alphas = data[:,4]
-
-# polar = VortexLattice.Polar(alphas, cls_visc, cds_visc .* 0.0)
-
-# get section_rs
-# section_rs = (yle_p1[1:end-1] .+ yle_p1[2:end]) .* 0.5 ./ yle_p1[end]
-# section_rs = collect(LinRange(0.0, 1.0, ns+1))
-# section_rs = (section_rs[1:end-1] .+ section_rs[2:end]) .* 0.5
-# blade_files = fill("dji_9443_airfoils.csv", 2)
-# polars = VortexLattice.get_polars2([section_rs, section_rs], blade_files)
-# @show length(polars[1])
-# display(polars[1][1])
-# error()
-
-# or just use the same polar for all sections
-# polars = fill(polar, size(system.surfaces, 2))
-# polars = [polars, polars]
-# polars = nothing
-
-# function plot_polars(polars::Vector{VortexLattice.Polar{TF}}, labels) where TF
-#     fig = figure("airfoils")
-#     fig.clear()
-#     fig.add_subplot(121, xlabel=L"\alpha (^\circ)", ylabel=L"c_l")
-#     fig.add_subplot(122, xlabel=L"\alpha (^\circ)", ylabel=L"c_d")
-#     axs = fig.get_axes()
-
-#     # loop over polars
-#     for (ip,polar) in enumerate(polars)
-#         alpha = polar.alphas
-#         cl = polar.cls_visc
-#         cd = polar.cds_visc
-#         @show length(alpha), length(cl), length(cd) alpha cl cd
-#         axs[0].plot(alpha, cl, label=labels[ip])
-#         axs[1].plot(alpha, cd, label=labels[ip])
-#     end
-#     axs[0].legend()
-#     axs[1].legend()
-# end
-
-# plot_polars(polars[1], ["sec$i" for i in 1:length(polars[1])])
+fmm_vehicle = VortexLattice.fmm(;
+    ncrit = 3,
+    autotune_p = true,
+    autotune_ncrit = true,
+    autotune_reg_error = false,
+)
 
 monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
-benchmark = @elapsed wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
-            monitors, name = "rotorhover_new", 
-            # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            # particle_trailing_methods=fill(VortexLattice.OverlapPPS(overlap, p_per_step), length(system.surfaces)),
-            particle_trailing_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.SigmaOverlap(sigma, overlap), length(system.surfaces)),
-            particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            eta = 0.3,
-            derivatives = false,
-            # vtk_args=(trailing_vortices=false,),
-            # wake_args=(SFS=VortexLattice.FLOWVPM.SFS_Cd_twolevel_nobackscatter,),
-            # nonlinear_analysis=true,
-            # nonlinear_args=(polar_correction=false,),
-            # calculate_influence_matrix=true,
-            # path=nothing,
-            # wake_args=(relaxation=VortexLattice.FLOWVPM.relaxation_none,),
-            polars, frames_index = fill(1, length(system.surfaces))
+wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+            wake_type=PanelParticleWake,
+            method_trailing=SigmaPPS(sigma, p_per_step),
+            method_unsteady=NoShed(),
+            eta=0.3,
+            nwakerows=nwakerows,
+            max_particles=1_000_000,
+            fmm_wake=fmm_wake,
+            fmm_vehicle=fmm_vehicle,
+            monitors,
+            name="rotorhover",
+            path=save_path,
+            derivatives=false,
+            polars,
+            frames_index=fill(1, length(system.surfaces)),
+            verbose=true,
         )
 
 # post-process
 Ts = [monitors[1].CF[i][1] for i in 1:length(t_range)]
 Ts .*= (0.5 * VortexLattice.RHO * ref.V^2 * ref.S)
 CTs = Ts ./ (rho * (RPM/60)^2 * (2*R)^4)
-# fig = figure("CT")
-# fig.clear()
-# fig.add_subplot(111, xlabel=L"t", ylabel=L"C_T")
-# ax = fig.get_axes()[0]
-# ax.plot(collect(t_range), CTs, label="VPM")
-# ax.set_ylim(-1.0, 1.0)
 
 # comparison
 CT_exp = 0.072
 CT_URANS = 0.071
-# ax.plot(collect(t_range), fill(CT_exp, length(t_range)), "--", label="experiment")
 
 di = timestep_per_rev * 1
 CT_vpm = sum(CTs[end-di+1 : end]) / length(CTs[end-di+1 : end])
