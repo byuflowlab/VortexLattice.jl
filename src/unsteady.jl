@@ -151,7 +151,7 @@ so that the panel buffer has the expected row count.
 function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
         maneuver!::Function, Vinf::Function, t_range,
         Ωinf::Function; wake_type::Type{PanelParticleWake},
-        nwakerows::Int=size(system.wakes[1], 1),
+        nwakerows::Int=size(system.wakes[1], 1) - 1,
         max_particles::Int=10_000,
         eta::Real=0.3,
         fmm::FLOWVPM.FMM=FLOWVPM.FMM(; p=20),

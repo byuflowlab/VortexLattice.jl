@@ -859,7 +859,7 @@ function _init_wake_vtk_writer(name::String, wake::PanelParticleWake; overwrite:
     particle_empty_cells = Vector{WriteVTK.MeshCell{WriteVTK.PolyData.Verts, UnitRange{Int}}}()
 
     TF = eltype(eltype(wake.wakes[1]))
-    wake_scratch = [_WakeVTKScratch(TF, size(w, 1), size(w, 2)) for w in wake.wakes]
+    wake_scratch = [_WakeVTKScratch(TF, wake.nwakerows, size(w, 2)) for w in wake.wakes]
 
     return _WakeVTKWriterState(panel_pvd, panel_block_name, particles_pvd, particles_block,
         particle_cells, particle_empty_points, particle_empty_cells, wake_scratch)

@@ -37,8 +37,8 @@ function main()
 
 
     core_size = 1e-3
-    nwakerows = 1
-    system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
+    nwakerows = 2
+    system = System(grids; ratios, core_size, nw=fill(nwakerows+1, length(grids)));
 
     Sref = 1.0
     cref = 1.0
@@ -95,6 +95,7 @@ function main()
     )
 
     monitors = (monitor, monitor1, fd_monitor)
+    monitors = (monitor, monitor1)
     Ωinf(_) = SVector{3,Float64}(0.0, 0.0, 0.0)
 
     fmm_wake = VortexLattice.fmm(;
@@ -120,8 +121,8 @@ function main()
                 eta=0.3,
                 monitors,
                 name = "NREL5MW",
-                path = nothing,
-                write_restart = true,
+                # path = nothing,
+                write_restart = false,
                 derivatives=false,
                 polars,
                 frames_index=fill(1, length(system.surfaces)),

@@ -895,11 +895,12 @@ function PanelParticleWake(system;
     TF = eltype(system.wake_shedding_locations[1][1])
     nsurf = length(system.surfaces)
 
-    # Verify the System was allocated with the right wake buffer size.
+    # Verify the System was allocated with nwakerows+1 rows (one extra for the
+    # shed-before-convert buffer slot).
     for i in 1:nsurf
-        @assert size(system.wakes[i], 1) == nwakerows "System.wakes[$i] has " *
+        @assert size(system.wakes[i], 1) == nwakerows + 1 "System.wakes[$i] has " *
             "$(size(system.wakes[i], 1)) rows but PanelParticleWake expects " *
-            "nwakerows=$nwakerows. Rebuild the System with nw=fill($nwakerows, nsurf)."
+            "nwakerows+1=$(nwakerows+1). Rebuild the System with nw=fill($(nwakerows+1), nsurf)."
     end
 
     # Alias panel-wake storage from System (shared arrays — not copies).
@@ -1021,7 +1022,7 @@ updated with the row's circulations so the next call can form `Γ - Γ_tm1`.
 """
 function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
     for isurf in eachindex(w.wakes)
-        w.nwake[isurf] == w.nwakerows || continue
+        w.nwake[isurf] > w.nwakerows || continue
         nlast = w.nwake[isurf]
         wake = w.wakes[isurf]
         ns = size(wake, 2)
@@ -1057,6 +1058,8 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
             r_te  = bottom_right(panel)
             _shed_particles!(w.pfield, r_le, r_te, -Γ, method_t)
         end
+
+        w.nwake[isurf] -= 1
     end
     return w
 end
@@ -1069,14 +1072,6 @@ buffer is full into particles, shed a new row of wake panels at the trailing
 edge, and grow `nwake` until the buffer is saturated.
 """
 function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
-    for isurf in eachindex(w.wakes)
-        if w.nwake[isurf] == w.nwakerows
-            w.overflowed[] = true
-        end
-    end
-
-    _convert_to_particles!(w)
-
     iΓ = 0
     for isurf in eachindex(w.wakes)
         surface = system.surfaces[isurf]
@@ -1091,7 +1086,7 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
             saved_rtr = [top_right(wake[1, j]) for j in 1:ns]
         end
 
-        nkeep = min(w.nwake[isurf], w.nwakerows - 1)
+        nkeep = min(w.nwake[isurf], w.nwakerows)
         for j = 1:ns, i = nkeep:-1:1
             wake[i+1, j] = wake[i, j]
         end
@@ -1113,8 +1108,16 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
 
         iΓ += length(surface)
 
-        if w.nwake[isurf] < w.nwakerows
+        if w.nwake[isurf] <= w.nwakerows
             w.nwake[isurf] += 1
+        end
+    end
+
+    _convert_to_particles!(w)
+
+    for isurf in eachindex(w.wakes)
+        if w.nwake[isurf] > w.nwakerows
+            w.overflowed[] = true
         end
     end
 
