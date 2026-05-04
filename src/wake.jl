@@ -878,6 +878,8 @@ struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF
     method_trailing::Vector{MT}
     method_unsteady::Vector{MU}
     prev_bottom_gamma::Vector{Vector{TF}}
+    pending_overflow::Vector{Vector{WakePanel{TF}}}
+    has_pending::Vector{Bool}
     eta::TF
 end
 
@@ -895,12 +897,10 @@ function PanelParticleWake(system;
     TF = eltype(system.wake_shedding_locations[1][1])
     nsurf = length(system.surfaces)
 
-    # Verify the System was allocated with nwakerows+1 rows (one extra for the
-    # shed-before-convert buffer slot).
     for i in 1:nsurf
-        @assert size(system.wakes[i], 1) == nwakerows + 1 "System.wakes[$i] has " *
+        @assert size(system.wakes[i], 1) == nwakerows "System.wakes[$i] has " *
             "$(size(system.wakes[i], 1)) rows but PanelParticleWake expects " *
-            "nwakerows+1=$(nwakerows+1). Rebuild the System with nw=fill($(nwakerows+1), nsurf)."
+            "nwakerows=$nwakerows. Rebuild the System with nw=fill($nwakerows, nsurf)."
     end
 
     # Alias panel-wake storage from System (shared arrays — not copies).
@@ -932,9 +932,17 @@ function PanelParticleWake(system;
     # (one entry per spanwise panel). Used by _convert_to_particles! as Γ_tm1.
     prev_bottom_gamma = [zeros(TF, size(system.wakes[i], 2)) for i in 1:nsurf]
 
+    # Overflow buffer: holds the oldest row saved before each shift so that
+    # _convert_to_particles! can read it without needing an extra buffer row in
+    # the system allocation. has_pending[i] is true iff pending_overflow[i] is
+    # populated and ready to convert.
+    pending_overflow = [Vector{WakePanel{TF}}(undef, size(system.wakes[i], 2)) for i in 1:nsurf]
+    has_pending = fill(false, nsurf)
+
     return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments), typeof(fmm_wake), typeof(fmm_vehicle)}(
         wakes, wake_shedding_locations, wake_velocities, nwake, nwakerows, overflowed, pfield,
-        trailing_edge_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec, prev_bottom_gamma, TF(eta),
+        trailing_edge_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec,
+        prev_bottom_gamma, pending_overflow, has_pending, TF(eta),
     )
 end
 
@@ -1022,21 +1030,20 @@ updated with the row's circulations so the next call can form `Γ - Γ_tm1`.
 """
 function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
     for isurf in eachindex(w.wakes)
-        w.nwake[isurf] > w.nwakerows || continue
-        nlast = w.nwake[isurf]
-        wake = w.wakes[isurf]
-        ns = size(wake, 2)
-        method_t = w.method_trailing[isurf]
-        method_u = w.method_unsteady[isurf]
+        w.has_pending[isurf] || continue
+        pending   = w.pending_overflow[isurf]
+        ns        = length(pending)
+        method_t  = w.method_trailing[isurf]
+        method_u  = w.method_unsteady[isurf]
         prev_gamma = w.prev_bottom_gamma[isurf]
 
-        r1_le_first = top_left(wake[nlast, 1])
-        rend_le     = top_right(wake[nlast, ns])
+        r1_le_first = top_left(pending[1])
+        rend_le     = top_right(pending[ns])
         wraps = norm(r1_le_first - rend_le) < 5 * eps(TF)
-        Γ_last = wraps ? circulation_strength(wake[nlast, ns]) : zero(TF)
+        Γ_last = wraps ? circulation_strength(pending[ns]) : zero(TF)
 
         for j in 1:ns
-            panel = wake[nlast, j]
+            panel = pending[j]
             Γ     = circulation_strength(panel)
             r1_le = top_left(panel)
             r1_te = bottom_left(panel)
@@ -1052,14 +1059,12 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
         end
 
         if !wraps
-            panel = wake[nlast, ns]
+            panel = pending[ns]
             Γ     = circulation_strength(panel)
             r_le  = top_right(panel)
             r_te  = bottom_right(panel)
             _shed_particles!(w.pfield, r_le, r_te, -Γ, method_t)
         end
-
-        w.nwake[isurf] -= 1
     end
     return w
 end
@@ -1086,7 +1091,18 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
             saved_rtr = [top_right(wake[1, j]) for j in 1:ns]
         end
 
-        nkeep = min(w.nwake[isurf], w.nwakerows)
+        # when the buffer is full, save the oldest row before it is overwritten
+        if w.nwake[isurf] == w.nwakerows
+            for j in 1:ns
+                w.pending_overflow[isurf][j] = wake[w.nwakerows, j]
+            end
+            w.has_pending[isurf] = true
+        else
+            w.has_pending[isurf] = false
+        end
+
+        # shift only rows that fit — oldest row was already saved above
+        nkeep = min(w.nwake[isurf], w.nwakerows - 1)
         for j = 1:ns, i = nkeep:-1:1
             wake[i+1, j] = wake[i, j]
         end
@@ -1108,17 +1124,15 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
 
         iΓ += length(surface)
 
-        if w.nwake[isurf] <= w.nwakerows
+        if w.nwake[isurf] < w.nwakerows
             w.nwake[isurf] += 1
         end
     end
 
     _convert_to_particles!(w)
 
-    for isurf in eachindex(w.wakes)
-        if w.nwake[isurf] > w.nwakerows
-            w.overflowed[] = true
-        end
+    if any(w.has_pending)
+        w.overflowed[] = true
     end
 
     return w

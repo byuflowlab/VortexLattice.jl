@@ -38,7 +38,7 @@ function main()
 
     core_size = 1e-3
     nwakerows = 2
-    system = System(grids; ratios, core_size, nw=fill(nwakerows+1, length(grids)));
+    system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
     Sref = 1.0
     cref = 1.0
