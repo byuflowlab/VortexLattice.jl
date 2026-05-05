@@ -96,7 +96,7 @@ end
     Similar to `update_wake_shedding_locations`, but assumes `wake_shedding_locations` contain the previous trailing edge location.
 """
 function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations,
-    surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
+    surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta; sync_panels=true)
 
     # get number of surfaces
     nsurf = length(surfaces)
@@ -141,7 +141,7 @@ function update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations
 
         end
 
-        if nwake[isurf] > 0
+        if sync_panels && nwake[isurf] > 0
             # loop through first row of wake panels
             for j = 1:ns
                 # update wake panel with wake shedding location coordinates
@@ -1076,7 +1076,7 @@ Advance the hybrid wake one step: convert the oldest row of any surface whose
 buffer is full into particles, shed a new row of wake panels at the trailing
 edge, and grow `nwake` until the buffer is saturated.
 """
-function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
+function shed_wake!(w::PanelParticleWake, system, dt, Gamma)  # dt unused; kept for call-site compatibility
     iΓ = 0
     for isurf in eachindex(w.wakes)
         surface = system.surfaces[isurf]
@@ -1114,8 +1114,13 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma)
                 rbl = saved_rtl[j]
                 rbr = saved_rtr[j]
             else
-                rbl = rtl + w.wake_velocities[isurf][1, j]   * dt
-                rbr = rtr + w.wake_velocities[isurf][1, j+1] * dt
+                # first shed: mirror initial_wake_panels! — bottom corner is the
+                # TE projected through wsl by the eta ratio, so kinematics in wsl
+                # (from update_wake_shedding_locations_unsteady!) are included
+                rte_l = bottom_left(surface[end, j])
+                rte_r = bottom_right(surface[end, j])
+                rbl = rte_l + (rtl - rte_l) / w.eta
+                rbr = rte_r + (rtr - rte_r) / w.eta
             end
             core_size = get_core_size(surface[end, j])
             gamma = Gamma[iΓ + ls[end, j]]

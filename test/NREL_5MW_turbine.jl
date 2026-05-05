@@ -37,7 +37,7 @@ function main()
 
 
     core_size = 1e-3
-    nwakerows = 2
+    nwakerows = 1
     system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
     Sref = 1.0
@@ -75,7 +75,7 @@ function main()
 
     n_revs = 1
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 36
+    timestep_per_rev = 72
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     overlap = 1.3
     p_per_step = 2

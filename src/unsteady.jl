@@ -524,17 +524,10 @@ function simulate!(system::System, wake::PanelParticleWake,
         # update shedding points for the next step using full TE convection
         update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
             system.surfaces, ref, system.freestream[], dt, additional_velocity,
-            Vte, system.nwake, wake.eta)
+            Vte, system.nwake, wake.eta; sync_panels=false)
 
-        # Form the first wake row between steps 0 and 1 using the body-aware
-        # shedding locations; subsequent rows use the normal shedding routine.
-        if i_step == 0
-            initial_wake_panels!(wake.wakes, system.wake_shedding_locations,
-                system.surfaces, Γ_wake, wake.eta)
-            for isurf in eachindex(wake.nwake)
-                wake.nwake[isurf] < wake.nwakerows && (wake.nwake[isurf] += 1)
-            end
-        else
+        # shed wake: skip step 0 entirely so the VTK at step 0 contains no wake panels
+        if i_step > 0
             shed_wake!(wake, system, dt, Γ_wake)
         end
 
@@ -549,6 +542,7 @@ function simulate!(system::System, wake::PanelParticleWake,
                 end
             end
         end
+
         i_step += 1
     end
 

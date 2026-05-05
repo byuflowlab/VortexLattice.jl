@@ -872,8 +872,10 @@ function _append_wake_vtk!(writer::_WakeVTKWriterState, wake::PanelParticleWake,
         n = wake.nwake[i]
         n == 0 && continue
         wake_view = view(wake.wakes[i], 1:n, :)
+        # scratch is sized for nwakerows rows; stride is wrong when n < nwakerows
+        scratch = n == wake.nwakerows ? writer.wake_scratch[i] : nothing
         write_vtk!(vtm, wake_view; symmetric=false, trailing_vortices=false,
-            scratch = writer.wake_scratch[i])
+            scratch = scratch)
     end
     writer.panel_pvd[t] = vtm
 
