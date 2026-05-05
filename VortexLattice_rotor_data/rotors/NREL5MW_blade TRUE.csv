@@ -4,5 +4,6 @@ pitchdist,NREL5MW_pitchdist TRUE.csv,Pitch distribution
 sweepdist,NREL5MW_sweepdist_new TRUE.csv,AC sweep distribution
 heightdist,NREL5MW_curvedist_new TRUE.csv,AC curve distribution
 airfoil_files,NREL5MW_airfoils TRUE.csv,Airfoil distribution
+airfoil_reference,NREL5MW_centers TRUE.csv,Airfoil references
 spl_k,5,Spline order
 spl_s,0.0,Spline smoothing

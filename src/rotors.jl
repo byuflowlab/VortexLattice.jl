@@ -156,7 +156,7 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     zle = .-FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
 
     if size(airfoil_reference,1) < length(yle)
-        if length(airfoil_reference) != 1
+        if size(airfoil_reference,1) != 1 != 1
             @warn "Airfoil reference line has different length than spanwise stations. Ignoring reference line."
         end
         airfoil_reference = zeros(length(yle),2)
@@ -166,7 +166,6 @@ function _generate_rotor(Rtip, Rhub, B::Int,
                     ns,nc;reference_line=airfoil_reference,
                     spacing_s=spacing_s, spacing_c=spacing_c)
 
-    translate!(grid, SVector{3}( -chord[1]*0.5,0.0, 0.0))
     R = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
     VortexLattice.rotate!(grid, R)
 

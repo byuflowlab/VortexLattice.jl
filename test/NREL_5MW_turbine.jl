@@ -52,7 +52,6 @@ function main()
     alpha = 0.0
     beta = 0.0
     Omega = [RPM * 2*pi/60; 0.0; 0.0]
-    Omega = [0; 0.0; 0.0]
     fs = Freestream(magVinf, alpha, beta, Omega)
     system.freestream[] = fs
 
@@ -75,7 +74,7 @@ function main()
 
     n_revs = 1
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 72
+    timestep_per_rev = 36
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     overlap = 1.3
     p_per_step = 2
@@ -134,7 +133,7 @@ function main()
 
     # Normal force along the blade
     RHO = 1.0
-    r_hub = 11.75
+    r_hub = 1.5
     dr = (R - r_hub) / ns
     x = r_hub .+ dr * (1:ns)
 
