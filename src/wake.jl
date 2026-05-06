@@ -830,9 +830,18 @@ struct OverlapPPS{TF} <: WakeSheddingMethod
     p_per_step::Int
 end
 
+"""Gaussian particle shedding with fixed `sigma` and target `overlap`.
+   The number of particles per step is computed as
+   `ceil(overlap * dist / sigma)`.
+"""
+struct SigmaOverlap{TF} <: WakeSheddingMethod
+    sigma::TF
+    overlap::TF
+end
+
 function _shed_particles!(pfield, r1, r2, Γ, method::OverlapPPS)
     dist = norm(r2 - r1)
-    dist < eps(typeof(dist)) && return nothing
+    dist < eps(typeof(dist)) && return zero(typeof(Γ))
     sigma = dist * method.overlap / method.p_per_step
     return _shed_particles!(pfield, r1, r2, Γ, SigmaPPS(sigma, method.p_per_step))
 end
@@ -843,14 +852,26 @@ function _shed_particles!(pfield, r1, r2, Γ, method::SigmaPPS)
     distance_vector = (r2 - r1) / p_per_step
     Xp = r1 + distance_vector * 0.5
     Γp = Γ * distance_vector
+    circ_scalar = Γ * norm(distance_vector)
+    total_added = zero(typeof(circ_scalar))
     for _ in 1:p_per_step
-        FLOWVPM.add_particle(pfield, Xp, Γp, sigma; circulation=Γ)
+        FLOWVPM.add_particle(pfield, Xp, Γp, sigma; circulation=circ_scalar)
+        total_added += circ_scalar
         Xp += distance_vector
     end
+    return total_added
+end
+
+function _shed_particles!(pfield, r1, r2, Γ, method::SigmaOverlap)
+    dist = norm(r2 - r1)
+    dist < eps(typeof(dist)) && return zero(typeof(Γ))
+
+    pps = max(1, ceil(Int, method.overlap * dist / method.sigma))
+    return _shed_particles!(pfield, r1, r2, Γ, SigmaPPS(method.sigma, pps))
 end
 
 function _shed_particles!(pfield, r1, r2, Γ, ::NoShed)
-    return nothing
+    return zero(typeof(Γ))
 end
 
 #--- Panel + Particle Wake ---#
@@ -864,7 +885,7 @@ shed vorticity; once the buffer fills, the oldest row is converted to vortex
 particles on each subsequent shed. The panel arrays are aliased from `system`
 so existing VLM kernels continue to operate on the same storage.
 """
-struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF, TFW, TFWakeFMM, TVehicleFMM}
+struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF, TFW, TBFW, TFWakeFMM, TVehicleFMM}
     wakes::Vector{Matrix{WakePanel{TF}}}
     wake_shedding_locations::Vector{Vector{SVector{3,TF}}}
     wake_velocities::Vector{Matrix{SVector{3,TF}}}
@@ -873,6 +894,7 @@ struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF
     overflowed::Base.RefValue{Bool}
     pfield::TPF
     trailing_edge_filaments::TFW
+    boundary_filaments::TBFW
     fmm_wake::TFWakeFMM
     fmm_vehicle::TVehicleFMM
     method_trailing::Vector{MT}
@@ -920,6 +942,9 @@ function PanelParticleWake(system;
     # Trailing-edge filament wrapper for FMM coupling
     trailing_edge_filaments = FilamentWrapper(system.wakes)
 
+    # Boundary filament: top edge of the most-recently converted wake row.
+    boundary_filaments = BoundaryFilamentWrapper(system.wakes)
+
     # Independent runtime FMM states for wake and vehicle coupling.
     fmm_wake = Base.RefValue{FLOWVPM.FMM}(fmm_wake)
     fmm_vehicle = Base.RefValue{FLOWVPM.FMM}(fmm_vehicle)
@@ -939,9 +964,9 @@ function PanelParticleWake(system;
     pending_overflow = [Vector{WakePanel{TF}}(undef, size(system.wakes[i], 2)) for i in 1:nsurf]
     has_pending = fill(false, nsurf)
 
-    return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments), typeof(fmm_wake), typeof(fmm_vehicle)}(
+    return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments), typeof(boundary_filaments), typeof(fmm_wake), typeof(fmm_vehicle)}(
         wakes, wake_shedding_locations, wake_velocities, nwake, nwakerows, overflowed, pfield,
-        trailing_edge_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec,
+        trailing_edge_filaments, boundary_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec,
         prev_bottom_gamma, pending_overflow, has_pending, TF(eta),
     )
 end
@@ -1042,6 +1067,9 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
         wraps = norm(r1_le_first - rend_le) < 5 * eps(TF)
         Γ_last = wraps ? circulation_strength(pending[ns]) : zero(TF)
 
+        # track how much scalar circulation particles contributed per panel
+        added_by_particles = zeros(TF, ns)
+
         for j in 1:ns
             panel = pending[j]
             Γ     = circulation_strength(panel)
@@ -1049,10 +1077,15 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
             r1_te = bottom_left(panel)
             r2_te = bottom_right(panel)
 
-            _shed_particles!(w.pfield, r1_le, r1_te, Γ - Γ_last, method_t)
+            added_t = _shed_particles!(w.pfield, r1_le, r1_te, Γ - Γ_last, method_t)
 
             Γ_tm1 = prev_gamma[j]
-            _shed_particles!(w.pfield, r1_te, r2_te, Γ - Γ_tm1, method_u)
+            added_u = _shed_particles!(w.pfield, r1_te, r2_te, Γ - Γ_tm1, method_u)
+
+            # ensure numeric zero for any missing returns
+            added_t === nothing && (added_t = zero(TF))
+            added_u === nothing && (added_u = zero(TF))
+            added_by_particles[j] = added_t + added_u
 
             Γ_last = Γ
             prev_gamma[j] = Γ
@@ -1065,6 +1098,21 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
             r_te  = bottom_right(panel)
             _shed_particles!(w.pfield, r_le, r_te, -Γ, method_t)
         end
+
+        # Boundary filament: top edge of the converted row.
+        # The WakeBufferRings ring goes rtl→rbl→rbr→rtr (Ring B, CW from above),
+        # so its top edge is rtr→rtl with +Γ = rtl→rtr with -Γ. The filament
+        # stored as r1=rtl, r2=rtr therefore needs -Γ to match.
+        bfw = w.boundary_filaments
+        bfw.active[isurf] = true
+        for j in 1:ns
+            panel = pending[j]
+            bfw.r1[isurf][j]        = top_left(panel)
+            bfw.r2[isurf][j]        = top_right(panel)
+            bfw.gamma[isurf][j]     = -circulation_strength(panel)
+            bfw.core_size[isurf][j] = panel.core_size
+        end
+
     end
     return w
 end

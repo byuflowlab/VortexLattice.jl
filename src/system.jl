@@ -271,7 +271,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
         Vv, Vte, dΓdt, probes, core_size)
 end
 
-function update_probes!(system::System{TF}) where TF
+function update_probes!(system::System{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
     i_probe = 1
 
     # Vcp
@@ -327,11 +327,12 @@ function update_probes!(system::System{TF}) where TF
         i_probe += 1
     end
 
-    # V (all allocated wake node rows; inactive rows fall back to wake_shedding_locations)
+    # V (only active wake node rows when nwake_active is provided; otherwise all allocated rows)
+    nwake_use = isnothing(nwake_active) ? system.nwake : nwake_active
     for (k, wake) in enumerate(system.wakes)
         ns_k = size(wake, 2)
-        max_nw = size(wake, 1)
-        nwk = system.nwake[k]
+        max_nw = isnothing(nwake_active) ? size(wake, 1) : nwake_use[k]  # only iterate active rows if provided
+        nwk = nwake_use[k]
         wsl = system.wake_shedding_locations[k]
         for i in 1:max_nw+1
             for j in 1:ns_k
@@ -355,10 +356,10 @@ function update_probes!(system::System{TF}) where TF
         end
     end
 
-    return system.probes
+    return i_probe - 1  # return number of active probes
 end    
 
-function probes_to_surfaces!(system::System{TF}) where TF
+function probes_to_surfaces!(system::System{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
     i_probe = 1
     
     # Vcp
@@ -427,12 +428,13 @@ function probes_to_surfaces!(system::System{TF}) where TF
         i_probe += 1
     end
 
-    # V (all allocated wake node rows; only write to active rows)
+    # V (only active wake node rows when nwake_active is provided; otherwise all allocated rows)
+    nwake_use = isnothing(nwake_active) ? system.nwake : nwake_active
     for i_surf in eachindex(system.wakes)
         wake = system.wakes[i_surf]
         V = system.V[i_surf]
-        max_nw = size(wake, 1)
-        nwk = system.nwake[i_surf]
+        max_nw = isnothing(nwake_active) ? size(wake, 1) : nwake_use[i_surf]  # only iterate active rows if provided
+        nwk = nwake_use[i_surf]
         for i in 1:max_nw+1
             for j in 1:size(wake, 2)
                 v = system.probes.gradient[i_probe]

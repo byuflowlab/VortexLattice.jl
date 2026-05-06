@@ -86,7 +86,7 @@ function (m::FluidDomainMonitor{TF})(system::System, wake::PanelParticleWake,
     FastMultipole.reset!(m.probes)
 
     np   = FLOWVPM.get_np(wake.pfield)
-    tef  = PanelBufferFilaments(wake)
+    tef  = WakeBufferRings(wake)
     nfil = FastMultipole.get_n_bodies(tef)
 
     wake_kw    = _fmm_kwargs(wake.fmm_wake[],    wake.pfield.useGPU)

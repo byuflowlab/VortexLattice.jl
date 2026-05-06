@@ -197,12 +197,214 @@ function FastMultipole.buffer_to_target_system!(target_system::PanelBufferFilame
 end
 
 """
+    WakeBufferRings{TF}
+
+FMM-compatible source wrapper over the *active* portion of a
+`PanelParticleWake`'s panel buffer. Represents each active wake panel as a
+full vortex ring (all four edges), matching the accuracy of the steady-wake
+`System` source representation.
+"""
+struct WakeBufferRings{TF}
+    wakes::Vector{Matrix{WakePanel{TF}}}
+    nwake::Vector{Int}
+end
+
+WakeBufferRings(w::PanelParticleWake) = WakeBufferRings(w.wakes, w.nwake)
+
+Base.eltype(::WakeBufferRings{TF}) where TF = TF
+
+function _wbr_index(wbr::WakeBufferRings, n)
+    n_counter = 0
+    for k in eachindex(wbr.wakes)
+        nwk = wbr.nwake[k]
+        nwk == 0 && continue
+        ns = size(wbr.wakes[k], 2)
+        block = nwk * ns
+        if n_counter + block >= n
+            i_plus = n - n_counter
+            i = mod(i_plus - 1, nwk) + 1
+            j = div(i_plus - 1, nwk) + 1
+            return k, i, j
+        end
+        n_counter += block
+    end
+    error("WakeBufferRings index $n out of active range")
+end
+
+function FastMultipole.get_n_bodies(wbr::WakeBufferRings)
+    n = 0
+    for k in eachindex(wbr.wakes)
+        n += wbr.nwake[k] * size(wbr.wakes[k], 2)
+    end
+    return n
+end
+
+FastMultipole.data_per_body(::WakeBufferRings)        = 18
+FastMultipole.strength_dims(::WakeBufferRings)        = 1
+FastMultipole.has_vector_potential(::WakeBufferRings) = false
+
+function FastMultipole.get_position(wbr::WakeBufferRings, i)
+    k, ir, jc = _wbr_index(wbr, i)
+    panel = wbr.wakes[k][ir, jc]
+    return 0.25 * (panel.rtl + panel.rtr + panel.rbr + panel.rbl)
+end
+
+function FastMultipole.source_system_to_buffer!(buffer, i_buffer, wbr::WakeBufferRings, i_body)
+    k, ir, jc = _wbr_index(wbr, i_body)
+    panel = wbr.wakes[k][ir, jc]
+    buffer[1:3, i_buffer] .= 0.25 * (panel.rtl + panel.rtr + panel.rbr + panel.rbl)
+    buffer[4,   i_buffer]  = 0.5 * max(norm(panel.rtl - panel.rbr), norm(panel.rtr - panel.rbl)) + panel.core_size
+    buffer[5,   i_buffer]  = panel.gamma
+    # Ring B vertex order (matches _convert_to_particles! and FLOWPanel):
+    # v1=rtl, v2=rbl, v3=rbr, v4=rtr → edges: rtl→rbl→rbr→rtr→rtl
+    buffer[6:8,   i_buffer] .= panel.rtl
+    buffer[9:11,  i_buffer] .= panel.rbl
+    buffer[12:14, i_buffer] .= panel.rbr
+    buffer[15:17, i_buffer] .= panel.rtr
+    buffer[18,    i_buffer]  = panel.core_size
+end
+
+FastMultipole.body_to_multipole!(wbr::WakeBufferRings, args...) =
+    FastMultipole.body_to_multipole_quad!(FastMultipole.Panel{FastMultipole.Dipole}, wbr, args...)
+
+function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::WakeBufferRings{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+    @inbounds for j_target in target_index
+        target = FastMultipole.get_position(target_system, j_target)
+        v = SVector{3,TF}(0.0, 0.0, 0.0)
+        @inbounds for i_source in source_index
+            v1    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
+            v2    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
+            v3    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 3)
+            v4    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 4)
+            gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
+            cs    = source_buffer[18, i_source]
+            if VS
+                v += bound_induced_velocity(target - v1, target - v2, true, cs) * gamma
+                v += bound_induced_velocity(target - v2, target - v3, true, cs) * gamma
+                v += bound_induced_velocity(target - v3, target - v4, true, cs) * gamma
+                v += bound_induced_velocity(target - v4, target - v1, true, cs) * gamma
+            end
+        end
+        FastMultipole.set_gradient!(target_system, j_target, v)
+    end
+end
+
+function FastMultipole.buffer_to_target_system!(target_system::WakeBufferRings, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
+    @warn "A WakeBufferRings should not be used as a target in an FMM call."
+end
+
+"""
+    BoundaryFilamentWrapper{TF}
+
+One vortex filament per spanwise strip per surface, representing the top edge
+of the most-recently converted wake panel row. When a row overflows from the
+panel buffer into particles, its left/right streamwise edges and bottom
+(unsteady) edge become particles via `_convert_to_particles!`. The top edge —
+shared with the still-buffered row above — cannot become a particle without
+double-counting. This wrapper stores that top edge as a bound vortex filament
+so it can be included as an FMM source alongside the particles and buffer
+panels. Updated once per overflow event by `_convert_to_particles!`.
+"""
+struct BoundaryFilamentWrapper{TF}
+    r1::Vector{Vector{SVector{3,TF}}}
+    r2::Vector{Vector{SVector{3,TF}}}
+    gamma::Vector{Vector{TF}}
+    core_size::Vector{Vector{TF}}
+    active::Vector{Bool}
+end
+
+function BoundaryFilamentWrapper(wakes::Vector{Matrix{WakePanel{TF}}}) where TF
+    nsurf = length(wakes)
+    r1        = [fill(zero(SVector{3,TF}), size(wakes[i], 2)) for i in 1:nsurf]
+    r2        = [fill(zero(SVector{3,TF}), size(wakes[i], 2)) for i in 1:nsurf]
+    gamma     = [zeros(TF, size(wakes[i], 2)) for i in 1:nsurf]
+    core_size = [zeros(TF, size(wakes[i], 2)) for i in 1:nsurf]
+    return BoundaryFilamentWrapper{TF}(r1, r2, gamma, core_size, fill(false, nsurf))
+end
+
+Base.eltype(::BoundaryFilamentWrapper{TF}) where TF = TF
+FastMultipole.numtype(::BoundaryFilamentWrapper{TF}) where TF = TF
+FastMultipole.data_per_body(::BoundaryFilamentWrapper)    = 12
+FastMultipole.strength_dims(::BoundaryFilamentWrapper)    = 1
+FastMultipole.has_vector_potential(::BoundaryFilamentWrapper) = true
+
+function FastMultipole.get_n_bodies(bfw::BoundaryFilamentWrapper)
+    n = 0
+    for i in eachindex(bfw.active)
+        bfw.active[i] && (n += length(bfw.gamma[i]))
+    end
+    return n
+end
+
+function _bfw_index(bfw::BoundaryFilamentWrapper, n)
+    n_counter = 0
+    for i in eachindex(bfw.active)
+        bfw.active[i] || continue
+        ns = length(bfw.gamma[i])
+        if n_counter + ns >= n
+            return i, n - n_counter
+        end
+        n_counter += ns
+    end
+    error("BoundaryFilamentWrapper index $n out of active range")
+end
+
+function FastMultipole.get_position(bfw::BoundaryFilamentWrapper, n)
+    i, j = _bfw_index(bfw, n)
+    return 0.5 * (bfw.r1[i][j] + bfw.r2[i][j])
+end
+
+function FastMultipole.source_system_to_buffer!(buffer, i_buffer, bfw::BoundaryFilamentWrapper, i_body)
+    i, j  = _bfw_index(bfw, i_body)
+    r1 = bfw.r1[i][j]
+    r2 = bfw.r2[i][j]
+    cs = bfw.core_size[i][j]
+    buffer[1:3, i_buffer] .= 0.5 * (r1 + r2)
+    buffer[4,   i_buffer]  = 0.5 * norm(r2 - r1) + cs
+    buffer[5,   i_buffer]  = bfw.gamma[i][j]
+    buffer[6:8,  i_buffer] .= r1
+    buffer[9:11, i_buffer] .= r2
+    buffer[12,   i_buffer]  = cs
+end
+
+function FastMultipole.body_to_multipole!(bfw::BoundaryFilamentWrapper, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
+    for i_body in bodies_index
+        rtl   = FastMultipole.get_vertex(buffer, bfw, i_body, 1)
+        rtr   = FastMultipole.get_vertex(buffer, bfw, i_body, 2)
+        gamma = FastMultipole.get_strength(buffer, bfw, i_body)[1]
+        body_to_multipole_vl!(multipole_coefficients, harmonics, rtl, rtr, center, gamma, expansion_order)
+    end
+end
+
+function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::BoundaryFilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+    @inbounds for j_target in target_index
+        target = FastMultipole.get_position(target_system, j_target)
+        v = SVector{3,TF}(0.0, 0.0, 0.0)
+        @inbounds for i_source in source_index
+            v1    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
+            v2    = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
+            gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
+            cs    = source_buffer[12, i_source]
+            if VS
+                v += bound_induced_velocity(target - v1, target - v2, true, cs) * gamma
+            end
+        end
+        FastMultipole.set_gradient!(target_system, j_target, v)
+    end
+end
+
+function FastMultipole.buffer_to_target_system!(target_system::BoundaryFilamentWrapper, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
+    @warn "A BoundaryFilamentWrapper should not be used as a target in an FMM call."
+end
+
+"""
     update_trailing_edge_filaments!(pbf::PanelBufferFilaments, current_surfaces, Γ)
 
-Populate row-1 strengths of the active panel-buffer filaments from the
-current circulation vector `Γ`. Row-1 only — deeper buffer rows keep the
-strength they were given when originally shed. Surfaces with `nwake==0` are
-skipped (their Γ indices are still advanced).
+Populate row-1 strengths of the active panel-buffer rows from the current
+circulation vector `Γ`. Row-1 only — deeper buffer rows keep the strength they
+were given when originally shed. Surfaces with `nwake==0` are skipped (their Γ
+indices are still advanced). Works for both `PanelBufferFilaments` and
+`WakeBufferRings` since both alias the same wake storage.
 """
 function update_trailing_edge_filaments!(pbf::PanelBufferFilaments, current_surfaces, Γ::Vector{TF}) where TF
     wakes = pbf.wakes
@@ -224,6 +426,9 @@ function update_trailing_edge_filaments!(pbf::PanelBufferFilaments, current_surf
     end
 end
 
+update_trailing_edge_filaments!(wbr::WakeBufferRings, current_surfaces, Γ) =
+    update_trailing_edge_filaments!(PanelBufferFilaments(wbr.wakes, wbr.nwake), current_surfaces, Γ)
+
 """
     wake_on_all!(system, wake::PanelParticleWake, trailing_edge_filaments; fmm_wake_args...)
 
@@ -232,27 +437,62 @@ particle field (`wake.pfield`) plus the active panel-buffer filaments;
 targets are the particle field and the body probes.
 """
 function wake_on_all!(system, wake::PanelParticleWake,
-        trailing_edge_filaments::PanelBufferFilaments; fmm_wake_args...)
+        trailing_edge_filaments::WakeBufferRings; fmm_wake_args...)
     FastMultipole.reset!(system.probes)
-    update_probes!(system)
-    np = FLOWVPM.get_np(wake.pfield)
+    n_active_probes = update_probes!(system; nwake_active=wake.nwake)
+    np   = FLOWVPM.get_np(wake.pfield)
     nfil = FastMultipole.get_n_bodies(trailing_edge_filaments)
-    if np > 0 && nfil > 0
-        fmm_args = fmm!((wake.pfield, system.probes), (wake.pfield, trailing_edge_filaments);
-            _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
-            hessian=SVector{2}(true, false), fmm_wake_args...)
+    nbf  = FastMultipole.get_n_bodies(wake.boundary_filaments)
+    if np > 0 && (nfil > 0 || nbf > 0)
+        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        if nfil > 0 && nbf > 0
+            fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, trailing_edge_filaments, wake.boundary_filaments);
+                _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
+                hessian=SVector{2}(true, false), fmm_wake_args...)
+        elseif nfil > 0
+            fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, trailing_edge_filaments);
+                _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
+                hessian=SVector{2}(true, false), fmm_wake_args...)
+        else
+            fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, wake.boundary_filaments);
+                _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
+                hessian=SVector{2}(true, false), fmm_wake_args...)
+        end
+        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :wake, fmm_args)
     elseif np > 0
-        fmm_args = fmm!((wake.pfield, system.probes), (wake.pfield,);
+        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield,);
             _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_wake_args...)
+        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :wake, fmm_args)
-    elseif nfil > 0
+    elseif nfil > 0 || nbf > 0
+        # No particles yet, but buffer rings (and/or boundary filament) exist.
+        # normal_velocity! uses include_wakes=false, so the ONLY path for
+        # wake-panel influence on the body is through probes_to_surfaces!.
+        # Compute the ring-panel→probe FMM so the buffer wake is felt before
+        # the first particle appears; otherwise Ct jumps at first overflow.
+        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        if nfil > 0 && nbf > 0
+            fmm!((probes_active,), (trailing_edge_filaments, wake.boundary_filaments);
+                hessian=SVector{1}(false), fmm_wake_args...)
+        elseif nfil > 0
+            fmm!((probes_active,), (trailing_edge_filaments,);
+                hessian=SVector{1}(false), fmm_wake_args...)
+        else
+            fmm!((probes_active,), (wake.boundary_filaments,);
+                hessian=SVector{1}(false), fmm_wake_args...)
+        end
+        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         for V in system.V
             fill!(V, zero(eltype(V)))
         end
     end
-    probes_to_surfaces!(system)
+    probes_to_surfaces!(system; nwake_active=wake.nwake)
     return wake
 end
 
@@ -263,20 +503,26 @@ FMM vehicle-influence pass for `PanelParticleWake`. Sources are the body
 surfaces; targets are the particle field and the body probes.
 """
 function vehicle_on_all!(system, wake::PanelParticleWake,
-        trailing_edge_filaments::PanelBufferFilaments; fmm_vehicle_args...)
+        trailing_edge_filaments::WakeBufferRings; fmm_vehicle_args...)
     FastMultipole.reset!(system.probes)
-    update_probes!(system)
+    n_active_probes = update_probes!(system; nwake_active=wake.nwake)
     np = FLOWVPM.get_np(wake.pfield)
     if np > 0
-        fmm_args = fmm!((wake.pfield, system.probes), (system,);
+        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        fmm_args = fmm!((wake.pfield, probes_active), (system,);
             _fmm_kwargs(wake.fmm_vehicle[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_vehicle_args...)
+        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :vehicle, fmm_args)
     else
-        fmm!((system.probes,), (system,);
+        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        fmm!((probes_active,), (system,);
             hessian=SVector{1}(false), fmm_vehicle_args...)
+        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
     end
-    probes_to_surfaces!(system)
+    probes_to_surfaces!(system; nwake_active=wake.nwake)
     return wake
 end
 

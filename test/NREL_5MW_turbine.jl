@@ -27,7 +27,16 @@ function main()
     ns = 20
     nc = 1
 
-    grids, ratios, polars, frames = VortexLattice.generate_rotor("NREL5MW.csv", data_path;
+    run_true = false
+    if run_true
+        str = "NREL5MW TRUE.csv"
+        r_hub = 1.5
+    else
+        str = "NREL5MW.csv"
+        r_hub = 11.25
+    end
+
+    grids, ratios, polars, frames = VortexLattice.generate_rotor(str, data_path;
                                                                 turbine_flag=false,
                                                                 clockwise=true,
                                                                 ns,
@@ -40,11 +49,11 @@ function main()
     nwakerows = 1
     system = System(grids; ratios, core_size, nw=fill(nwakerows, length(grids)));
 
-    Sref = 1.0
-    cref = 1.0
-    bref = 1.0
+    Sref = pi * R^2  # rotor disk area
+    cref = 3.0  # approximate mid-chord (check your blade file for exact value)
+    bref = R - 1.5  # blade span (R - r_hub)
     rref = [0.0, 0.0, 0.0]
-    Vinf = 1.0
+    Vinf = magVinf
     ref = Reference(Sref, cref, bref, rref, Vinf)
     system.reference[] = ref
 
@@ -72,9 +81,9 @@ function main()
             dependent_index = collect(1:length(system.surfaces))
         )
 
-    n_revs = 1
+    n_revs = 3
     ttot = n_revs / (RPM / 60)
-    timestep_per_rev = 36
+    timestep_per_rev = 12
     t_range = range(start=0.0, stop=ttot, length=n_revs * timestep_per_rev + 1)
     overlap = 1.3
     p_per_step = 2
@@ -117,6 +126,8 @@ function main()
                 wake_type=PanelParticleWake,
                 method_trailing=SigmaPPS(sigma, p_per_step),
                 method_unsteady=SigmaPPS(sigma, p_per_step),
+                # method_trailing=SigmaOverlap(sigma, 1.3),
+                # method_unsteady=SigmaOverlap(sigma, 1.3),
                 eta=0.3,
                 monitors,
                 name = "NREL5MW",
@@ -126,21 +137,23 @@ function main()
                 polars,
                 frames_index=fill(1, length(system.surfaces)),
                 verbose=true,
-                max_particles=50000,
+                max_particles=100_000,
                 fmm_wake=fmm_wake,
                 fmm_vehicle=fmm_vehicle,
             )
 
+            
+
     # Normal force along the blade
-    RHO = 1.0
-    r_hub = 1.5
     dr = (R - r_hub) / ns
     x = r_hub .+ dr * (1:ns)
 
     # Panel forces: CF is (3, nc, ns, nt) — component 1 (axial/thrust), chordwise 1, all spans, last step
-    F_panel = monitors[1].CF[1, 1, :, end] .* (0.5 * RHO * ref.V^2 * ref.S / dr)
-    # Lifting line: normalized=false gives dimensional N/m
-    F_lift = monitors[2].CF[1][1, :, end]
+    F_panel = monitors[1].CF[1, 1, :, end] .* (0.5 * rho * ref.V^2 * ref.S / dr)
+    # Lifting line: normalized=false gives dimensional N/m at rho=1; scale to actual density
+    F_lift = monitors[2].CF[1][1, :, end] .* rho
+
+    @show maximum(F_panel)
 
     p = plot(x, F_panel; xlabel="r (m)", ylabel="Normal force (N/m)", label="Panel forces")
     plot!(p, x, F_lift; label="Lifting line forces")
@@ -151,7 +164,7 @@ function main()
     q = 0.5 * rho * magVinf^2
     A_disk = pi * R^2
     nt = length(t_range)
-    CT_time = [abs(B * FLOWMath.trapz(x, monitors[2].CF[1][1, :, it])) / (q * A_disk) for it in 1:nt]
+    CT_time = [abs(B * rho * FLOWMath.trapz(x, monitors[2].CF[1][1, :, it])) / (q * A_disk) for it in 1:nt]
     println("Final CT: $(CT_time[end])")
 
     p2 = plot(t_range, CT_time; xlabel="t (s)", ylabel="CT", label="CT")

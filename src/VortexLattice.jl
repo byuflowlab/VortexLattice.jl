@@ -21,7 +21,7 @@ export reflect, set_normal
 include("wake.jl")
 export Wake
 export PanelParticleWake
-export WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS
+export WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS, SigmaOverlap
 export IntegrationScheme, EulerScheme, RK3Scheme
 
 include("panel_particle_wake.jl")
