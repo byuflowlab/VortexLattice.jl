@@ -274,7 +274,7 @@ function simulate!(system::System, wake::PanelParticleWake,
         fmm_wake_args=(), fmm_vehicle_args=(),
         derivatives=false,
         monitors=(),
-        calculate_influence_matrix=true,
+        recalculate_influence_matrix=true,
         polars=nothing, frames_index=fill(-1, length(system.surfaces)),
         restart_from::Union{Nothing,String}=nothing,
         restart_idx::Union{Nothing,Int}=nothing,
@@ -347,15 +347,14 @@ function simulate!(system::System, wake::PanelParticleWake,
             kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
             update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
                 system.surfaces, ref, system.freestream[], dt0, nothing, Vte, system.nwake, wake.eta)
-            if calculate_influence_matrix
-                influence_coefficients!(system.AIC, system.surfaces;
-                    symmetric, wake_shedding_locations=system.wake_shedding_locations,
-                    surface_id, trailing_vortices=system.trailing_vortices, xhat,
-                    force_finite_core=fill(true, length(system.surfaces)))
-            end
+            influence_coefficients!(system.AIC, system.surfaces;
+                symmetric, wake_shedding_locations=system.wake_shedding_locations,
+                surface_id, trailing_vortices=system.trailing_vortices, xhat,
+                force_finite_core=fill(true, length(system.surfaces)))
             update_trailing_edge_coefficients!(system.AIC, system.surfaces;
                 symmetric, wake_shedding_locations=system.wake_shedding_locations,
                 trailing_vortices=system.trailing_vortices)
+            system.fAIC[] = lu(system.AIC)
             if derivatives
                 normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
                     ref, system.freestream[]; additional_velocity=nothing, Vcp, symmetric,
@@ -367,7 +366,7 @@ function simulate!(system::System, wake::PanelParticleWake,
                     additional_velocity=nothing, Vcp, symmetric, nwake=system.nwake,
                     surface_id, wake_finite_core, trailing_vortices=system.trailing_vortices,
                     xhat, include_wakes=false)
-                circulation!(system.Γ, system.AIC, system.w)
+                ldiv!(system.Γ, system.fAIC[], system.w)
             end
 
             # second iteration: pre-seed the first wake row so step 0 of the loop
@@ -390,7 +389,7 @@ function simulate!(system::System, wake::PanelParticleWake,
                     additional_velocity=nothing, Vcp, symmetric, nwake=system.nwake,
                     surface_id, wake_finite_core, trailing_vortices=system.trailing_vortices,
                     xhat, include_wakes=false)
-                circulation!(system.Γ, system.AIC, system.w)
+                ldiv!(system.Γ, system.fAIC[], system.w)
             end
         end
     end
@@ -483,17 +482,20 @@ function simulate!(system::System, wake::PanelParticleWake,
         additional_velocity = nothing
 
         # AIC (re)build
-        if calculate_influence_matrix
+        if recalculate_influence_matrix || i_step == start_step
             influence_coefficients!(AIC, system.surfaces;
                 symmetric, wake_shedding_locations = system.wake_shedding_locations,
                 surface_id, trailing_vortices, xhat,
                 force_finite_core = fill(true, length(system.surfaces)))
+            update_trailing_edge_coefficients!(AIC, system.surfaces;
+                symmetric, wake_shedding_locations = system.wake_shedding_locations,
+                trailing_vortices)
+            system.fAIC[] = lu(AIC)
+        else
+            # lock AIC: move wake shedding locations with trailing edge kinematics
+            update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+                system.surfaces, ref, fs, dt, additional_velocity, Vte, system.nwake, wake.eta)
         end
-
-        # update AIC for the current wake shedding locations
-        update_trailing_edge_coefficients!(AIC, system.surfaces;
-            symmetric, wake_shedding_locations = system.wake_shedding_locations,
-            trailing_vortices)
 
         # RHS
         if derivatives
@@ -514,7 +516,7 @@ function simulate!(system::System, wake::PanelParticleWake,
         if derivatives
             circulation_derivatives!(Γ, dΓ, AIC, w, dw)
         else
-            circulation!(Γ, AIC, w)
+            ldiv!(Γ, system.fAIC[], w)
         end
 
         # finish finite-difference dΓ/dt
@@ -631,7 +633,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         trailing_vortices=fill(false, length(system.surfaces)),
         shedding_surfaces=fill(true, length(system.surfaces)),
         monitors=(),
-        calculate_influence_matrix=true,
+        recalculate_influence_matrix=true,
         polars=nothing, frames_index=fill(-1, length(system.surfaces)), # viscous correction
         verbose=true
     )
@@ -778,17 +780,20 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         #--- solve the system ---#
 
         # calculate/re-calculate AIC matrix (if necessary)
-        if calculate_influence_matrix
+        if recalculate_influence_matrix || i_step == 0
             influence_coefficients!(AIC, current_surfaces;
                 symmetric, wake_shedding_locations,
                 # ignore_trailing_edges = shedding_surfaces,
                 surface_id, trailing_vortices, xhat,
                 force_finite_core = fill(true, length(current_surfaces)))
+            update_trailing_edge_coefficients!(AIC, current_surfaces;
+                symmetric, wake_shedding_locations, trailing_vortices)
+            system.fAIC[] = lu(AIC)
+        else
+            # lock AIC: move wake shedding locations with trailing edge kinematics
+            update_wake_shedding_locations!(wakes, wake_shedding_locations,
+                current_surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
         end
-
-        # update the AIC matrix to use the new wake shedding locations
-        update_trailing_edge_coefficients!(AIC, current_surfaces;
-            symmetric, wake_shedding_locations, trailing_vortices)
 
         # calculate RHS
         if derivatives
@@ -810,7 +815,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         if derivatives
             circulation_derivatives!(Γ, dΓ, AIC, w, dw)
         else
-            circulation!(Γ, AIC, w)
+            ldiv!(Γ, system.fAIC[], w)
         end
 
         # solve for dΓdt using finite difference `dΓdt = (Γ - Γp)/dt`

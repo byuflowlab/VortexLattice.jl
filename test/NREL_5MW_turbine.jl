@@ -140,6 +140,7 @@ function main()
                 max_particles=100_000,
                 fmm_wake=fmm_wake,
                 fmm_vehicle=fmm_vehicle,
+                recalculate_influence_matrix=false
             )
 
             

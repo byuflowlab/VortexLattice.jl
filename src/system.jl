@@ -79,6 +79,7 @@ Contains pre-allocated storage for internal system variables.
 """
 struct System{TF}
     AIC::Matrix{TF}
+    fAIC::Array{LU{TF, Matrix{TF}, Vector{Int64}}, 0}
     w::Vector{TF}
     Γ::Vector{TF}
     V::Vector{Matrix{SVector{3,TF}}}
@@ -232,6 +233,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     end
 
     AIC = zeros(TF, N, N)
+    fAIC = fill(lu(AIC, check=false))
     w = zeros(TF, N)
     Γ = zeros(TF, N)
     V = [fill((@SVector zeros(TF, 3)), nw[i]+1, ns[i]+1) for i = 1:nsurf]
@@ -264,7 +266,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     n_probes = get_n_probes(surfaces, nw)
     probes = FastMultipole.ProbeSystem(n_probes, TF)
 
-    return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, 
+    return System{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
         wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
