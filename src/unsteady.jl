@@ -261,6 +261,406 @@ function Base.isnan(val::SVector{N,TF}) where {N,TF}
 end
 
 
+function _init_simulate!(system, wake::PanelParticleWake, frames, name, path,
+        restart_from, restart_idx, write_restart, vtk_interval, t_range)
+    @assert wake.nwakerows >= 1 "PanelParticleWake requires nwakerows >= 1, got $(wake.nwakerows)"
+
+    if !isnothing(path) && !isdir(path)
+        mkpath(path)
+    end
+    if isnothing(path)
+        write_restart = false
+        vtk_interval  = 0
+    end
+
+    restart_state = nothing
+    if !isnothing(restart_from)
+        restart_state = restore_restart!(system, wake, frames, restart_from; idx=restart_idx)
+    end
+
+    body_name       = isnothing(path) ? nothing : joinpath(path, name * "_bodies")
+    checkpoint_base = isnothing(path) ? name    : joinpath(path, name)
+    overwrite_first = isnothing(restart_state)
+    body_writer = isnothing(body_name) ? nothing :
+        _init_system_vtk_writer(body_name, system; overwrite=overwrite_first)
+    wake_writer = isnothing(path) ? nothing :
+        _init_wake_vtk_writer(joinpath(path, name * "_wake"), wake; overwrite=overwrite_first)
+
+    if write_restart && !isnothing(body_name) && isnothing(restart_state)
+        write_restart_checkpoint(checkpoint_base, 0, t_range[1], system, wake, frames; overwrite=true)
+    end
+
+    return (;restart_state, body_name, checkpoint_base, body_writer, wake_writer,
+             write_restart, vtk_interval)
+end
+
+function _warm_start!(system, wake::PanelParticleWake, frames, maneuver!, Vinf, Ωinf,
+        t_range, trailing_edge_filaments, ref, symmetric, surface_id, wake_finite_core,
+        xhat, derivatives, fmm_wake_args)
+    t0  = t_range[1]
+    dt0 = t_range[2] - t_range[1]
+
+    Vcp = system.Vcp; Vh = system.Vh; Vv = system.Vv; Vte = system.Vte
+    for isurf in 1:length(system.surfaces)
+        Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
+        Vh[isurf]  .= Ref(zero(eltype(Vh[isurf])))
+        Vv[isurf]  .= Ref(zero(eltype(Vv[isurf])))
+        Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
+    end
+    system.w .= zero(eltype(system.w))
+    system.nwake .= 0
+    maneuver!(frames, system, wake, t0)
+    system.freestream[] = velocity_to_freestream(Vinf(t0), Ωinf(t0))
+    kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
+    update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+        system.surfaces, ref, system.freestream[], dt0, nothing, Vte, system.nwake, wake.eta)
+    influence_coefficients!(system.AIC, system.surfaces;
+        symmetric, wake_shedding_locations=system.wake_shedding_locations,
+        surface_id, trailing_vortices=system.trailing_vortices, xhat,
+        force_finite_core=fill(true, length(system.surfaces)))
+    update_trailing_edge_coefficients!(system.AIC, system.surfaces;
+        symmetric, wake_shedding_locations=system.wake_shedding_locations,
+        trailing_vortices=system.trailing_vortices)
+    system.fAIC[] = lu(system.AIC)
+
+    # solve twice: once without wake influence, once with the first shed row
+    for pass in 1:2
+        system.w .= zero(eltype(system.w))
+        if derivatives
+            normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
+                ref, system.freestream[]; additional_velocity=nothing, Vcp, symmetric,
+                nwake=system.nwake, surface_id, wake_finite_core,
+                trailing_vortices=system.trailing_vortices, xhat, include_wakes=false)
+            circulation_derivatives!(system.Γ, system.dΓ, system.AIC, system.w, system.dw)
+        else
+            normal_velocity!(system.w, system.surfaces, system.wakes, ref, system.freestream[];
+                additional_velocity=nothing, Vcp, symmetric, nwake=system.nwake,
+                surface_id, wake_finite_core, trailing_vortices=system.trailing_vortices,
+                xhat, include_wakes=false)
+            ldiv!(system.Γ, system.fAIC[], system.w)
+        end
+        pass == 2 && break
+        # pre-seed the first wake row so step 0 sees wake influence (makes dΓdt ≈ 0)
+        shed_wake!(wake, system, dt0, system.Γ)
+        system.nwake .= wake.nwake
+        reset!(wake)
+        update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
+        wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
+        wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+    end
+end
+
+function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_filaments,
+        config, i_step, start_step, t, t_range)
+    (;ref, symmetric, surface_id, wake_finite_core, xhat,
+      recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
+      polars, frames_index, monitors, vtk_interval, body_name, write_restart,
+      checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
+      Γ_wake, dΓdt_wake) = config
+
+    verbose && println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(FLOWVPM.get_np(wake.pfield))")
+
+    #------- reset system -------#
+
+    for isurf in 1:length(system.surfaces)
+        system.Vcp[isurf] .= Ref(zero(eltype(system.Vcp[isurf])))
+        system.Vh[isurf]  .= Ref(zero(eltype(system.Vh[isurf])))
+        system.Vv[isurf]  .= Ref(zero(eltype(system.Vv[isurf])))
+        system.Vte[isurf] .= Ref(zero(eltype(system.Vte[isurf])))
+    end
+    system.w .= zero(eltype(system.w))
+    for i in eachindex(system.dw)
+        system.dw[i] .= zero(eltype(system.dw[i]))
+    end
+    reset!(wake)
+
+    #------- controls -------#
+
+    maneuver!(frames, system, wake, t)
+
+    #------- external flow -------#
+
+    vinf = Vinf(t)
+    fs   = velocity_to_freestream(vinf, Ωinf(t))
+    system.freestream[] = fs
+    kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
+
+    dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
+
+    if i_step == 0
+        update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+            system.surfaces, ref, fs, dt, nothing, system.Vte, system.nwake, wake.eta)
+    end
+
+    #------- wake coupling -------#
+
+    system.nwake .= wake.nwake
+    update_TE!(wake, system)
+    update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
+    if FLOWVPM.get_np(wake.pfield) > 0 || any(>(0), wake.nwake)
+        wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
+        wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+    end
+
+    #------- AIC + solve -------#
+
+    AIC = system.AIC
+    Γ   = system.Γ
+    trailing_vortices = system.trailing_vortices
+
+    if recalculate_influence_matrix || i_step == start_step
+        influence_coefficients!(AIC, system.surfaces;
+            symmetric, wake_shedding_locations=system.wake_shedding_locations,
+            surface_id, trailing_vortices, xhat,
+            force_finite_core=fill(true, length(system.surfaces)))
+        update_trailing_edge_coefficients!(AIC, system.surfaces;
+            symmetric, wake_shedding_locations=system.wake_shedding_locations,
+            trailing_vortices)
+        system.fAIC[] = lu(AIC)
+    else
+        update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+            system.surfaces, ref, fs, dt, nothing, system.Vte, system.nwake, wake.eta)
+    end
+
+    if derivatives
+        normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
+            ref, fs; additional_velocity=nothing, Vcp=system.Vcp, symmetric,
+            nwake=system.nwake, surface_id, wake_finite_core,
+            trailing_vortices, xhat, include_wakes=false)
+        system.dΓdt .= .-Γ
+        circulation_derivatives!(Γ, system.dΓ, AIC, system.w, system.dw)
+    else
+        normal_velocity!(system.w, system.surfaces, system.wakes, ref, fs;
+            additional_velocity=nothing, Vcp=system.Vcp, symmetric, nwake=system.nwake,
+            surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
+        system.dΓdt .= .-Γ
+        ldiv!(Γ, system.fAIC[], system.w)
+    end
+    system.dΓdt .+= Γ
+    system.dΓdt ./= dt
+
+    vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
+
+    #------- near-field forces + viscous -------#
+
+    if derivatives
+        near_field_forces_derivatives!(system.properties, system.dproperties,
+            system.surfaces, system.wakes, ref, fs, Γ, system.dΓ;
+            dΓdt=system.dΓdt, additional_velocity=nothing, Vh=system.Vh, Vv=system.Vv,
+            symmetric, nwake=system.nwake, surface_id, wake_finite_core,
+            wake_shedding_locations=system.wake_shedding_locations,
+            trailing_vortices, xhat, calculate_vlm_induced=false)
+    else
+        near_field_forces!(system.properties, system.surfaces, system.wakes,
+            ref, fs, Γ; dΓdt=system.dΓdt, additional_velocity=nothing,
+            Vh=system.Vh, Vv=system.Vv, symmetric, nwake=system.nwake, surface_id,
+            wake_finite_core, wake_shedding_locations=system.wake_shedding_locations,
+            trailing_vortices, xhat, calculate_vlm_induced=false)
+    end
+
+    Γ_wake .= Γ
+    if !isnothing(polars)
+        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
+            frames_index, polars, ref, dt)
+    end
+    dΓdt_wake .+= Γ_wake
+    dΓdt_wake ./= dt
+
+    #------- monitors -------#
+
+    system.near_field_analysis[] = true
+    for monitor in monitors
+        monitor(system, wake, i_step)
+    end
+
+    #------- propagate system -------#
+
+    _seed_wake_velocity!(wake, fs)
+    propagate!(wake, dt; Vinf=vinf, relax=true)
+    store_trailing_edge!(system.wake_shedding_locations, system.surfaces)
+    propagate_kinematics!(system, frames, dt)
+
+    idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
+    system.freestream[] = velocity_to_freestream(Vinf(t_range[idx]), Ωinf(t_range[idx]))
+
+    for isurf in 1:length(system.surfaces)
+        system.Vcp[isurf] .= Ref(zero(eltype(system.Vcp[isurf])))
+        system.Vh[isurf]  .= Ref(zero(eltype(system.Vh[isurf])))
+        system.Vv[isurf]  .= Ref(zero(eltype(system.Vv[isurf])))
+        system.Vte[isurf] .= Ref(zero(eltype(system.Vte[isurf])))
+    end
+    kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
+
+    update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
+        system.surfaces, ref, system.freestream[], dt, nothing,
+        system.Vte, system.nwake, wake.eta; sync_panels=false)
+
+    shed_wake!(wake, system, dt, Γ_wake)
+
+    if vtk_interval > 0 && !isnothing(body_writer) && mod(i_step, vtk_interval) == 0
+        _append_system_vtk!(body_writer, system, i_step, t)
+        _append_wake_vtk!(wake_writer, wake, i_step, t)
+        _append_step_log!(body_writer, system, wake, i_step, t)
+        if write_restart && !isnothing(body_name) && i_step < length(t_range) - 1
+            write_restart_checkpoint(checkpoint_base, i_step + 1, t, system, wake, frames;
+                overwrite=false)
+        end
+    end
+end
+
+function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_filaments,
+        config, i_step, t, t_range)
+    (;eta, trailing_vortices, derivatives, recalculate_influence_matrix,
+      fmm_wake_args, fmm_vehicle_args, particle_trailing_methods, particle_unsteady_methods,
+      polars, frames_index, monitors, path, name, vtk_args, vtk_postshed,
+      Vinf, Ωinf, maneuver!, verbose, Γ_wake, dΓdt_wake) = config
+
+    verbose && println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(FLOWVPM.get_np(wake))")
+
+    #------- reset system -------#
+
+    for isurf in 1:length(system.surfaces)
+        system.Vcp[isurf] .= Ref(zero(eltype(system.Vcp[isurf])))
+        system.Vh[isurf]  .= Ref(zero(eltype(system.Vh[isurf])))
+        system.Vv[isurf]  .= Ref(zero(eltype(system.Vv[isurf])))
+        system.Vte[isurf] .= Ref(zero(eltype(system.Vte[isurf])))
+        system.V[isurf]   .= Ref(zero(eltype(system.V[isurf])))
+    end
+    system.w .= zero(eltype(system.w))
+    for i in eachindex(system.dw)
+        system.dw[i] .= zero(eltype(system.dw[i]))
+    end
+    FLOWVPM._reset_particles(wake)
+    FLOWVPM._reset_particles_sfs(wake)
+
+    #------- controls -------#
+
+    maneuver!(frames, system, wake, t)
+    kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
+
+    #------- aerodynamics -------#
+
+    ref              = system.reference[]
+    symmetric        = system.symmetric
+    surface_id       = system.surface_id
+    wake_finite_core = system.wake_finite_core
+    xhat             = system.xhat[]
+    symmetric       .= false
+
+    wakes                  = system.wakes
+    wake_shedding_locations = system.wake_shedding_locations
+    nwake                  = system.nwake
+    Γ                      = system.Γ
+    fs                     = system.freestream[]
+
+    dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
+    if i_step == 0
+        dt = t_range[2] - t_range[1]
+        update_wake_shedding_locations!(wakes, wake_shedding_locations,
+            system.surfaces, ref, fs, dt, nothing, system.Vte, nwake, eta)
+        initial_wake_panels!(wakes, wake_shedding_locations, system.surfaces, Γ, eta)
+    end
+
+    update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, Γ)
+    wake.SFS(wake, FLOWVPM.BeforeUJ())
+    wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+
+    #------- AIC + solve -------#
+
+    AIC = system.AIC
+
+    if recalculate_influence_matrix || i_step == 0
+        influence_coefficients!(AIC, system.surfaces;
+            symmetric, wake_shedding_locations,
+            surface_id, trailing_vortices, xhat,
+            force_finite_core=fill(true, length(system.surfaces)))
+        update_trailing_edge_coefficients!(AIC, system.surfaces;
+            symmetric, wake_shedding_locations, trailing_vortices)
+        system.fAIC[] = lu(AIC)
+    else
+        update_wake_shedding_locations!(wakes, wake_shedding_locations,
+            system.surfaces, ref, fs, dt, nothing, system.Vte, nwake, eta)
+    end
+
+    if derivatives
+        normal_velocity_derivatives!(system.w, system.dw, system.surfaces, wakes,
+            ref, fs; additional_velocity=nothing, Vcp=system.Vcp, symmetric, nwake,
+            surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
+        system.dΓdt .= .-Γ
+        circulation_derivatives!(Γ, system.dΓ, AIC, system.w, system.dw)
+    else
+        normal_velocity!(system.w, system.surfaces, wakes, ref, fs;
+            additional_velocity=nothing, Vcp=system.Vcp, symmetric, nwake,
+            surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
+        system.dΓdt .= .-Γ
+        ldiv!(Γ, system.fAIC[], system.w)
+    end
+    system.dΓdt .+= Γ
+    system.dΓdt ./= dt
+
+    vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
+
+    #------- near-field forces + viscous -------#
+
+    if derivatives
+        near_field_forces_derivatives!(system.properties, system.dproperties,
+            system.surfaces, wakes, ref, fs, Γ, system.dΓ; dΓdt=system.dΓdt,
+            additional_velocity=nothing, Vh=system.Vh, Vv=system.Vv, symmetric, nwake,
+            surface_id, wake_finite_core, wake_shedding_locations,
+            trailing_vortices, xhat, calculate_vlm_induced=false)
+    else
+        near_field_forces!(system.properties, system.surfaces, wakes,
+            ref, fs, Γ; dΓdt=system.dΓdt, additional_velocity=nothing,
+            Vh=system.Vh, Vv=system.Vv, symmetric, nwake, surface_id, wake_finite_core,
+            wake_shedding_locations, trailing_vortices, xhat, calculate_vlm_induced=false)
+    end
+
+    Γ_wake .= Γ
+    viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
+        frames_index, polars, ref, dt)
+    dΓdt_wake .+= Γ_wake
+    dΓdt_wake ./= dt
+
+    #------- monitors -------#
+
+    system.near_field_analysis[] = true
+    for monitor in monitors
+        monitor(system, wake, i_step)
+    end
+
+    #------- save state -------#
+
+    if !isnothing(path)
+        write_vtk(joinpath(path, name * "_step_$i_step"), system; vtk_args...)
+        FLOWVPM.save(wake, name * "_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
+    end
+
+    #------- propagate system -------#
+
+    if i_step < length(t_range)
+        FLOWVPM._euler(wake, dt; relax=true)
+        update_vpm_shedding_TE!(wakes, ref, fs, dt, nothing, nothing)
+        store_trailing_edge!(wake_shedding_locations, system.surfaces)
+        propagate_kinematics!(system, frames, dt)
+
+        idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
+        fs_next = velocity_to_freestream(Vinf(t_range[idx]), Ωinf(t_range[idx]))
+        system.freestream[] = fs_next
+
+        update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations,
+            system.surfaces, ref, fs_next, dt, nothing, nothing, nwake, eta)
+
+        shed_wake!(wake, system, dt, Γ_wake, system.dΓdt,
+            particle_trailing_methods, particle_unsteady_methods)
+        dΓdt_wake .= -Γ_wake
+
+        if !isnothing(path) && vtk_postshed
+            write_vtk(joinpath(path, name * "_postshed_step_$i_step"), system; write_wakes=true, vtk_args...)
+            FLOWVPM.save(wake, name * "_postshed_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
+        end
+    end
+end
+
 """
     simulate!(system::System, wake::PanelParticleWake, frames, maneuver!, Vinf, t_range,
               Ωinf=(t)->SVector{3}(0,0,0); kwargs...)
@@ -282,336 +682,39 @@ function simulate!(system::System, wake::PanelParticleWake,
         write_restart::Bool=true,
         verbose=true,
     )
-    # Validate wake configuration
-    @assert wake.nwakerows >= 1 "PanelParticleWake requires nwakerows >= 1, got $(wake.nwakerows)"
+    (;restart_state, body_name, checkpoint_base, body_writer, wake_writer,
+      write_restart, vtk_interval) = _init_simulate!(system, wake, frames, name, path,
+        restart_from, restart_idx, write_restart, vtk_interval, t_range)
 
-    # create save path if it does not exist
-    if !isnothing(path) && !isdir(path)
-        mkpath(path)
-    end
-
-    if isnothing(path)
-        write_restart = false
-        vtk_interval = 0
-    end
-
-    restart_state = nothing
-    if !isnothing(restart_from)
-        restart_state = restore_restart!(system, wake, frames, restart_from; idx=restart_idx)
-    end
-
-    # unpack reference and storage for circulation bookkeeping
-    ref = system.reference[]
-    Γ_wake = zeros(length(system.Γ))
-    dΓdt_wake = zeros(length(system.Γ))
-
-    # nwake-aware filament wrapper over the active panel-buffer rows
+    ref               = system.reference[]
+    Γ_wake            = zeros(length(system.Γ))
+    dΓdt_wake         = zeros(length(system.Γ))
     trailing_edge_filaments = WakeBufferRings(wake)
+    symmetric         = system.symmetric
+    surface_id        = system.surface_id
+    wake_finite_core  = system.wake_finite_core
+    xhat              = system.xhat[]
+    symmetric        .= false
 
-    # persistent VTK writers avoid reopening/parsing PVD files every step
-    # constant system params
-    symmetric = system.symmetric
-    surface_id = system.surface_id
-    wake_finite_core = system.wake_finite_core
-    xhat = system.xhat[]
-    symmetric .= false
-
-    body_name = isnothing(path) ? nothing : joinpath(path, name * "_bodies")
-    checkpoint_base = isnothing(path) ? name : joinpath(path, name)
-
-    overwrite_first = isnothing(restart_state)
-    body_writer = isnothing(body_name) ? nothing :
-        _init_system_vtk_writer(body_name, system; overwrite=overwrite_first)
-    wake_writer = isnothing(path) ? nothing :
-        _init_wake_vtk_writer(joinpath(path, name * "_wake"), wake; overwrite=overwrite_first)
-
-    if write_restart && !isnothing(body_name) && isnothing(restart_state)
-        write_restart_checkpoint(checkpoint_base, 0, t_range[1], system, wake, frames; overwrite=true)
-    end
-
-    # warm start: solve for steady circulation at t₀ so dΓdt ≈ 0 on step 0
     if isnothing(restart_state)
-        let t0 = t_range[1], dt0 = t_range[2] - t_range[1]
-            Vcp = system.Vcp; Vh = system.Vh; Vv = system.Vv; Vte = system.Vte
-            for isurf in 1:length(system.surfaces)
-                Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
-                Vh[isurf]  .= Ref(zero(eltype(Vh[isurf])))
-                Vv[isurf]  .= Ref(zero(eltype(Vv[isurf])))
-                Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
-            end
-            system.w .= zero(eltype(system.w))
-            # match the nwake=0 state that step 0 sees after `system.nwake .= wake.nwake`
-            system.nwake .= 0
-            maneuver!(frames, system, wake, t0)
-            system.freestream[] = velocity_to_freestream(Vinf(t0), Ωinf(t0))
-            kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
-            update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
-                system.surfaces, ref, system.freestream[], dt0, nothing, Vte, system.nwake, wake.eta)
-            influence_coefficients!(system.AIC, system.surfaces;
-                symmetric, wake_shedding_locations=system.wake_shedding_locations,
-                surface_id, trailing_vortices=system.trailing_vortices, xhat,
-                force_finite_core=fill(true, length(system.surfaces)))
-            update_trailing_edge_coefficients!(system.AIC, system.surfaces;
-                symmetric, wake_shedding_locations=system.wake_shedding_locations,
-                trailing_vortices=system.trailing_vortices)
-            system.fAIC[] = lu(system.AIC)
-            if derivatives
-                normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
-                    ref, system.freestream[]; additional_velocity=nothing, Vcp, symmetric,
-                    nwake=system.nwake, surface_id, wake_finite_core,
-                    trailing_vortices=system.trailing_vortices, xhat, include_wakes=false)
-                circulation_derivatives!(system.Γ, system.dΓ, system.AIC, system.w, system.dw)
-            else
-                normal_velocity!(system.w, system.surfaces, system.wakes, ref, system.freestream[];
-                    additional_velocity=nothing, Vcp, symmetric, nwake=system.nwake,
-                    surface_id, wake_finite_core, trailing_vortices=system.trailing_vortices,
-                    xhat, include_wakes=false)
-                ldiv!(system.Γ, system.fAIC[], system.w)
-            end
-
-            # second iteration: pre-seed the first wake row so step 0 of the loop
-            # also sees wake influence, making dΓdt ≈ 0 when the wake first appears
-            shed_wake!(wake, system, dt0, system.Γ)  # nwake: 0→1, no particles (buffer not yet full)
-            system.nwake .= wake.nwake
-            reset!(wake)
-            update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
-            wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
-            wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
-            system.w .= zero(eltype(system.w))
-            if derivatives
-                normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
-                    ref, system.freestream[]; additional_velocity=nothing, Vcp, symmetric,
-                    nwake=system.nwake, surface_id, wake_finite_core,
-                    trailing_vortices=system.trailing_vortices, xhat, include_wakes=false)
-                circulation_derivatives!(system.Γ, system.dΓ, system.AIC, system.w, system.dw)
-            else
-                normal_velocity!(system.w, system.surfaces, system.wakes, ref, system.freestream[];
-                    additional_velocity=nothing, Vcp, symmetric, nwake=system.nwake,
-                    surface_id, wake_finite_core, trailing_vortices=system.trailing_vortices,
-                    xhat, include_wakes=false)
-                ldiv!(system.Γ, system.fAIC[], system.w)
-            end
-        end
+        _warm_start!(system, wake, frames, maneuver!, Vinf, Ωinf, t_range,
+            trailing_edge_filaments, ref, symmetric, surface_id, wake_finite_core,
+            xhat, derivatives, fmm_wake_args)
     end
 
-    # begin simulation
-    i_step = 0
+    # bundle constant simulation parameters for the per-step function
+    config = (;ref, symmetric, surface_id, wake_finite_core, xhat,
+               recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
+               polars, frames_index, monitors, vtk_interval, body_name, write_restart,
+               checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
+               Γ_wake, dΓdt_wake)
+
     println()
     start_step = isnothing(restart_state) ? 0 : restart_state.idx
     for (it, t) in enumerate(t_range)
         i_step = it - 1
         i_step < start_step && continue
-        if verbose
-            n_particles = FLOWVPM.get_np(wake.pfield)
-            println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(n_particles)")
-        end
-
-        #------- reset system -------#
-
-        Vcp = system.Vcp
-        Vh  = system.Vh
-        Vv  = system.Vv
-        Vte = system.Vte
-        for isurf in 1:length(system.surfaces)
-            Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
-            Vh[isurf]  .= Ref(zero(eltype(Vh[isurf])))
-            Vv[isurf]  .= Ref(zero(eltype(Vv[isurf])))
-            Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
-        end
-        system.w .= zero(eltype(system.w))
-        for i in eachindex(system.dw)
-            system.dw[i] .= zero(eltype(system.dw[i]))
-        end
-
-        # reset wake-node velocities + particle velocity/SFS fields
-        reset!(wake)
-
-        #------- controls -------#
-
-        # update frames based on maneuver (scalar single-system signature)
-        dynamics_toggle = maneuver!(frames, system, wake, t)
-
-        #------- external flow -------#
-
-        vinf = Vinf(t)
-        Ω    = Ωinf(t)
-        fs   = velocity_to_freestream(vinf, Ω)
-        system.freestream[] = fs
-
-        # kinematic velocity from rigid-body motion of frames
-        kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
-
-        # time step for this iteration
-        dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
-
-        # on the first step, seed wake_shedding_locations with eta-offset points
-        # to avoid degenerate wake-interface panels at the trailing edge
-        if i_step == 0
-            additional_velocity = nothing
-            update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
-                system.surfaces, ref, system.freestream[], dt,
-                additional_velocity, Vte, system.nwake, wake.eta)
-        end
-
-        #------- wake coupling + body solve -------#
-
-        # sync active wake-row count so probes cover all active rows
-        system.nwake .= wake.nwake
-
-        # snap panel-buffer row-1 geometry to current wake_shedding_locations
-        update_TE!(wake, system)
-
-        # set row-1 strengths from previous-timestep circulation
-        update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
-
-        # wake-on-all (particles + buffer filaments -> bodies and particles)
-        wake_has_sources = FLOWVPM.get_np(wake.pfield) > 0 || any(>(0), wake.nwake)
-        if wake_has_sources
-            wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
-            wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
-        end
-
-        # unpack system storage
-        AIC = system.AIC
-        w   = system.w
-        dw  = system.dw
-        Γ   = system.Γ
-        dΓ  = system.dΓ
-        dΓdt = system.dΓdt
-        trailing_vortices = system.trailing_vortices
-        additional_velocity = nothing
-
-        # AIC (re)build
-        if recalculate_influence_matrix || i_step == start_step
-            influence_coefficients!(AIC, system.surfaces;
-                symmetric, wake_shedding_locations = system.wake_shedding_locations,
-                surface_id, trailing_vortices, xhat,
-                force_finite_core = fill(true, length(system.surfaces)))
-            update_trailing_edge_coefficients!(AIC, system.surfaces;
-                symmetric, wake_shedding_locations = system.wake_shedding_locations,
-                trailing_vortices)
-            system.fAIC[] = lu(AIC)
-        else
-            # lock AIC: move wake shedding locations with trailing edge kinematics
-            update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
-                system.surfaces, ref, fs, dt, additional_velocity, Vte, system.nwake, wake.eta)
-        end
-
-        # RHS
-        if derivatives
-            normal_velocity_derivatives!(w, dw, system.surfaces, system.wakes,
-                ref, system.freestream[]; additional_velocity, Vcp, symmetric,
-                nwake = system.nwake, surface_id, wake_finite_core,
-                trailing_vortices, xhat, include_wakes=false)
-        else
-            normal_velocity!(w, system.surfaces, system.wakes, ref, system.freestream[];
-                additional_velocity, Vcp, symmetric, nwake = system.nwake,
-                surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
-        end
-
-        # stash previous Γ (negative) for finite-difference dΓ/dt
-        dΓdt .= .-Γ
-
-        # solve for new circulation
-        if derivatives
-            circulation_derivatives!(Γ, dΓ, AIC, w, dw)
-        else
-            ldiv!(Γ, system.fAIC[], w)
-        end
-
-        # finish finite-difference dΓ/dt
-        dΓdt .+= Γ
-        dΓdt ./= dt
-
-        # vehicle-on-all (bodies -> particles + probes)
-        vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
-
-        #------- post-solve: near-field forces + viscous -------#
-
-        properties  = system.properties
-        dproperties = system.dproperties
-        if derivatives
-            near_field_forces_derivatives!(properties, dproperties,
-                system.surfaces, system.wakes, ref, system.freestream[], Γ, dΓ;
-                dΓdt=system.dΓdt, additional_velocity, Vh, Vv, symmetric,
-                nwake = system.nwake, surface_id, wake_finite_core,
-                wake_shedding_locations = system.wake_shedding_locations,
-                trailing_vortices, xhat, calculate_vlm_induced=false)
-        else
-            near_field_forces!(properties, system.surfaces, system.wakes,
-                ref, system.freestream[], Γ; dΓdt=system.dΓdt, additional_velocity,
-                Vh, Vv, symmetric, nwake = system.nwake, surface_id,
-                wake_finite_core,
-                wake_shedding_locations = system.wake_shedding_locations,
-                trailing_vortices, xhat, calculate_vlm_induced=false)
-        end
-
-        # viscous correction (updates Γ_wake in place)
-        Γ_wake .= Γ
-        if !isnothing(polars)
-            viscous!(properties, Γ_wake, system.surfaces, system.grids, frames,
-                frames_index, polars, ref, dt)
-        end
-        dΓdt_wake .+= Γ_wake
-        dΓdt_wake ./= dt
-
-        #------- monitors -------#
-
-        system.near_field_analysis[] = true
-        for monitor in monitors
-            monitor(system, wake, i_step)
-        end
-
-        #------- propagate system -------#
-
-        # seed freestream velocity into wake panel node velocities
-        _seed_wake_velocity!(wake, system.freestream[])
-
-        # convect particles and active panel rows
-        propagate!(wake, dt; Vinf=vinf, relax=true)
-
-        # stash current TE for next-step wsl update
-        store_trailing_edge!(system.wake_shedding_locations, system.surfaces)
-
-        # rigid-body kinematics
-        propagate_kinematics!(system, frames, dt)
-
-        # next step's freestream
-        idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
-        vinf_next = Vinf(t_range[idx])
-        Ω_next = Ωinf(t_range[idx])
-        system.freestream[] = velocity_to_freestream(vinf_next, Ω_next)
-
-        # refresh kinematic TE velocity at the propagated configuration so
-        # the next shed location includes body motion, not just freestream.
-        for isurf in 1:length(system.surfaces)
-            Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
-            Vh[isurf]  .= Ref(zero(eltype(Vh[isurf])))
-            Vv[isurf]  .= Ref(zero(eltype(Vv[isurf])))
-            Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
-        end
-        kinematic_velocity!(Vcp, Vh, Vv, Vte, system.surfaces, frames; skip_top_level=false)
-
-        # update shedding points for the next step using full TE convection
-        update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
-            system.surfaces, ref, system.freestream[], dt, additional_velocity,
-            Vte, system.nwake, wake.eta; sync_panels=false)
-
-        shed_wake!(wake, system, dt, Γ_wake)
-
-        if vtk_interval > 0
-            if !isnothing(body_writer) && mod(i_step, vtk_interval) == 0
-                _append_system_vtk!(body_writer, system, i_step, t)
-                _append_wake_vtk!(wake_writer, wake, i_step, t)
-                _append_step_log!(body_writer, system, wake, i_step, t)
-                if write_restart && !isnothing(body_name) && i_step < length(t_range) - 1
-                    write_restart_checkpoint(checkpoint_base, i_step + 1, t, system, wake, frames;
-                        overwrite=false)
-                end
-            end
-        end
-
-        i_step += 1
+        _simulate_step!(system, wake, frames, trailing_edge_filaments, config, i_step, start_step, t, t_range)
     end
 
     if !isnothing(body_writer)
@@ -637,326 +740,51 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
         polars=nothing, frames_index=fill(-1, length(system.surfaces)), # viscous correction
         verbose=true
     )
-    # create save path if it does not exist
     if !isnothing(path) && !isdir(path)
         mkpath(path)
     end
-
-    # empty wake shedding locations
-    # empty_wake_shedding_locations = fill(nothing, length(system.surfaces))
 
     # one row of wake panels per surface
     system.nwake .= 1
     for isurf in 1:length(system.surfaces)
         if shedding_surfaces[isurf]
-            panels = Matrix{WakePanel{eltype(system.Γ)}}(undef, 1, size(system.surfaces[isurf], 2))
+            TF = eltype(system.Γ)
+            panels = Matrix{WakePanel{TF}}(undef, 1, size(system.surfaces[isurf], 2))
+            z3 = SVector{3,TF}(0, 0, 0)
             for i in 1:size(system.surfaces[isurf], 2)
-                panels[1, i] = WakePanel{eltype(system.Γ)}(SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
-                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
-                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
-                                                        SVector{3,eltype(system.Γ)}(0.0, 0.0, 0.0),
-                                                        zero(eltype(system.Γ)),
-                                                        zero(eltype(system.Γ)))
+                panels[1, i] = WakePanel{TF}(z3, z3, z3, z3, zero(TF), zero(TF))
             end
             system.wakes[isurf] = panels
         end
     end
-    
-    # wrap in wake object
+
     trailing_edge_filaments = FilamentWrapper(system.wakes)
 
-    # velocity at wake vertices
     for isurf in 1:length(system.surfaces)
         nc, ns = size(system.wakes[isurf])
         system.V[isurf] = zeros(SVector{3,eltype(system.Γ)}, nc+1, ns+1)
     end
 
-    # unpack system properties
-    symmetric = system.symmetric
-    surface_id = system.surface_id
     system.trailing_vortices .= trailing_vortices
+    system.freestream[] = velocity_to_freestream(Vinf(t_range[1]), Ωinf(t_range[1]))
 
-    # freestream for initial step
-    ref = system.reference[]
-    vinf = Vinf(t_range[1])
-    Ω = Ωinf(t_range[1])
-    fs = velocity_to_freestream(vinf, Ω)
-    system.freestream[] = fs
-
-    # storage for setting wake strengths
-    Γ_wake = zeros(length(system.Γ))
+    Γ_wake    = zeros(length(system.Γ))
     dΓdt_wake = zeros(length(system.Γ))
 
-    # begin simulation
-    i_step = 0
+    config = (;eta, trailing_vortices, derivatives, recalculate_influence_matrix,
+               fmm_wake_args, fmm_vehicle_args, particle_trailing_methods,
+               particle_unsteady_methods, polars, frames_index, monitors,
+               path, name, vtk_args, vtk_postshed, Vinf, Ωinf, maneuver!, verbose,
+               Γ_wake, dΓdt_wake)
+
     println()
+    i_step = 0
     for t in t_range
-        if verbose
-            n_particles = FLOWVPM.get_np(wake)
-            println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(n_particles)")
-        end
-        
-        #------- reset system -------#
-
-        Vcp = system.Vcp
-        Vh = system.Vh
-        Vv = system.Vv
-        Vte = system.Vte
-        V = system.V
-        for isurf in 1:length(system.surfaces)
-            Vcp[isurf] .= Ref(zero(eltype(Vcp[isurf])))
-            Vh[isurf] .= Ref(zero(eltype(Vh[isurf])))
-            Vv[isurf] .= Ref(zero(eltype(Vv[isurf])))
-            Vte[isurf] .= Ref(zero(eltype(Vte[isurf])))
-            V[isurf] .= Ref(zero(eltype(V[isurf])))
-        end
-        system.w .= zero(eltype(system.w))
-        for i in eachindex(system.dw)
-            system.dw[i] .= zero(eltype(system.dw[i]))
-        end
-
-        # particle field
-        FLOWVPM._reset_particles(wake)
-        FLOWVPM._reset_particles_sfs(wake)
-
-        #------- controls -------#
-
-        # update frames based on maneuver
-        # (RPMs, tilting systems, prescribed trajectory, etc.)
-        dynamics_toggle = maneuver!(frames, system, wake, t)
-
-        # update kinematic velocity due to rigid body motion
-        # (structural deflections should be remembered from the previous step)
-        # NOTE: this skips the top level frame, which is captured in system.fs
-        # CORRECTION: just changed this to not skip the top level frame
-        current_surfaces = system.surfaces
-        kinematic_velocity!(Vcp, Vh, Vv, Vte, current_surfaces, frames; skip_top_level=false)
-        
-        #------- aerodynamics -------#
-
-        # unpack constant system parameters
-        wake_finite_core = system.wake_finite_core
-        xhat = system.xhat[]
-
-        # unpack system storage (including state variables)
-        # previous_surfaces = system.previous_surfaces
-        properties = system.properties
-        dproperties = system.dproperties
-        wakes = system.wakes
-        # wake_velocities = system.V
-        wake_shedding_locations = system.wake_shedding_locations
-        nwake = system.nwake
-        AIC = system.AIC
-        w = system.w
-        dw = system.dw
-        Γ = system.Γ
-        dΓ = system.dΓ
-        dΓdt = system.dΓdt
-        
-        # default arguments
-        additional_velocity = nothing
-        symmetric .= false
-
-        # if the first timestep, set up the first wake panels for particle shedding later
-        dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
-        if i_step == 0
-            # align "wake shedding locations" with the trailing edge
-            dt = t_range[2] - t_range[1]
-            additional_velocity = nothing
-            update_wake_shedding_locations!(wakes, wake_shedding_locations,
-                current_surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
-
-            # seed the first wake row so the wake probes stay off the trailing edge
-            initial_wake_panels!(wakes, wake_shedding_locations, current_surfaces, Γ, eta)
-        end
-        
-        # update trailing edge filaments with the previous circulation solution
-        update_trailing_edge_filaments!(trailing_edge_filaments, current_surfaces, Γ)
-
-        # wake-on-all
-        wake.SFS(wake, FLOWVPM.BeforeUJ())
-        wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
-
-        #--- solve the system ---#
-
-        # calculate/re-calculate AIC matrix (if necessary)
-        if recalculate_influence_matrix || i_step == 0
-            influence_coefficients!(AIC, current_surfaces;
-                symmetric, wake_shedding_locations,
-                # ignore_trailing_edges = shedding_surfaces,
-                surface_id, trailing_vortices, xhat,
-                force_finite_core = fill(true, length(current_surfaces)))
-            update_trailing_edge_coefficients!(AIC, current_surfaces;
-                symmetric, wake_shedding_locations, trailing_vortices)
-            system.fAIC[] = lu(AIC)
-        else
-            # lock AIC: move wake shedding locations with trailing edge kinematics
-            update_wake_shedding_locations!(wakes, wake_shedding_locations,
-                current_surfaces, ref, fs, dt, additional_velocity, Vte, nwake, eta)
-        end
-
-        # calculate RHS
-        if derivatives
-            normal_velocity_derivatives!(w, dw, current_surfaces, wakes,
-                ref, fs; additional_velocity, Vcp, symmetric, nwake,
-                surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
-        else
-            normal_velocity!(w, current_surfaces, wakes, ref, fs;
-                additional_velocity, Vcp, symmetric, nwake, surface_id,
-                wake_finite_core, trailing_vortices, xhat, include_wakes=false)
-        end
-        # @show w
-        # throw("here2")
-
-        # save (negative) previous circulation in dΓdt
-        dΓdt .= .-Γ
-
-        # solve for the new circulation
-        if derivatives
-            circulation_derivatives!(Γ, dΓ, AIC, w, dw)
-        else
-            ldiv!(Γ, system.fAIC[], w)
-        end
-
-        # solve for dΓdt using finite difference `dΓdt = (Γ - Γp)/dt`
-        dΓdt .+= Γ # add newly computed circulation
-        dΓdt ./= dt # divide by corresponding time step
-
-        #--- vehicle-on-all ---#
-
-        # solve n-body problem
-        # @show V[1][1,1] V[1][1,end]
-        # DEBUG[] = true
-        vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
-        # DEBUG[] = false
-        # @show V[1][1,1] V[1][1,end]
-        # throw(ErrorException("STOP HERE"))
-
-        # compute transient forces on each panel (if necessary)
-        if derivatives
-            near_field_forces_derivatives!(properties, dproperties,
-                current_surfaces, wakes, ref, fs, Γ, dΓ; dΓdt=system.dΓdt,
-                additional_velocity, Vh, Vv, symmetric, nwake,
-                surface_id, wake_finite_core, wake_shedding_locations,
-                trailing_vortices, xhat,
-                calculate_vlm_induced=false) # we've already calculated the induced velocity
-                                                            # in vehicle_on_all!
-        else
-            near_field_forces!(properties, current_surfaces, wakes,
-                ref, fs, Γ; dΓdt=system.dΓdt, additional_velocity, Vh, Vv,
-                symmetric, nwake, surface_id, wake_finite_core,
-                wake_shedding_locations, trailing_vortices, xhat,
-                calculate_vlm_induced=false) # we've already calculated the induced velocity
-                                             # in vehicle_on_all!
-        end
-
-        #------- apply viscous corrections (if set) -------#
-
-        Γ_wake .= Γ
-        viscous!(properties, Γ_wake, current_surfaces, system.grids, frames, frames_index, polars, ref, dt)
-        dΓdt_wake .+= Γ_wake
-        dΓdt_wake ./= dt
-        # Γ .= Γ_wake
-        
-        #------- other solvers -------#
-        
-        # e.g. structures, acoustics, dynamics, etc.
-        
-        #------- update state -------#
-        
-
-        #------- save state -------#
-
-        if !isnothing(path)
-            # VortexLattice system
-            write_vtk(joinpath(path, name * "_step_$i_step"), system; vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
-
-            # FLOWVLM particle field
-
-            # check wake for NaNs
-            FLOWVPM.save(wake, name * "_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
-            
-            # save trailing edge filaments
-            # write_vtk(joinpath(path, name * "_filaments_step_$i_step"), trailing_edge_filaments)
-        end
-
-        system.near_field_analysis[] = true
-        for monitor in monitors
-            monitor(system, wake, i_step)
-        end
-
-        #------- propagate system -------#
-
-        if i_step < length(t_range)
-
-            #--- state evolution ---#
-            
-            # propagate wake
-            FLOWVPM._euler(wake, dt; relax=true)
-
-            # dynamics function
-            # if dynamics_toggle
-            #     apply_dynamics!(system, frames)
-            # end
-
-            # calculate next step's wake trailing edge
-            this_V = nothing # ignore wake- and vehicle-induced velocity for wake shedding location update
-            update_vpm_shedding_TE!(wakes, ref, fs, dt, additional_velocity, this_V) # uses current step's freestream
-
-            # store trailing edge location for next step's wsl
-            store_trailing_edge!(wake_shedding_locations, current_surfaces)
-            
-            # propagate rigid-body kinematics
-            propagate_kinematics!(system, frames, dt)
-
-            # next step's freestream
-            idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
-            vinf = Vinf(t_range[idx])
-            Ω = Ωinf(t_range[idx])
-            # fs = Freestream(frames[1], ref, vinf)
-            fs = velocity_to_freestream(vinf, Ω)
-            system.freestream[] = fs
-
-            # update wake shedding locations / wake leading edge
-            this_Vte = nothing # ignore wake- and vehicle-induced velocity for wake shedding location update
-            update_wake_shedding_locations_unsteady!(wakes, wake_shedding_locations,
-                current_surfaces, ref, fs, dt, additional_velocity, this_Vte, nwake, eta) # uses next step's freestream
-
-            #--- shed new wake particles ---#
-
-            shed_wake!(wake, system,  dt, Γ_wake, dΓdt,
-                particle_trailing_methods, particle_unsteady_methods)
-
-            dΓdt_wake .= -Γ_wake # store negative of current circulation for next step's shedding
-
-            # update wake shedding locations based on wake and vehicle
-            # accounts for vehicle-induced, wake-induced, freestream,
-            # and kinematic velocities
-            # update_vpm_shedding_LE!(wakes, ref, fs, dt, additional_velocity, V)
-
-            #--- update locations for the next step ---#
-
-            if !isnothing(path) && vtk_postshed
-                # VortexLattice system
-                write_vtk(joinpath(path, name * "_postshed_step_$i_step"), system; write_wakes=true, vtk_args...) # trailing_edge_list=.!shedding_surfaces, vtk_args...)
-
-                # FLOWVLM particle field
-
-                # check wake for NaNs
-                FLOWVPM.save(wake, name * "_postshed_wake"; add_num=true, num=i_step, path, overwrite_time=i_step)
-                
-                # save trailing edge filaments
-                # write_vtk(joinpath(path, name * "_filaments_step_$i_step"), trailing_edge_filaments)
-            end
-        end
-
-        # increment step
+        _simulate_step!(system, wake, frames, trailing_edge_filaments, config, i_step, t, t_range)
         i_step += 1
-        # if i_step == 2
-        #     breakme
-        # end
-    end    
+    end
 end
+
 
 function update_trailing_edge_filaments!(trailing_edge_filaments::FilamentWrapper, current_surfaces, Γ::Vector{TF}) where TF
     # loop over surfaces
