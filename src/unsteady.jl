@@ -918,16 +918,6 @@ function shed_particles!(pfield, r1, r2, Γ, method::SigmaPPS)
     distance_vector = (r2 - r1) / p_per_step
     Xp = r1 + distance_vector * 0.5
     Γp = Γ * distance_vector
-    # Diagnostics: record particle circulation before/after this shed
-    np_before = FLOWVPM.get_np(pfield)
-    sum_before = np_before > 0 ? sum(view(pfield.particles, FLOWVPM.CIRCULATION_INDEX, 1:np_before)) : zero(eltype(Γ))
-    for i in 1:p_per_step
-        FLOWVPM.add_particle(pfield, Xp, Γp, sigma; circulation=Γ)
-        Xp += distance_vector
-    end
-    np_after = FLOWVPM.get_np(pfield)
-    sum_after = np_after > 0 ? sum(view(pfield.particles, FLOWVPM.CIRCULATION_INDEX, 1:np_after)) : zero(eltype(Γ))
-    println("SHED: p_per_step=$(p_per_step) Γ=$(Γ) np_before=$(np_before) np_after=$(np_after) delta_circ=$(sum_after - sum_before)")
 end
 
 function shed_particles!(pfield, r1, r2, Γ, method::NoShed)
