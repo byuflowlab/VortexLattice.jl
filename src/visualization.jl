@@ -771,15 +771,12 @@ function _init_system_vtk_writer(name::String, system::System; overwrite::Bool=f
     TF = eltype(eltype(system.surfaces[1]))
     scratch = [_SurfaceVTKScratch(TF, size(s, 1), size(s, 2)) for s in system.surfaces]
 
-    log_path = name * "_log.csv"
-    write_header = overwrite || !isfile(log_path)
-    log_io = open(log_path, overwrite ? "w" : "a")
-    if write_header
-        nsurf = length(system.surfaces)
-        nwake_cols = join(("nwake_$i" for i in 1:nsurf), ",")
-        println(log_io, "step,time,Vinf,alpha,beta,Omega_x,Omega_y,Omega_z,wake_overflowed,$nwake_cols")
-        flush(log_io)
-    end
+    # Per-step "*_log.csv" write disabled (2026-07-15) — nothing in this package or its tests
+    # reads it back; it was pure write-only diagnostic output. `log_io` stays an IOStream (the
+    # type _SystemVTKWriterState expects) — `open(devnull, "w")` doesn't work here (devnull is
+    # a special IO sink object, not a path, and has no matching 2-arg open method) — use the
+    # literal "/dev/null" path string instead, which does return a real IOStream.
+    log_io = open("/dev/null", "w")
 
     return _SystemVTKWriterState(pvd, block_name, scratch, log_io)
 end
