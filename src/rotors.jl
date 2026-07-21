@@ -25,10 +25,10 @@ Generate a grids, ratios from a rotor file. Explained in the docs:
  - `initial_azimuthal_angle`: Initial azimuthal angle of the rotor. Defaults to 0.0.
 """
 function generate_rotor(rotor_file::String, data_path; optargs...)
-    Rtip, Rhub, B, blade_file = _read_rotor(rotor_file, data_path)
+    Rtip, Rhub, B, blade_file, precone = _read_rotor(rotor_file, data_path)
 
     return _generate_rotor(Rtip, Rhub, B, blade_file,
-                            data_path; optargs...)
+                            data_path; precone=precone, optargs...)
 end
 
 function _read_rotor(rotor_file::String, data_path)
@@ -41,8 +41,9 @@ function _read_rotor(rotor_file::String, data_path)
     Rhub = data[2]
     B = Int64(data[3])
     blade_file = String(data[4])
+    precone = length(data) >= 5 ? Float64(data[5]) : 0.0
 
-    return Rtip, Rhub, B, blade_file
+    return Rtip, Rhub, B, blade_file, precone
 end
 
 function _read_blade(blade_file::String, data_path)
@@ -143,7 +144,8 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     rotor_name="rotor",
     frames = Vector{VortexLattice.ReferenceFrame{Float64}}(undef, 0),
     surface_index = collect(1:B),
-    parent_index = -1) # radians
+    parent_index = -1,
+    precone::Real=0.0) # radians
 
     yle = chorddist[:,1] .* Rtip
     if zero_at_root
@@ -168,6 +170,15 @@ function _generate_rotor(Rtip, Rhub, B::Int,
 
     R = VortexLattice.Rodrigues(SVector{3}(0.0, 1.0, 0.0), -pi*0.5)
     VortexLattice.rotate!(grid, R)
+
+    # Precone: rigid rotation of the (now shaft=x, span=y, chord=z) grid about
+    # the chord axis (z), mixing span into the shaft direction. Applied once
+    # to the shared blade template before per-blade azimuthal placement.
+    if precone != 0.0
+        phi = precone*pi/180
+        R_precone = VortexLattice.Rodrigues(SVector{3}(0.0, 0.0, 1.0), phi)
+        VortexLattice.rotate!(grid, R_precone)
+    end
 
     grids = Vector{typeof(grid)}(undef,B)
     ratios = Vector{typeof(ratio)}(undef,B)
