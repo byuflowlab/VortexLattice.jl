@@ -159,6 +159,8 @@ function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
         fmm_vehicle::Union{Nothing, FLOWVPM.FMM}=nothing,
         method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
         method_unsteady::WakeSheddingMethod=OverlapPPS(1.3, 2),
+        viscous=FLOWVPM.Inviscid(),
+        SFS=FLOWVPM.SFS_default,
         kwargs...)
 
     wake = PanelParticleWake(system;
@@ -169,7 +171,9 @@ function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
         fmm_wake=fmm_wake,
         fmm_vehicle=fmm_vehicle,
         method_trailing=method_trailing,
-        method_unsteady=method_unsteady)
+        method_unsteady=method_unsteady,
+        viscous=viscous,
+        SFS=SFS)
 
     simulate!(system, wake, frames, maneuver!, Vinf, t_range, Ωinf; kwargs...)
 
