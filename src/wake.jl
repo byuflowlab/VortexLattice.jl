@@ -914,8 +914,7 @@ function PanelParticleWake(system;
         fmm_vehicle::Union{Nothing, FLOWVPM.FMM}=nothing,
         method_trailing::WakeSheddingMethod=OverlapPPS(1.3, 2),
         method_unsteady::WakeSheddingMethod=OverlapPPS(1.3, 2),
-        viscous=FLOWVPM.Inviscid(),
-        SFS=FLOWVPM.SFS_default,
+        vpm_kwargs::NamedTuple=NamedTuple(),
     )
 
     TF = eltype(system.wake_shedding_locations[1][1])
@@ -936,7 +935,7 @@ function PanelParticleWake(system;
 
     # Particle field (FLOWVPM)
     pfield = FLOWVPM.ParticleField(max_particles, TF;
-        fmm=fmm, viscous=viscous, SFS=SFS)
+        fmm=fmm, vpm_kwargs...)
 
     fmm_wake = something(fmm_wake, fmm)
     fmm_vehicle = something(fmm_vehicle, fmm)
