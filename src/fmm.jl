@@ -191,7 +191,7 @@ function FastMultipole.body_to_multipole!(system::System, multipole_coefficients
     end
 end
 
-function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::System, source_buffer, source_index) where {PS,VS,GS}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::System, source_buffer, source_index) where {PS,VS,GS}
     @inbounds for i_source in source_index
         v1 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
         v2 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
@@ -210,7 +210,11 @@ function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{
                     v += bound_induced_velocity(target-v3, target-v4, true, cs)
                 end
                 v += bound_induced_velocity(target-v4, target-v1, true, cs)
-                FastMultipole.set_gradient!(target_system, j_target, v * gamma)
+                # switch-aware setter: the bare 2-arg set_gradient! hardcodes rows
+                # 5:7, which only matches gradient_range(switch) by coincidence
+                # when scalar_potential output is enabled; passing `switch` keeps
+                # writer/reader row offsets consistent regardless.
+                FastMultipole.set_gradient!(target_system, switch, j_target, v * gamma)
             end
         end
     end
@@ -306,7 +310,7 @@ function FastMultipole.body_to_multipole!(filaments::FilamentWrapper, multipole_
     end
 end
 
-function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::FilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::FilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
     @inbounds for j_target in target_index
         target = FastMultipole.get_position(target_system, j_target)
         v = SVector{3,TF}(0.0, 0.0, 0.0)
@@ -319,7 +323,8 @@ function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{
                 v += bound_induced_velocity(target-v1, target-v2, true, cs) * gamma
             end
         end
-        FastMultipole.set_gradient!(target_system, j_target, v)
+        # see the comment on the same substitution in direct! for System, above
+        FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
 

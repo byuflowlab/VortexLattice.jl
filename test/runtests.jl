@@ -1447,40 +1447,40 @@ end
 
 #------- additional tests -------#
 
-@testset "PanelParticleWake Restart (Short)" begin
-    function _build_short_restart_case()
-        grid, ratios = wing_to_grid([0.0, 0.0], [-1.0, 1.0], [0.0, 0.0],
-            [1.0, 1.0], [0.0, 0.0], [0.0, 0.0], 2, 1;
-            mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+function _build_short_restart_case()
+    grid, ratios = wing_to_grid([0.0, 0.0], [-1.0, 1.0], [0.0, 0.0],
+        [1.0, 1.0], [0.0, 0.0], [0.0, 0.0], 2, 1;
+        mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
 
-        system = System([grid]; nw=[2], ratios=[ratios])
-        system.reference[] = Reference(2.0, 1.0, 2.0, [0.0, 0.0, 0.0], 10.0)
-        system.freestream[] = Freestream(10.0, 0.0, 0.0, [0.0, 0.0, 0.0])
+    system = System([grid]; nw=[2], ratios=[ratios])
+    system.reference[] = Reference(2.0, 1.0, 2.0, [0.0, 0.0, 0.0], 10.0)
+    system.freestream[] = Freestream(10.0, 0.0, 0.0, [0.0, 0.0, 0.0])
 
-        for isurf in eachindex(system.surfaces)
-            VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
-                ratios=system.ratios[isurf], fcore=(c, Δs) -> system.core_size)
-        end
-
-        frames = ReferenceFrame(system;
-            origin=SVector{3,Float64}(0.0, 0.0, 0.0),
-            v=SVector{3,Float64}(0.0, 0.0, 0.0),
-            ω_axis=SVector{3,Float64}(1.0, 0.0, 0.0),
-            ω=0.0,
-            R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0,
-                                     0.0, 1.0, 0.0,
-                                     0.0, 0.0, 1.0),
-            name="vehicle",
-            child_index=Int[],
-            dependent_index=collect(1:length(system.surfaces)))
-        maneuver!(frames, system, wake, t) = nothing
-        Uinf(t) = SVector{3,Float64}(10.0, 0.0, 0.0)
-        Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
-        t_range = collect(0.0:0.05:0.10)
-
-        return system, frames, maneuver!, Uinf, Ωinf, t_range
+    for isurf in eachindex(system.surfaces)
+        VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
+            ratios=system.ratios[isurf], fcore=(c, Δs) -> system.core_size)
     end
 
+    frames = ReferenceFrame(system;
+        origin=SVector{3,Float64}(0.0, 0.0, 0.0),
+        v=SVector{3,Float64}(0.0, 0.0, 0.0),
+        ω_axis=SVector{3,Float64}(1.0, 0.0, 0.0),
+        ω=0.0,
+        R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0,
+                                 0.0, 1.0, 0.0,
+                                 0.0, 0.0, 1.0),
+        name="vehicle",
+        child_index=Int[],
+        dependent_index=collect(1:length(system.surfaces)))
+    maneuver!(frames, system, wake, t) = nothing
+    Uinf(t) = SVector{3,Float64}(10.0, 0.0, 0.0)
+    Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
+    t_range = collect(0.0:0.05:0.10)
+
+    return system, frames, maneuver!, Uinf, Ωinf, t_range
+end
+
+@testset "PanelParticleWake Restart (Short)" begin
     full_dir = mktempdir()
     restart_dir = mktempdir()
 

@@ -109,7 +109,7 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
-    probes::FastMultipole.ProbeSystemStatic{TF}
+    probes::ProbeSystem{TF}
     core_size::TF
 end
 
@@ -264,7 +264,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
 
     # get number of probes
     n_probes = get_n_probes(surfaces, nw)
-    probes = FastMultipole.ProbeSystem(n_probes, TF)
+    probes = ProbeSystem(n_probes, TF)
 
     return System{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 

@@ -298,7 +298,7 @@ end
 
 function _warm_start!(system, wake::PanelParticleWake, frames, maneuver!, Vinf, Ωinf,
         t_range, trailing_edge_filaments, ref, symmetric, surface_id, wake_finite_core,
-        xhat, derivatives, fmm_wake_args)
+        xhat, derivatives, fmm_wake_args, force_finite_core)
     t0  = t_range[1]
     dt0 = t_range[2] - t_range[1]
 
@@ -319,7 +319,7 @@ function _warm_start!(system, wake::PanelParticleWake, frames, maneuver!, Vinf, 
     influence_coefficients!(system.AIC, system.surfaces;
         symmetric, wake_shedding_locations=system.wake_shedding_locations,
         surface_id, trailing_vortices=system.trailing_vortices, xhat,
-        force_finite_core=fill(true, length(system.surfaces)))
+        force_finite_core)
     update_trailing_edge_coefficients!(system.AIC, system.surfaces;
         symmetric, wake_shedding_locations=system.wake_shedding_locations,
         trailing_vortices=system.trailing_vortices)
@@ -354,7 +354,7 @@ end
 
 function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_filaments,
         config, i_step, start_step, t, t_range)
-    (;ref, symmetric, surface_id, wake_finite_core, xhat,
+    (;ref, symmetric, surface_id, wake_finite_core, xhat, force_finite_core,
       recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
       polars, frames_index, monitors, vtk_interval, body_name, write_restart,
       checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
@@ -414,7 +414,7 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
         influence_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations=system.wake_shedding_locations,
             surface_id, trailing_vortices, xhat,
-            force_finite_core=fill(true, length(system.surfaces)))
+            force_finite_core)
         update_trailing_edge_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations=system.wake_shedding_locations,
             trailing_vortices)
@@ -512,7 +512,7 @@ end
 
 function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_filaments,
         config, i_step, t, t_range)
-    (;eta, trailing_vortices, derivatives, recalculate_influence_matrix,
+    (;eta, trailing_vortices, derivatives, recalculate_influence_matrix, force_finite_core,
       fmm_wake_args, fmm_vehicle_args, particle_trailing_methods, particle_unsteady_methods,
       polars, frames_index, monitors, path, name, vtk_args, vtk_postshed,
       Vinf, Ωinf, maneuver!, verbose, Γ_wake, dΓdt_wake) = config
@@ -575,7 +575,7 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
         influence_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations,
             surface_id, trailing_vortices, xhat,
-            force_finite_core=fill(true, length(system.surfaces)))
+            force_finite_core)
         update_trailing_edge_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations, trailing_vortices)
         system.fAIC[] = lu(AIC)
@@ -618,8 +618,10 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
     end
 
     Γ_wake .= Γ
-    viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
-        frames_index, polars, ref, dt)
+    if !isnothing(polars)
+        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
+            frames_index, polars, ref, dt)
+    end
     dΓdt_wake .+= Γ_wake
     dΓdt_wake ./= dt
 
@@ -697,15 +699,16 @@ function simulate!(system::System, wake::PanelParticleWake,
     wake_finite_core  = system.wake_finite_core
     xhat              = system.xhat[]
     symmetric        .= false
+    force_finite_core = fill(true, length(system.surfaces))
 
     if isnothing(restart_state)
         _warm_start!(system, wake, frames, maneuver!, Vinf, Ωinf, t_range,
             trailing_edge_filaments, ref, symmetric, surface_id, wake_finite_core,
-            xhat, derivatives, fmm_wake_args)
+            xhat, derivatives, fmm_wake_args, force_finite_core)
     end
 
     # bundle constant simulation parameters for the per-step function
-    config = (;ref, symmetric, surface_id, wake_finite_core, xhat,
+    config = (;ref, symmetric, surface_id, wake_finite_core, xhat, force_finite_core,
                recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
                polars, frames_index, monitors, vtk_interval, body_name, write_restart,
                checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
@@ -772,8 +775,9 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
     Γ_wake    = zeros(length(system.Γ))
     dΓdt_wake = zeros(length(system.Γ))
+    force_finite_core = fill(true, length(system.surfaces))
 
-    config = (;eta, trailing_vortices, derivatives, recalculate_influence_matrix,
+    config = (;eta, trailing_vortices, derivatives, recalculate_influence_matrix, force_finite_core,
                fmm_wake_args, fmm_vehicle_args, particle_trailing_methods,
                particle_unsteady_methods, polars, frames_index, monitors,
                path, name, vtk_args, vtk_postshed, Vinf, Ωinf, maneuver!, verbose,
@@ -855,7 +859,7 @@ function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wakes, Γ,
 
             # shed left particles
             Γthis = Γ[iΓ]
-            shed_particles!(pfield, r1, r2, Γthis - Γlast, method)
+            _shed_particles!(pfield, r1, r2, Γthis - Γlast, method)
 
             # recurse
             Γlast = Γthis
@@ -867,7 +871,7 @@ function shed_trailing_edge!(pfield::FLOWVPM.ParticleField, surfaces, wakes, Γ,
         r2 = bottom_right(panel)
 
         # shed right particles
-        shed_particles!(pfield, r1, r2, Γlast, method)
+        _shed_particles!(pfield, r1, r2, Γlast, method)
     end
 end
 
@@ -890,41 +894,9 @@ function shed_unsteady!(pfield::FLOWVPM.ParticleField, surfaces, wakes, dΓdt, d
             Γ = dΓdt[iΓ] * dt
 
             # shed unsteady particles
-            shed_particles!(pfield, r1, r2, Γ, method)
+            _shed_particles!(pfield, r1, r2, Γ, method)
         end
     end
-end
-
-function shed_particles!(pfield, r1, r2, Γ, method::OverlapPPS)
-    # shed particles with overlap and p_per_step
-    overlap = method.overlap
-    p_per_step = method.p_per_step
-    sigma = norm(r2 - r1) * overlap / p_per_step
-    return shed_particles!(pfield, r1, r2, Γ, SigmaPPS(sigma, p_per_step))
-end
-
-function shed_particles!(pfield, r1, r2, Γ, method::SigmaOverlap)
-    # shed particles with sigma and overlap
-    sigma = method.sigma
-    overlap = method.overlap
-    p_per_step = ceil(Int, overlap * norm(r2 - r1) / sigma)
-    return shed_particles!(pfield, r1, r2, Γ, SigmaPPS(sigma, p_per_step))
-end
-
-function shed_particles!(pfield, r1, r2, Γ, method::SigmaPPS)
-    # shed particles with sigma and p_per_step
-    sigma = method.sigma
-    p_per_step = method.p_per_step
-
-    # add particles
-    distance_vector = (r2 - r1) / p_per_step
-    Xp = r1 + distance_vector * 0.5
-    Γp = Γ * distance_vector
-end
-
-function shed_particles!(pfield, r1, r2, Γ, method::NoShed)
-    # do not shed particles
-    return nothing
 end
 
 function get_max_particles(surface::AbstractMatrix{<:SurfacePanel}, method::Union{<:SigmaPPS, <:OverlapPPS})

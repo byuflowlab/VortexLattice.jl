@@ -91,11 +91,45 @@ VortexLattice.FastMultipole.direct!(probes, system)
 v_direct = probes.gradient[1]
 @test isapprox(v_VL, v_direct; atol=1e-12)
 
-# FastMultipole.fmm! induced velocity
+# FastMultipole.fmm! induced velocity, finite core.
+#
+# body_to_multipole_vl! expands a SINGULAR vortex filament while direct! applies
+# the finite-core regularization, so with core_size > 0 the two describe slightly
+# different physics and fmm! cannot converge to the direct result at any expansion
+# order -- the error plateaus at roughly |v(finite core) - v(singular)| (~1e-9 for
+# core_size=1e-3 at this evaluation point) from about p=12 onward. Test against
+# that floor here, and test the multipole path properly at core_size=0 below.
 probes.gradient[1] = zero(eltype(probes.gradient))
 _, _, _, _, m2l_list, direct_list, _ = VortexLattice.FastMultipole.fmm!(probes, system; expansion_order=20, leaf_size_source=1)
 v_fmm = probes.gradient[1]
 @assert length(m2l_list) > 0
-@test isapprox(v_VL, v_fmm; atol=1e-12)
+@test isapprox(v_VL, v_fmm; atol=1e-8)
+
+# FastMultipole.fmm! induced velocity, zero core: now the multipole expansion and
+# the direct kernel represent the same physics, so the multipole error must fall
+# exponentially with expansion order all the way down to roundoff. This is what
+# actually exercises the m2l path -- a fixed tolerance at finite core cannot.
+for i in eachindex(system.surfaces)
+    VortexLattice.update_surface_panels!(system.surfaces[i], system.grids[i];
+        ratios=system.ratios[i], fcore=(c, Δs) -> 0.0)
+end
+v_VL_singular = VortexLattice.induced_velocity(xt, system.surfaces[1], system.Γ;
+    trailing_vortices=false, finite_core=true, skip_trailing_edge=false,
+    wake_shedding_locations=wsl)
+
+fmm_errors = Float64[]
+for p in (4, 8, 12, 20)
+    probes.gradient[1] = zero(eltype(probes.gradient))
+    _, _, _, _, m2l_list_p, _, _ = VortexLattice.FastMultipole.fmm!(probes, system;
+        expansion_order=p, leaf_size_source=1)
+    @assert length(m2l_list_p) > 0
+    push!(fmm_errors, VortexLattice.norm(probes.gradient[1] - v_VL_singular))
+end
+
+@test issorted(fmm_errors; rev=true) # monotone convergence in expansion order
+@test fmm_errors[1] < 1e-5          # p=4
+@test fmm_errors[2] < 1e-8          # p=8
+@test fmm_errors[3] < 1e-11         # p=12
+@test fmm_errors[4] < 1e-14         # p=20, machine precision
 
 end

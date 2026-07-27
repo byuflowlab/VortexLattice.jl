@@ -175,7 +175,7 @@ function FastMultipole.body_to_multipole!(pbf::PanelBufferFilaments, multipole_c
     end
 end
 
-function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::PanelBufferFilaments{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::PanelBufferFilaments{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
     @inbounds for j_target in target_index
         target = FastMultipole.get_position(target_system, j_target)
         v = SVector{3,TF}(0.0, 0.0, 0.0)
@@ -185,10 +185,17 @@ function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{
             gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
             cs = source_buffer[12, i_source]
             if VS
+                # Probes/particles routinely land within `cs` of a wake-buffer filament's
+                # own endpoint here (PanelParticleWake evaluates wake nodes against their
+                # own just-shed geometry). bound_induced_velocity's finite-core branch is
+                # bounded by 1/(4*pi*cs) in that regime -- see the derivation in the
+                # comment on its finite_core branch in src/induced.jl.
                 v += bound_induced_velocity(target - v1, target - v2, true, cs) * gamma
             end
         end
-        FastMultipole.set_gradient!(target_system, j_target, v)
+        # switch-aware setter -- see the comment on the same substitution in
+        # src/fmm.jl's direct! for System
+        FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
 
@@ -267,7 +274,7 @@ end
 FastMultipole.body_to_multipole!(wbr::WakeBufferRings, args...) =
     FastMultipole.body_to_multipole_quad!(FastMultipole.Panel{FastMultipole.Dipole}, wbr, args...)
 
-function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::WakeBufferRings{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::WakeBufferRings{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
     @inbounds for j_target in target_index
         target = FastMultipole.get_position(target_system, j_target)
         v = SVector{3,TF}(0.0, 0.0, 0.0)
@@ -279,13 +286,18 @@ function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{
             gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
             cs    = source_buffer[18, i_source]
             if VS
+                # A wake ring's own corners are exactly the probe points evaluated here,
+                # so the evaluation point sits within `cs` of a source endpoint routinely
+                # -- see the near-endpoint note in PanelBufferFilaments' direct! above.
                 v += bound_induced_velocity(target - v1, target - v2, true, cs) * gamma
                 v += bound_induced_velocity(target - v2, target - v3, true, cs) * gamma
                 v += bound_induced_velocity(target - v3, target - v4, true, cs) * gamma
                 v += bound_induced_velocity(target - v4, target - v1, true, cs) * gamma
             end
         end
-        FastMultipole.set_gradient!(target_system, j_target, v)
+        # switch-aware setter -- see the comment on the same substitution in
+        # src/fmm.jl's direct! for System
+        FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
 
@@ -376,7 +388,7 @@ function FastMultipole.body_to_multipole!(bfw::BoundaryFilamentWrapper, multipol
     end
 end
 
-function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{PS,VS,GS}, source_system::BoundaryFilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::BoundaryFilamentWrapper{TF}, source_buffer, source_index) where {PS,VS,GS,TF}
     @inbounds for j_target in target_index
         target = FastMultipole.get_position(target_system, j_target)
         v = SVector{3,TF}(0.0, 0.0, 0.0)
@@ -386,10 +398,15 @@ function FastMultipole.direct!(target_system, target_index, ::DerivativesSwitch{
             gamma = FastMultipole.get_strength(source_buffer, source_system, i_source)[1]
             cs    = source_buffer[12, i_source]
             if VS
+                # The evaluation point routinely falls within `cs` of a boundary
+                # filament's own endpoint here -- see the near-endpoint note in
+                # PanelBufferFilaments' direct! above.
                 v += bound_induced_velocity(target - v1, target - v2, true, cs) * gamma
             end
         end
-        FastMultipole.set_gradient!(target_system, j_target, v)
+        # switch-aware setter -- see the comment on the same substitution in
+        # src/fmm.jl's direct! for System
+        FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
 
@@ -444,8 +461,11 @@ function wake_on_all!(system, wake::PanelParticleWake,
     nfil = FastMultipole.get_n_bodies(trailing_edge_filaments)
     nbf  = FastMultipole.get_n_bodies(wake.boundary_filaments)
     if np > 0 && (nfil > 0 || nbf > 0)
-        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        # carry the previous pass's influence so FastMultipole's relative error
+        # tolerance has something to scale against (see src/probes.jl)
+        seed_previous_influence!(probes_active, system.probes, n_active_probes)
         if nfil > 0 && nbf > 0
             fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, trailing_edge_filaments, wake.boundary_filaments);
                 _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
@@ -462,8 +482,11 @@ function wake_on_all!(system, wake::PanelParticleWake,
         system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :wake, fmm_args)
     elseif np > 0
-        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        # carry the previous pass's influence so FastMultipole's relative error
+        # tolerance has something to scale against (see src/probes.jl)
+        seed_previous_influence!(probes_active, system.probes, n_active_probes)
         fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield,);
             _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_wake_args...)
@@ -475,8 +498,11 @@ function wake_on_all!(system, wake::PanelParticleWake,
         # wake-panel influence on the body is through probes_to_surfaces!.
         # Compute the ring-panel→probe FMM so the buffer wake is felt before
         # the first particle appears; otherwise Ct jumps at first overflow.
-        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        # carry the previous pass's influence so FastMultipole's relative error
+        # tolerance has something to scale against (see src/probes.jl)
+        seed_previous_influence!(probes_active, system.probes, n_active_probes)
         if nfil > 0 && nbf > 0
             fmm!((probes_active,), (trailing_edge_filaments, wake.boundary_filaments);
                 hessian=SVector{1}(false), fmm_wake_args...)
@@ -508,16 +534,22 @@ function vehicle_on_all!(system, wake::PanelParticleWake,
     n_active_probes = update_probes!(system; nwake_active=wake.nwake)
     np = FLOWVPM.get_np(wake.pfield)
     if np > 0
-        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        # carry the previous pass's influence so FastMultipole's relative error
+        # tolerance has something to scale against (see src/probes.jl)
+        seed_previous_influence!(probes_active, system.probes, n_active_probes)
         fmm_args = fmm!((wake.pfield, probes_active), (system,);
             _fmm_kwargs(wake.fmm_vehicle[], wake.pfield.useGPU)...,
             hessian=SVector{2}(true, false), fmm_vehicle_args...)
         system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :vehicle, fmm_args)
     else
-        probes_active = FastMultipole.ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
+        # carry the previous pass's influence so FastMultipole's relative error
+        # tolerance has something to scale against (see src/probes.jl)
+        seed_previous_influence!(probes_active, system.probes, n_active_probes)
         fmm!((probes_active,), (system,);
             hessian=SVector{1}(false), fmm_vehicle_args...)
         system.probes.gradient[1:n_active_probes] .= probes_active.gradient

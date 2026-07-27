@@ -46,6 +46,8 @@ include("induced.jl")
 
 include("circulation.jl")
 
+include("probes.jl")
+
 include("system.jl")
 export System
 export PanelProperties, get_surface_properties

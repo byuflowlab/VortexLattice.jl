@@ -23,7 +23,7 @@ struct FluidDomainMonitor{TF,
     z::TZ
     velocity::Array{SVector{3,TF}, 3}    # (nx, ny, nz); overwritten each call
     vorticity::Array{SVector{3,TF}, 3}   # (nx, ny, nz); overwritten each call
-    probes::FastMultipole.ProbeSystemStatic{TF}  # flat, column-major (x fastest)
+    probes::ProbeSystem{TF}              # flat, column-major (x fastest)
     vtk_interval::Int                    # write every N steps (0 = never)
     name::String
     path::String
@@ -56,7 +56,7 @@ function FluidDomainMonitor(x::AbstractVector, y::AbstractVector, z::AbstractVec
 
     velocity  = Array{SVector{3,TF}}(undef, nx, ny, nz)
     vorticity = Array{SVector{3,TF}}(undef, nx, ny, nz)
-    probes    = FastMultipole.ProbeSystem(n, TF)
+    probes    = ProbeSystem(n, TF)
 
     # populate probe positions once; column-major order (x index varies fastest)
     i = 0

@@ -40,25 +40,42 @@ function bound_induced_velocity(r1, r2, finite_core, core_size)
     denom = nr1 * nr2 + dot(r1, r2)
 
     if finite_core
-        # core size comes into play here
-        # nr3 = norm(r1 - r2) # length of the segment
-        # distance_line = norm(num) / nr3
-        δ0 = get_δ(denom, core_size)
-        δ1 = get_δ(nr1, core_size) # distance to first endpoint
-        δ2 = get_δ(nr2, core_size) # distance to second endpoint
-        # nr3 = norm(r1 - r2) # length of the filament
-        # distance_3 = sqrt(max(2*nr1*nr1 + 2*nr2*nr2 - nr3*nr3, zero(nr3)))*0.5 # distance to midpoint
-        # δ3 = get_δ(distance_3, core_size)
+        # The only true singularity of a straight vortex segment is at rc -> 0, where
+        # rc = norm(cross(r1,r2))/norm(r1-r2) is the perpendicular distance from the
+        # field point to the segment's infinite line. Regularize exactly that, via the
+        # standard viscous-core substitution rc -> sqrt(rc^2 + core_size^2), without
+        # ever forming rc (which would be 0/0 for a field point lying on the line):
+        #
+        #   norm(cross)^2 + core_size^2*nr3^2 == nr3^2 * (rc^2 + core_size^2)
+        #
+        # and rewrite f1 using the identity
+        #
+        #   cross/(nr1*nr2 + rdot) == cross*(nr1*nr2 - rdot)/norm(cross)^2
+        #
+        # so the regularized form still reduces exactly to the unregularized formula
+        # as core_size -> 0. This is dimensionally consistent (the previous
+        # get_δ(denom, core_size) compared a squared length against a length, so
+        # whether it engaged depended on the absolute scale of the geometry) and
+        # bounds the velocity at 1/(4*pi*core_size), with Rankine-like linear decay
+        # inside the core. The denominator vanishes only for a degenerate zero-length
+        # segment, where the induced velocity is zero anyway.
+        εs = core_size * core_size
+        r12 = r1 - r2
+        nr3s = dot(r12, r12) # squared segment length
+        f1_denom = dot(num, num) + εs*nr3s
+        iszero(f1_denom) && return zero(num)
+        f1 = num*(nr1*nr2 - dot(r1, r2))/f1_denom
+        # f2/f3 use the standard sqrt(r^2 + core_size^2) regularization instead of
+        # 1/(r + get_δ(r, core_size)): the latter approaches 1/core_size^2 (not the
+        # physically-bounded 1/core_size) as r -> 0, i.e. it barely regularizes the
+        # near-endpoint conditioning at all.
+        f2 = 1/sqrt(nr1*nr1 + εs)
+        f3 = 1/sqrt(nr2*nr2 + εs)
     else
-        δ0 = zero(denom)
-        δ1 = zero(nr1)
-        δ2 = zero(nr2)
+        f1 = num/denom
+        f2 = 1/nr1
+        f3 = 1/nr2
     end
-
-    # desingularized terms
-    f1 = num/(denom + δ0)
-    f2 = 1/(nr1+δ1)
-    f3 = 1/(nr2+δ2)
 
     # evaluate vector field
     V = (f1*(f2+f3))/(4*pi)

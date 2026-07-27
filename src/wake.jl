@@ -586,7 +586,12 @@ function get_wake_velocities!(wake_velocities, surfaces, wakes, ref, fs, Γ,
                 # add induced velocity from the wake
                 if same_surface
                     nc_wake = max(nwake[jsurf] - 1, 0)
-                    if nc_wake > 1
+                    # I[1] ranges up to nw+1 (the newly-shed/attached row), which is
+                    # excluded by nc_wake = nw-1; induced_velocity's CartesianIndex
+                    # branches assume I[1] <= nc_wake+1, so skip the last row here
+                    # rather than falling through to an incorrect branch (this used
+                    # to throw a BoundsError, e.g. wake[nw, 0], for I[1] == nw+1).
+                    if nc_wake > 1 && I[1] <= nc_wake + 1
                         # vertex location on wake
                         J = CartesianIndex(I[1], js)
 
