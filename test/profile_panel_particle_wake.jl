@@ -1,17 +1,22 @@
 # Allocation / time profiling harness for the PanelParticleWake simulate! path.
 #
+# ALWAYS warm up before profiling. The first call to run_case compiles the entire
+# simulate! call tree, and profiling that call reports compiler allocations
+# (Core.Compiler.typeinf and friends) rather than the allocations you care about.
+# profile_case below does the warm-up for you.
+#
 # Usage (interactive REPL, with ProfileView loaded):
 #
 #   using ProfileView
 #   include("test/profile_panel_particle_wake.jl")
 #
-#   run_case()                    # warm up / precompile
-#   @profview run_case(n_steps=200)        # CPU flame graph
-#   @profview_allocs run_case(n_steps=200) sample_rate=1.0   # allocation profile
+#   profile_case(n_steps=200)                # warms up, then allocation profile
+#   run_case(n_steps=4)                      # warm up by hand...
+#   @profview run_case(n_steps=200)          # ...then CPU flame graph
 #
 # Or without ProfileView, for raw @time numbers:
 #   include("test/profile_panel_particle_wake.jl")
-#   run_case()                     # warm up
+#   run_case(n_steps=4)            # warm up
 #   @time run_case(n_steps=200)    # timed, steady-state allocation count
 
 using StaticArrays
@@ -75,4 +80,22 @@ function run_case(; n_steps=36, max_particles=20_000, verbose=false)
     return system, wake
 end
 
-run_case()
+"""
+    profile_case(; n_steps=36, warmup_steps=6, max_particles=20_000)
+
+Allocation-profile `run_case`, warming up first so the profile reflects steady
+state rather than compilation.
+
+`warmup_steps` defaults to 6 rather than 1 because the particle-shedding and
+buffer-overflow paths are not reached on the first step: with `nwakerows=1` the
+wake buffer does not overflow into the particle field until step 2, and code that
+first runs at step 3 would otherwise still be compiling inside the profiled call.
+"""
+function profile_case(; n_steps=72, warmup_steps=6, max_particles=20_000)
+    run_case(; n_steps=warmup_steps, max_particles=max_particles)
+    @profview_allocs run_case(; n_steps=n_steps, max_particles=max_particles) sample_rate=1E-3
+    @time run_case(; n_steps=n_steps, max_particles=max_particles)
+    return nothing
+end
+
+profile_case()
