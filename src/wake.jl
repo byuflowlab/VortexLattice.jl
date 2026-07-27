@@ -908,6 +908,7 @@ struct PanelParticleWake{TF, MT<:WakeSheddingMethod, MU<:WakeSheddingMethod, TPF
     pending_overflow::Vector{Vector{WakePanel{TF}}}
     has_pending::Vector{Bool}
     eta::TF
+    probes_active::ProbeSystem{TF}
 end
 
 function PanelParticleWake(system;
@@ -970,10 +971,16 @@ function PanelParticleWake(system;
     pending_overflow = [Vector{WakePanel{TF}}(undef, size(system.wakes[i], 2)) for i in 1:nsurf]
     has_pending = fill(false, nsurf)
 
+    # Reusable scratch buffer for the "active probes" subset passed to each FMM
+    # call. Sized to the full persistent probe count up front so every later
+    # `resize_active!` call (always to <= this capacity) reuses this storage
+    # instead of allocating a fresh ProbeSystem.
+    probes_active = ProbeSystem(length(system.probes.position), TF)
+
     return PanelParticleWake{TF, typeof(method_trailing), typeof(method_unsteady), typeof(pfield), typeof(trailing_edge_filaments), typeof(boundary_filaments), typeof(fmm_wake), typeof(fmm_vehicle)}(
         wakes, wake_shedding_locations, wake_velocities, nwake, nwakerows, overflowed, pfield,
         trailing_edge_filaments, boundary_filaments, fmm_wake, fmm_vehicle, method_trailing_vec, method_unsteady_vec,
-        prev_bottom_gamma, pending_overflow, has_pending, TF(eta),
+        prev_bottom_gamma, pending_overflow, has_pending, TF(eta), probes_active,
     )
 end
 

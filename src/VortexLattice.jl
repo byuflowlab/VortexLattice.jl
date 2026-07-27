@@ -18,6 +18,8 @@ include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
 export reflect, set_normal
 
+include("probes.jl")
+
 include("wake.jl")
 export Wake
 export PanelParticleWake
@@ -45,8 +47,6 @@ export Freestream, trajectory_to_freestream
 include("induced.jl")
 
 include("circulation.jl")
-
-include("probes.jl")
 
 include("system.jl")
 export System

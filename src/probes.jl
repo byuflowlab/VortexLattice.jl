@@ -73,6 +73,29 @@ function seed_previous_influence!(dest::ProbeSystem, src::ProbeSystem, n=length(
     return dest
 end
 
+"""
+    resize_active!(probes::ProbeSystem, n)
+
+Resize `probes` to `n` active bodies, reusing its existing backing arrays
+rather than allocating new ones (`resize!` down then back up within the same
+capacity is a no-op allocation-wise). `n` must not exceed the capacity
+`probes` was originally constructed with. Zeros the FMM-accumulated fields
+(`scalar_potential`, `gradient`, `hessian`); `position` and the
+previous-influence fields are left for the caller to fill.
+"""
+function resize_active!(probes::ProbeSystem{TF}, n) where TF
+    resize!(probes.position, n)
+    resize!(probes.scalar_potential, n)
+    resize!(probes.gradient, n)
+    resize!(probes.hessian, n)
+    resize!(probes.previous_potential, n)
+    resize!(probes.previous_gradient, n)
+    fill!(probes.scalar_potential, zero(TF))
+    fill!(probes.gradient, zero(SVector{3,TF}))
+    fill!(probes.hessian, zero(SMatrix{3,3,TF,9}))
+    return probes
+end
+
 #--- FastMultipole target interface ---#
 
 FastMultipole.data_per_body(::ProbeSystem) = 3

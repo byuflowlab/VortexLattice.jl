@@ -461,28 +461,38 @@ function wake_on_all!(system, wake::PanelParticleWake,
     nfil = FastMultipole.get_n_bodies(trailing_edge_filaments)
     nbf  = FastMultipole.get_n_bodies(wake.boundary_filaments)
     if np > 0 && (nfil > 0 || nbf > 0)
-        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = resize_active!(wake.probes_active, n_active_probes)
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
         # carry the previous pass's influence so FastMultipole's relative error
         # tolerance has something to scale against (see src/probes.jl)
         seed_previous_influence!(probes_active, system.probes, n_active_probes)
+        # `_update_fmm_autotune!` is called separately in each branch (rather than
+        # after the branches merge) so that its `fmm_args` argument stays a single
+        # concrete type per call site. Merging first (via a shared `fmm_args =`
+        # assigned in all three branches) forces the compiler to infer a Union
+        # (mostly `Any`) type across the three distinct `fmm!` return types, which
+        # boxes every field read inside `_update_fmm_autotune!`.
         if nfil > 0 && nbf > 0
             fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, trailing_edge_filaments, wake.boundary_filaments);
                 _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
                 hessian=SVector{2}(true, false), fmm_wake_args...)
+            system.probes.gradient[1:n_active_probes] .= probes_active.gradient
+            _update_fmm_autotune!(wake, :wake, fmm_args)
         elseif nfil > 0
             fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, trailing_edge_filaments);
                 _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
                 hessian=SVector{2}(true, false), fmm_wake_args...)
+            system.probes.gradient[1:n_active_probes] .= probes_active.gradient
+            _update_fmm_autotune!(wake, :wake, fmm_args)
         else
             fmm_args = fmm!((wake.pfield, probes_active), (wake.pfield, wake.boundary_filaments);
                 _fmm_kwargs(wake.fmm_wake[], wake.pfield.useGPU)...,
                 hessian=SVector{2}(true, false), fmm_wake_args...)
+            system.probes.gradient[1:n_active_probes] .= probes_active.gradient
+            _update_fmm_autotune!(wake, :wake, fmm_args)
         end
-        system.probes.gradient[1:n_active_probes] .= probes_active.gradient
-        _update_fmm_autotune!(wake, :wake, fmm_args)
     elseif np > 0
-        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = resize_active!(wake.probes_active, n_active_probes)
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
         # carry the previous pass's influence so FastMultipole's relative error
         # tolerance has something to scale against (see src/probes.jl)
@@ -498,7 +508,7 @@ function wake_on_all!(system, wake::PanelParticleWake,
         # wake-panel influence on the body is through probes_to_surfaces!.
         # Compute the ring-panel→probe FMM so the buffer wake is felt before
         # the first particle appears; otherwise Ct jumps at first overflow.
-        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = resize_active!(wake.probes_active, n_active_probes)
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
         # carry the previous pass's influence so FastMultipole's relative error
         # tolerance has something to scale against (see src/probes.jl)
@@ -534,7 +544,7 @@ function vehicle_on_all!(system, wake::PanelParticleWake,
     n_active_probes = update_probes!(system; nwake_active=wake.nwake)
     np = FLOWVPM.get_np(wake.pfield)
     if np > 0
-        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = resize_active!(wake.probes_active, n_active_probes)
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
         # carry the previous pass's influence so FastMultipole's relative error
         # tolerance has something to scale against (see src/probes.jl)
@@ -545,7 +555,7 @@ function vehicle_on_all!(system, wake::PanelParticleWake,
         system.probes.gradient[1:n_active_probes] .= probes_active.gradient
         _update_fmm_autotune!(wake, :vehicle, fmm_args)
     else
-        probes_active = ProbeSystem(n_active_probes, eltype(system.probes))
+        probes_active = resize_active!(wake.probes_active, n_active_probes)
         probes_active.position .= view(system.probes.position, 1:n_active_probes)
         # carry the previous pass's influence so FastMultipole's relative error
         # tolerance has something to scale against (see src/probes.jl)

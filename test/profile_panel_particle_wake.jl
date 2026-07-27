@@ -93,9 +93,9 @@ first runs at step 3 would otherwise still be compiling inside the profiled call
 """
 function profile_case(; n_steps=72, warmup_steps=6, max_particles=20_000)
     run_case(; n_steps=warmup_steps, max_particles=max_particles)
-    @profview_allocs run_case(; n_steps=n_steps, max_particles=max_particles) sample_rate=1E-3
+    @profview_allocs run_case(; n_steps=n_steps, max_particles=max_particles) sample_rate=1E-4
     @time run_case(; n_steps=n_steps, max_particles=max_particles)
     return nothing
 end
 
-profile_case()
+# profile_case()
