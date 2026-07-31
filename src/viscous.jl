@@ -1,3 +1,14 @@
+# --- Diagnostic instrumentation: capture per-section effective AoA (deg) computed by the ---
+# --- viscous correction below, keyed by surface index, one Vector per call to viscous!.  ---
+# --- Added 2026-07-29 to compare local AoA against a CCBlade reference; does not affect   ---
+# --- forces/circulation. Enable with `ALPHA_LOG_ENABLED[] = true`; read out `ALPHA_LOG`.  ---
+const ALPHA_LOG_ENABLED = Ref(false)
+const ALPHA_LOG = Dict{Int, Vector{Vector{Float64}}}()
+function reset_alpha_log!()
+    empty!(ALPHA_LOG)
+    return nothing
+end
+
 struct Polar{TF}
     alphas::Vector{TF}
     cls_inv::Vector{TF}
@@ -161,6 +172,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
     # dynamic pressure for dimensionalizing forces
     q = 0.5 * RHO * ref.V * ref.V
 
+    # diagnostic AoA capture for this call (see ALPHA_LOG above)
+    _alpha_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
+
     # loop over surfaces
     for isurf in eachindex(surfaces)
 
@@ -180,6 +194,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
             R = transpose(Rp)
 
             # @show R # verified: basis vectors of the frame expressed in global coordinates
+
+            if !isnothing(_alpha_this_call)
+                _alpha_this_call[isurf] = Float64[]
+            end
 
             # loop over spanwise sections in this surface
             for j in axes(surface, 2)
@@ -251,6 +269,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # get effective α
                 α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
 
+                if !isnothing(_alpha_this_call)
+                    push!(_alpha_this_call[isurf], α_eff)
+                end
+
                 # additive viscous correction: Δcl(cl_inv), indexed by the
                 # inviscid cl so the table stays smooth near zero lift
                 Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
@@ -274,8 +296,8 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 nc = size(surface, 1)
                 Δl_strip = Δcl * q_local * c * Δs_y
 
-                # viscous drag (currently disabled by *0.0; see VISCOUS_BUGS.md #5)
-                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff) * 0.0
+                # viscous drag
+                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
                 d_viscous = (d_viscous_mag / nc) * (Rp * dhat_strip)
 
@@ -339,6 +361,12 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
             end
         else
             iΓ += size(surfaces[isurf], 1) * size(surfaces[isurf], 2) # skip circulation strengths for this surface
+        end
+    end
+
+    if !isnothing(_alpha_this_call)
+        for (isurf, row) in _alpha_this_call
+            push!(get!(ALPHA_LOG, isurf, Vector{Float64}[]), row)
         end
     end
 end
