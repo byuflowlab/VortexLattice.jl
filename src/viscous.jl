@@ -296,8 +296,14 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 nc = size(surface, 1)
                 Δl_strip = Δcl * q_local * c * Δs_y
 
-                # viscous drag
-                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
+                # viscous drag (disabled -- see VISCOUS_BUGS.md #5; the γ-based dynamic-pressure
+                # reconstruction below (l_2d_norm/γ, meant to equal q_local under the KJ
+                # relation) diverges badly at low-circulation stations (blade root/tip), and a
+                # naive swap to the already-computed q_local produced worse results (Ct~990
+                # instead of ~0.77), suggesting the l_2d_norm/γ path encodes something not
+                # captured by q_local alone. Re-disabled 2026-08-03 pending a real fix -- see
+                # research notes for the diagnosis.)
+                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff) * 0.0
                 d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
                 d_viscous = (d_viscous_mag / nc) * (Rp * dhat_strip)
 
