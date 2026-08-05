@@ -1,55 +1,3 @@
-# Cumulative per-phase wall-clock timers, allocation counts, and allocation
-# byte totals for profiling one time step of `_simulate_step!` (the
-# PanelParticleWake path): kinematics/bookkeeping, wake coupling (SFS +
-# wake_on_all! FMM eval), the AIC/circulation solve, the vehicle-induced FMM
-# eval, near-field forces + viscous correction, user monitors, particle
-# propagation (FLOWVPM integration + viscous diffusion), wake shedding, and
-# vtk output. Not reset automatically: callers accumulate across however many
-# steps they want, read PERF_TIMES/PERF_ALLOC_COUNTS/PERF_ALLOC_BYTES, then
-# call reset_perf_times!() to start the next window. Set PERF_ENABLED[] =
-# false to skip all measurement overhead. FastMultipole's own PERF_TIMES
-# (tree/list/nearfield/upward/horizontal/downward) captures both wake_coupling
-# and vehicle_on_all's FMM calls automatically, independent of this dict.
-const PERF_ENABLED = Ref(true)
-const PERF_TIMES = Dict{Symbol, Float64}(:kinematics => 0.0, :wake_coupling => 0.0,
-                                          :aic_solve => 0.0, :vehicle_on_all => 0.0,
-                                          :forces_viscous => 0.0, :monitors => 0.0,
-                                          :propagate => 0.0, :shed_wake => 0.0,
-                                          :vtk => 0.0)
-const PERF_ALLOC_COUNTS = Dict{Symbol, Int64}(:kinematics => 0, :wake_coupling => 0,
-                                               :aic_solve => 0, :vehicle_on_all => 0,
-                                               :forces_viscous => 0, :monitors => 0,
-                                               :propagate => 0, :shed_wake => 0,
-                                               :vtk => 0)
-const PERF_ALLOC_BYTES = Dict{Symbol, Int64}(:kinematics => 0, :wake_coupling => 0,
-                                              :aic_solve => 0, :vehicle_on_all => 0,
-                                              :forces_viscous => 0, :monitors => 0,
-                                              :propagate => 0, :shed_wake => 0,
-                                              :vtk => 0)
-
-function reset_perf_times!()
-    for k in keys(PERF_TIMES); PERF_TIMES[k] = 0.0; end
-    for k in keys(PERF_ALLOC_COUNTS); PERF_ALLOC_COUNTS[k] = 0; end
-    for k in keys(PERF_ALLOC_BYTES); PERF_ALLOC_BYTES[k] = 0; end
-end
-
-enable_perf_logging!() = (PERF_ENABLED[] = true)
-disable_perf_logging!() = (PERF_ENABLED[] = false)
-
-macro perftime!(key, expr)
-    return quote
-        if PERF_ENABLED[]
-            local stats = @timed $(esc(expr))
-            PERF_TIMES[$(esc(key))] += stats.time
-            PERF_ALLOC_COUNTS[$(esc(key))] += Base.gc_alloc_count(stats.gcstats)
-            PERF_ALLOC_BYTES[$(esc(key))] += stats.bytes
-            stats.value
-        else
-            $(esc(expr))
-        end
-    end
-end
-
 struct DerivativesMonitor{TF}
     CFalpha::Vector{SVector{3,TF}}
     CFbeta::Vector{SVector{3,TF}}
@@ -430,33 +378,31 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
 
     #------- controls -------#
 
-    @perftime!(:kinematics, maneuver!(frames, system, wake, t))
+    maneuver!(frames, system, wake, t)
 
     #------- external flow -------#
 
     vinf = Vinf(t)
     fs   = velocity_to_freestream(vinf, Ωinf(t))
     system.freestream[] = fs
-    @perftime!(:kinematics, kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false))
+    kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
 
     dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
 
     if i_step == 0
-        @perftime!(:kinematics, update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
-            system.surfaces, ref, fs, dt, nothing, system.Vte, system.nwake, wake.eta))
+        update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
+            system.surfaces, ref, fs, dt, nothing, system.Vte, system.nwake, wake.eta)
     end
 
     #------- wake coupling -------#
 
-    @perftime!(:wake_coupling, begin
-        system.nwake .= wake.nwake
-        update_TE!(wake, system)
-        update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
-        if FLOWVPM.get_np(wake.pfield) > 0 || any(>(0), wake.nwake)
-            wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
-            wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
-        end
-    end)
+    system.nwake .= wake.nwake
+    update_TE!(wake, system)
+    update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
+    if FLOWVPM.get_np(wake.pfield) > 0 || any(>(0), wake.nwake)
+        wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
+        wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+    end
 
     #------- AIC + solve -------#
 
@@ -464,7 +410,7 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     Γ   = system.Γ
     trailing_vortices = system.trailing_vortices
 
-    @perftime!(:aic_solve, if recalculate_influence_matrix || i_step == start_step
+    if recalculate_influence_matrix || i_step == start_step
         influence_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations=system.wake_shedding_locations,
             surface_id, trailing_vortices, xhat,
@@ -476,9 +422,9 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     else
         update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
             system.surfaces, ref, fs, dt, nothing, system.Vte, system.nwake, wake.eta)
-    end)
+    end
 
-    @perftime!(:aic_solve, if derivatives
+    if derivatives
         normal_velocity_derivatives!(system.w, system.dw, system.surfaces, system.wakes,
             ref, fs; additional_velocity=nothing, Vcp=system.Vcp, symmetric,
             nwake=system.nwake, surface_id, wake_finite_core,
@@ -491,15 +437,15 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             surface_id, wake_finite_core, trailing_vortices, xhat, include_wakes=false)
         system.dΓdt .= .-Γ
         ldiv!(Γ, system.fAIC[], system.w)
-    end)
+    end
     system.dΓdt .+= Γ
     system.dΓdt ./= dt
 
-    @perftime!(:vehicle_on_all, vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...))
+    vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
 
     #------- near-field forces + viscous -------#
 
-    @perftime!(:forces_viscous, if derivatives
+    if derivatives
         near_field_forces_derivatives!(system.properties, system.dproperties,
             system.surfaces, system.wakes, ref, fs, Γ, system.dΓ;
             dΓdt=system.dΓdt, additional_velocity=nothing, Vh=system.Vh, Vv=system.Vv,
@@ -512,12 +458,12 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             Vh=system.Vh, Vv=system.Vv, symmetric, nwake=system.nwake, surface_id,
             wake_finite_core, wake_shedding_locations=system.wake_shedding_locations,
             trailing_vortices, xhat, calculate_vlm_induced=false)
-    end)
+    end
 
     Γ_wake .= Γ
     if !isnothing(polars)
-        @perftime!(:forces_viscous, viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
-            frames_index, polars, ref, dt))
+        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
+            frames_index, polars, ref, dt)
     end
     dΓdt_wake .+= Γ_wake
     dΓdt_wake ./= dt
@@ -525,18 +471,16 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     #------- monitors -------#
 
     system.near_field_analysis[] = true
-    @perftime!(:monitors, for monitor in monitors
+    for monitor in monitors
         monitor(system, wake, i_step)
-    end)
+    end
 
     #------- propagate system -------#
 
-    @perftime!(:propagate, begin
-        _seed_wake_velocity!(wake, fs)
-        propagate!(wake, dt; Vinf=vinf, relax=true)
-    end)
+    _seed_wake_velocity!(wake, fs)
+    propagate!(wake, dt; Vinf=vinf, relax=true)
     store_trailing_edge!(system.wake_shedding_locations, system.surfaces)
-    @perftime!(:kinematics, propagate_kinematics!(system, frames, dt))
+    propagate_kinematics!(system, frames, dt)
 
     idx = i_step == length(t_range) - 1 ? i_step + 1 : i_step + 2
     system.freestream[] = velocity_to_freestream(Vinf(t_range[idx]), Ωinf(t_range[idx]))
@@ -547,15 +491,15 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
         system.Vv[isurf]  .= Ref(zero(eltype(system.Vv[isurf])))
         system.Vte[isurf] .= Ref(zero(eltype(system.Vte[isurf])))
     end
-    @perftime!(:kinematics, kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false))
+    kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
 
-    @perftime!(:kinematics, update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
+    update_wake_shedding_locations_unsteady!(system.wakes, system.wake_shedding_locations,
         system.surfaces, ref, system.freestream[], dt, nothing,
-        system.Vte, system.nwake, wake.eta; sync_panels=false))
+        system.Vte, system.nwake, wake.eta; sync_panels=false)
 
-    @perftime!(:shed_wake, shed_wake!(wake, system, dt, Γ_wake))
+    shed_wake!(wake, system, dt, Γ_wake)
 
-    @perftime!(:vtk, if vtk_interval > 0 && !isnothing(body_writer) && mod(i_step, vtk_interval) == 0
+    if vtk_interval > 0 && !isnothing(body_writer) && mod(i_step, vtk_interval) == 0
         _append_system_vtk!(body_writer, system, i_step, t)
         _append_wake_vtk!(wake_writer, wake, i_step, t)
         _append_step_log!(body_writer, system, wake, i_step, t)
@@ -563,7 +507,7 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             write_restart_checkpoint(checkpoint_base, i_step + 1, t, system, wake, frames;
                 overwrite=false)
         end
-    end)
+    end
 end
 
 function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_filaments,
