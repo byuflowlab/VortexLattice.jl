@@ -451,6 +451,31 @@ function _flatten_wsl(wsl, TF)
     return dims, data
 end
 
+function _flatten_boundary_filaments(bfw::BoundaryFilamentWrapper, TF)
+    nsurf = length(bfw.active)
+    active = TF[bfw.active[isurf] ? 1 : 0 for isurf in 1:nsurf]
+    dims = Vector{TF}(undef, nsurf)
+    npts = sum(length, bfw.gamma)
+    r1 = Vector{TF}(undef, 3npts)
+    r2 = Vector{TF}(undef, 3npts)
+    gamma = Vector{TF}(undef, npts)
+    core_size = Vector{TF}(undef, npts)
+    ip = 0
+    for isurf in 1:nsurf
+        ns = length(bfw.gamma[isurf])
+        dims[isurf] = ns
+        for j in 1:ns
+            ip += 1
+            i3 = 3(ip - 1)
+            r1[i3+1:i3+3] .= bfw.r1[isurf][j]
+            r2[i3+1:i3+3] .= bfw.r2[isurf][j]
+            gamma[ip] = bfw.gamma[isurf][j]
+            core_size[ip] = bfw.core_size[isurf][j]
+        end
+    end
+    return active, dims, r1, r2, gamma, core_size
+end
+
 function _flatten_wake_velocities(wake_velocities, TF)
     dims = Vector{TF}(undef, 2length(wake_velocities))
     npts = 0
@@ -509,6 +534,8 @@ function _append_restart_checkpoint!(writer::_RestartCheckpointWriterState, idx:
     wake_vel_dims, wake_vel_data = _flatten_wake_velocities(wake.wake_velocities, TF)
     grid_dims, grid_data = _flatten_grids(system.grids, TF)
     prev_bottom_gamma = vcat((copy(g) for g in wake.prev_bottom_gamma)...)
+    bfw_active, bfw_dims, bfw_r1, bfw_r2, bfw_gamma, bfw_core =
+        _flatten_boundary_filaments(wake.boundary_filaments, TF)
 
     points = zeros(TF, 3, 1)
     cells = [WriteVTK.MeshCell(WriteVTK.PolyData.Verts(), 1:1)]
@@ -541,6 +568,12 @@ function _append_restart_checkpoint!(writer::_RestartCheckpointWriterState, idx:
         vtkfile["wake_velocities", WriteVTK.VTKFieldData()] = wake_vel_data
         vtkfile["grid_dims", WriteVTK.VTKFieldData()] = grid_dims
         vtkfile["grid_data", WriteVTK.VTKFieldData()] = grid_data
+        vtkfile["bfw_active", WriteVTK.VTKFieldData()] = bfw_active
+        vtkfile["bfw_dims", WriteVTK.VTKFieldData()] = bfw_dims
+        vtkfile["bfw_r1", WriteVTK.VTKFieldData()] = bfw_r1
+        vtkfile["bfw_r2", WriteVTK.VTKFieldData()] = bfw_r2
+        vtkfile["bfw_gamma", WriteVTK.VTKFieldData()] = bfw_gamma
+        vtkfile["bfw_core", WriteVTK.VTKFieldData()] = bfw_core
     end
 
     open(writer.index_file, "a") do io
@@ -658,6 +691,28 @@ function restore_restart!(system::System{TF}, wake::PanelParticleWake{TF},
         n = length(wake.prev_bottom_gamma[isurf])
         wake.prev_bottom_gamma[isurf] .= view(prev, i0+1:i0+n)
         i0 += n
+    end
+
+    bfw = wake.boundary_filaments
+    bfw_active = Int.(round.(TF.(_restart_getdata(data, "bfw_active"))))
+    bfw_dims = Int.(round.(TF.(_restart_getdata(data, "bfw_dims"))))
+    bfw_r1 = TF.(_restart_getdata(data, "bfw_r1"))
+    bfw_r2 = TF.(_restart_getdata(data, "bfw_r2"))
+    bfw_gamma = TF.(_restart_getdata(data, "bfw_gamma"))
+    bfw_core = TF.(_restart_getdata(data, "bfw_core"))
+    ip = 0
+    for isurf in eachindex(bfw.active)
+        bfw.active[isurf] = bfw_active[isurf] != 0
+        ns = bfw_dims[isurf]
+        length(bfw.gamma[isurf]) == ns || error("Boundary filament shape mismatch during restart restore")
+        for j in 1:ns
+            ip += 1
+            i3 = 3(ip - 1)
+            bfw.r1[isurf][j] = SVector{3,TF}(view(bfw_r1, i3+1:i3+3))
+            bfw.r2[isurf][j] = SVector{3,TF}(view(bfw_r2, i3+1:i3+3))
+            bfw.gamma[isurf][j] = bfw_gamma[ip]
+            bfw.core_size[isurf][j] = bfw_core[ip]
+        end
     end
 
     nframes = Int(round(TF(_restart_getdata(data, "frame_count")[1])))
