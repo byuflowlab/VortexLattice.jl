@@ -265,7 +265,7 @@ end
 
 function _init_simulate!(system, wake::PanelParticleWake, frames, name, path,
         restart_from, restart_idx, write_restart, vtk_interval, t_range)
-    @assert wake.nwakerows >= 1 "PanelParticleWake requires nwakerows >= 1, got $(wake.nwakerows)"
+    @assert wake.nwakerows >= 0 "PanelParticleWake requires nwakerows >= 0, got $(wake.nwakerows)"
 
     if !isnothing(path) && !isdir(path)
         mkpath(path)
@@ -343,7 +343,9 @@ function _warm_start!(system, wake::PanelParticleWake, frames, maneuver!, Vinf, 
         end
         pass == 2 && break
         # pre-seed the first wake row so step 0 sees wake influence (makes dΓdt ≈ 0)
-        shed_wake!(wake, system, dt0, system.Γ)
+        # (nwakerows==0: only the boundary filament is seeded — no particles are
+        # emitted here, so the impulsive-start transient isn't double-counted)
+        shed_wake!(wake, system, dt0, system.Γ; emit_particles=false)
         system.nwake .= wake.nwake
         reset!(wake)
         update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)

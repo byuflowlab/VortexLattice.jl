@@ -1090,10 +1090,13 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
             r1_te = bottom_left(panel)
             r2_te = bottom_right(panel)
 
-            added_t = _shed_particles!(w.pfield, r1_le, r1_te, Γ - Γ_last, method_t)
+            # direction/sign matches the verified-correct legacy shed_trailing_edge!/
+            # shed_unsteady! (unsteady.jl): trailing sheds bottom_left->top_left with
+            # +(Γ-Γ_last), unsteady sheds bottom_right->bottom_left with +(Γ-Γ_tm1).
+            added_t = _shed_particles!(w.pfield, r1_te, r1_le, Γ - Γ_last, method_t)
 
             Γ_tm1 = prev_gamma[j]
-            added_u = _shed_particles!(w.pfield, r1_te, r2_te, Γ - Γ_tm1, method_u)
+            added_u = _shed_particles!(w.pfield, r2_te, r1_te, Γ - Γ_tm1, method_u)
 
             # ensure numeric zero for any missing returns
             added_t === nothing && (added_t = zero(TF))
@@ -1109,23 +1112,113 @@ function _convert_to_particles!(w::PanelParticleWake{TF}) where TF
             Γ     = circulation_strength(panel)
             r_le  = top_right(panel)
             r_te  = bottom_right(panel)
-            _shed_particles!(w.pfield, r_le, r_te, -Γ, method_t)
+            _shed_particles!(w.pfield, r_le, r_te, Γ, method_t)
         end
 
-        # Boundary filament: top edge of the converted row.
-        # The WakeBufferRings ring goes rtl→rbl→rbr→rtr (Ring B, CW from above),
-        # so its top edge is rtr→rtl with +Γ = rtl→rtr with -Γ. The filament
-        # stored as r1=rtl, r2=rtr therefore needs -Γ to match.
+        # Boundary filament: top edge of the converted row, r1=rtl, r2=rtr. This
+        # matches the same TL→TR, +Γ convention `ring_induced_velocity` uses for a
+        # ring's top edge (BoundaryFilamentWrapper's `direct!` evaluates it with
+        # the same `bound_induced_velocity` call), so store the panel's circulation
+        # unnegated. (A prior version of this comment reasoned from a "Ring B"
+        # WakeBufferRings convention that turned out to itself be sign-flipped;
+        # see the `-panel.gamma` fix in `source_system_to_buffer!` for WakeBufferRings.)
         bfw = w.boundary_filaments
         bfw.active[isurf] = true
         for j in 1:ns
             panel = pending[j]
             bfw.r1[isurf][j]        = top_left(panel)
             bfw.r2[isurf][j]        = top_right(panel)
-            bfw.gamma[isurf][j]     = -circulation_strength(panel)
+            bfw.gamma[isurf][j]     = circulation_strength(panel)
             bfw.core_size[isurf][j] = panel.core_size
         end
 
+    end
+    return w
+end
+
+"""
+    _shed_wake_particles_only!(w::PanelParticleWake, system, Gamma)
+
+Pure-particle-wake path for `w.nwakerows == 0`: no panel row is ever buffered.
+Each surface's just-shed row is built directly from `wake_shedding_locations`
+and `w.eta` (the same eta-projection `shed_wake!` otherwise uses only for the
+very first row) and converted to particles immediately, using the same
+trailing/unsteady shedding logic as `_convert_to_particles!`. The row's top
+edge is written to `w.boundary_filaments` every step (not just on overflow) so
+the still-open bound trailing-edge segment remains an FMM source.
+"""
+function _shed_wake_particles_only!(w::PanelParticleWake{TF}, system, Gamma;
+        emit_particles::Bool=true) where TF
+    iΓ = 0
+    for isurf in eachindex(w.wakes)
+        surface = system.surfaces[isurf]
+        wsl     = w.wake_shedding_locations[isurf]
+        nc, ns  = size(surface)
+        ls      = LinearIndices((nc, ns))
+        prev_gamma = w.prev_bottom_gamma[isurf]
+
+        row = Vector{WakePanel{TF}}(undef, ns)
+        for j in 1:ns
+            rtl = wsl[j]
+            rtr = wsl[j+1]
+            rte_l = bottom_left(surface[end, j])
+            rte_r = bottom_right(surface[end, j])
+            rbl = rte_l + (rtl - rte_l) / w.eta
+            rbr = rte_r + (rtr - rte_r) / w.eta
+            core_size = get_core_size(surface[end, j])
+            gamma = Gamma[iΓ + ls[end, j]]
+            row[j] = WakePanel(rtl, rtr, rbl, rbr, core_size, gamma)
+        end
+        iΓ += length(surface)
+
+        method_t = w.method_trailing[isurf]
+        method_u = w.method_unsteady[isurf]
+
+        if emit_particles
+            r1_le_first = top_left(row[1])
+            rend_le     = top_right(row[ns])
+            wraps = norm(r1_le_first - rend_le) < 5 * eps(TF)
+            Γ_last = wraps ? circulation_strength(row[ns]) : zero(TF)
+
+            for j in 1:ns
+                panel = row[j]
+                Γ     = circulation_strength(panel)
+                r1_le = top_left(panel)
+                r1_te = bottom_left(panel)
+                r2_te = bottom_right(panel)
+
+                # direction/sign matches the verified-correct legacy
+                # shed_trailing_edge!/shed_unsteady! (unsteady.jl); see the note
+                # in `_convert_to_particles!`.
+                _shed_particles!(w.pfield, r1_te, r1_le, Γ - Γ_last, method_t)
+
+                Γ_tm1 = prev_gamma[j]
+                _shed_particles!(w.pfield, r2_te, r1_te, Γ - Γ_tm1, method_u)
+
+                Γ_last = Γ
+                prev_gamma[j] = Γ
+            end
+
+            if !wraps
+                panel = row[ns]
+                Γ     = circulation_strength(panel)
+                r_le  = top_right(panel)
+                r_te  = bottom_right(panel)
+                _shed_particles!(w.pfield, r_le, r_te, Γ, method_t)
+            end
+        end
+
+        # Boundary filament: current still-open top edge, r1=rtl, r2=rtr (unnegated
+        # circulation — see the sign-convention note in `_convert_to_particles!`).
+        bfw = w.boundary_filaments
+        bfw.active[isurf] = true
+        for j in 1:ns
+            panel = row[j]
+            bfw.r1[isurf][j]        = top_left(panel)
+            bfw.r2[isurf][j]        = top_right(panel)
+            bfw.gamma[isurf][j]     = circulation_strength(panel)
+            bfw.core_size[isurf][j] = panel.core_size
+        end
     end
     return w
 end
@@ -1136,8 +1229,14 @@ end
 Advance the hybrid wake one step: convert the oldest row of any surface whose
 buffer is full into particles, shed a new row of wake panels at the trailing
 edge, and grow `nwake` until the buffer is saturated.
+
+When `w.nwakerows == 0`, dispatches to [`_shed_wake_particles_only!`](@ref): a
+pure-particle wake with no panel buffer at all, matching the pre-hybrid
+particle-only shedding scheme.
 """
-function shed_wake!(w::PanelParticleWake, system, dt, Gamma)  # dt unused; kept for call-site compatibility
+function shed_wake!(w::PanelParticleWake, system, dt, Gamma; emit_particles::Bool=true)  # dt unused; kept for call-site compatibility
+    w.nwakerows == 0 && return _shed_wake_particles_only!(w, system, Gamma; emit_particles)
+
     iΓ = 0
     for isurf in eachindex(w.wakes)
         surface = system.surfaces[isurf]

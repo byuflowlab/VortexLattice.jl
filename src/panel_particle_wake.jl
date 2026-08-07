@@ -261,9 +261,14 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, wbr::WakeBuffe
     panel = wbr.wakes[k][ir, jc]
     buffer[1:3, i_buffer] .= 0.25 * (panel.rtl + panel.rtr + panel.rbr + panel.rbl)
     buffer[4,   i_buffer]  = 0.5 * max(norm(panel.rtl - panel.rbr), norm(panel.rtr - panel.rbl)) + panel.core_size
-    buffer[5,   i_buffer]  = panel.gamma
     # Ring B vertex order (matches _convert_to_particles! and FLOWPanel):
-    # v1=rtl, v2=rbl, v3=rbr, v4=rtr → edges: rtl→rbl→rbr→rtr→rtl
+    # v1=rtl, v2=rbl, v3=rbr, v4=rtr → edges: rtl→rbl→rbr→rtr→rtl. This traverses
+    # the ring in the opposite rotational sense from the classic TL→TR→BR→BL→TL
+    # convention used by `induced_velocity`/`ring_induced_velocity`, so `gamma`
+    # must be negated here to match the classic sign convention for the same
+    # physical circulation (see the analogous `-circulation_strength(panel)` used
+    # for the boundary filament's top edge in `_convert_to_particles!`).
+    buffer[5,   i_buffer]  = -panel.gamma
     buffer[6:8,   i_buffer] .= panel.rtl
     buffer[9:11,  i_buffer] .= panel.rbl
     buffer[12:14, i_buffer] .= panel.rbr
