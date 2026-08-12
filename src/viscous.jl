@@ -4,8 +4,25 @@
 # --- forces/circulation. Enable with `ALPHA_LOG_ENABLED[] = true`; read out `ALPHA_LOG`.  ---
 const ALPHA_LOG_ENABLED = Ref(false)
 const ALPHA_LOG = Dict{Int, Vector{Vector{Float64}}}()
+# Local strip-frame velocity components (v[1], v[3] -- the xz in-plane components used to
+# build dhat_strip below), one (v1,v3) pair per section per call. Added 2026-08-10 alongside
+# the alpha bias investigation, to decompose VL's local relative wind into axial/tangential-like
+# components for comparison against CCBlade's induction factors (a, ap). Same enable flag/reset
+# as ALPHA_LOG since both are populated together in the same loop.
+const VELOCITY_LOG = Dict{Int, Vector{Vector{Tuple{Float64,Float64}}}}()
+# Corrected lift coefficient (cl_vlm + Δcl, i.e. the polar-informed cl actually used to
+# build Δl_strip) and the RAW polar-lookup drag coefficient BEFORE the `*0.0` disable
+# (see the viscous-drag comment below) -- added 2026-08-11 to compare VL's own Cl/Cd
+# against a CCBlade polar-lookup reference, same enable flag/history convention as
+# ALPHA_LOG/VELOCITY_LOG. Logging the raw (undisabled) Cd does not re-enable it --
+# forces/circulation are unaffected, this is read-only instrumentation.
+const CL_LOG = Dict{Int, Vector{Vector{Float64}}}()
+const CD_LOG = Dict{Int, Vector{Vector{Float64}}}()
 function reset_alpha_log!()
     empty!(ALPHA_LOG)
+    empty!(VELOCITY_LOG)
+    empty!(CL_LOG)
+    empty!(CD_LOG)
     return nothing
 end
 
@@ -174,6 +191,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
 
     # diagnostic AoA capture for this call (see ALPHA_LOG above)
     _alpha_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
+    _velocity_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Tuple{Float64,Float64}}}() : nothing
+    _cl_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
+    _cd_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
 
     # loop over surfaces
     for isurf in eachindex(surfaces)
@@ -197,6 +217,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
 
             if !isnothing(_alpha_this_call)
                 _alpha_this_call[isurf] = Float64[]
+                _velocity_this_call[isurf] = Tuple{Float64,Float64}[]
+                _cl_this_call[isurf] = Float64[]
+                _cd_this_call[isurf] = Float64[]
             end
 
             # loop over spanwise sections in this surface
@@ -277,10 +300,19 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # inviscid cl so the table stays smooth near zero lift
                 Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
 
+                if !isnothing(_cl_this_call)
+                    push!(_cl_this_call[isurf], cl_vlm + Δcl)
+                end
+
                 # lift direction in the strip xz plane: perpendicular to local
                 # flow projected into xz. well-defined whenever there is any
                 # freestream over the section.
                 v_induced_strip = R * v_induced
+
+                if !isnothing(_velocity_this_call)
+                    push!(_velocity_this_call[isurf], (v_induced_strip[1], v_induced_strip[3]))
+                end
+
                 dhat_strip = SVector(v_induced_strip[1], 0.0, v_induced_strip[3])
                 dhat_strip /= norm(dhat_strip)
                 lhat_strip = SVector(-dhat_strip[3], 0.0, dhat_strip[1])
@@ -296,16 +328,25 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 nc = size(surface, 1)
                 Δl_strip = Δcl * q_local * c * Δs_y
 
-                # viscous drag (disabled -- see VISCOUS_BUGS.md #5; the γ-based dynamic-pressure
-                # reconstruction below (l_2d_norm/γ, meant to equal q_local under the KJ
-                # relation) diverges badly at low-circulation stations (blade root/tip), and a
-                # naive swap to the already-computed q_local produced worse results (Ct~990
-                # instead of ~0.77), suggesting the l_2d_norm/γ path encodes something not
-                # captured by q_local alone. Re-disabled 2026-08-03 pending a real fix -- see
-                # research notes for the diagnosis.)
-                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff) * 0.0
-                d_viscous_mag = cd * l_2d_norm * l_2d_norm / (2 * RHO * γ * γ * c)
-                d_viscous = (d_viscous_mag / nc) * (Rp * dhat_strip)
+                # viscous drag: dimensionalized the same way as Δl_strip above (cd * q_local *
+                # c * Δs_y), NOT via the γ-based l_2d_norm/γ reconstruction. That reconstruction
+                # divides by γ² with no epsilon guard, so it produced Inf/NaN whenever γ crossed
+                # zero (e.g. Ct~990 instead of ~0.77) -- see prior disable note. q_local comes
+                # from the total local velocity (props.velocity), independent of γ, so it stays
+                # well-behaved through zero-circulation stations. Re-enabled 2026-08-12.
+                cd_raw = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
+                if !isnothing(_cd_this_call)
+                    push!(_cd_this_call[isurf], cd_raw)
+                end
+                cd = cd_raw
+                D_visc_strip = cd * q_local * c * Δs_y
+                # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
+                # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
+                # is a dimensional force, so it must go through the same normalization before
+                # being added, or it inflates the reported force by a factor of q*ref.S (~1e5-1e6
+                # for this rotor). Missing normalization caused CT~1770 instead of ~0.9 when this
+                # was first re-enabled 2026-08-12.
+                d_viscous = (D_visc_strip / nc) * (Rp * dhat_strip) / (q * ref.S)
 
                 # ---- per-segment additive correction ------------------------
                 # The strip's prescribed dimensional lift increment Δl_strip is
@@ -373,6 +414,15 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
     if !isnothing(_alpha_this_call)
         for (isurf, row) in _alpha_this_call
             push!(get!(ALPHA_LOG, isurf, Vector{Float64}[]), row)
+        end
+        for (isurf, row) in _velocity_this_call
+            push!(get!(VELOCITY_LOG, isurf, Vector{Tuple{Float64,Float64}}[]), row)
+        end
+        for (isurf, row) in _cl_this_call
+            push!(get!(CL_LOG, isurf, Vector{Float64}[]), row)
+        end
+        for (isurf, row) in _cd_this_call
+            push!(get!(CD_LOG, isurf, Vector{Float64}[]), row)
         end
     end
 end
