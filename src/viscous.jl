@@ -240,6 +240,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # initialize dynamic pressure
                 q_local = zero(TF)
 
+                # number of chordwise panels for this surface
+                nc_section = size(surface, 1)
+
                 # loop over chordwise panels in this section
                 for i in axes(surface, 1)
 
@@ -247,8 +250,17 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     ds = R * (surface[i,j].rtr - surface[i,j].rtl)
                     dy = abs(ds[2]) / norm(ds)
 
-                    # accumulate circulation contribution from this bound vortex
-                    γ += Γ[iΓ] * dy
+                    # Γ[iΓ] is the CUMULATIVE bound circulation from the leading edge
+                    # through panel i (see the cumulative-sum reconstruction below), so the
+                    # section's 2D-equivalent total circulation is just the trailing-edge
+                    # (last chordwise) panel's Γ -- not a sum over all nc panels, which
+                    # over-counts at nc>1 (Γ[1]+Γ[2]+...+Γ[nc] double/triple/quadruple-counts
+                    # since each Γ[i] already includes every prior segment). Harmless at
+                    # nc=1 (single panel, trivially the trailing-edge value) but corrupted
+                    # cl_vlm/Δcl at nc>1, producing nonphysical CT (2026-08-12 fix).
+                    if i == nc_section
+                        γ = Γ[iΓ] * dy
+                    end
                     iΓ += 1
 
                     # accumulate induced velocity contribution at this bound vortex
