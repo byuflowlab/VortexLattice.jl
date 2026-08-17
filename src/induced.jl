@@ -720,6 +720,15 @@ Construct the aerodynamic influence coefficient matrix for multiple surfaces.
     for each surface
  - `trailing_vortices`: Flags to indicate whether trailing vortices are used for
     each surface. Defaults to `true` for each surface.
+ - `force_finite_core`: Flags to force the finite core model on for the trailing-edge
+    panels of each surface in `surfaces`, even for same-surface (self-influence)
+    entries. Defaults to `false` for each surface. Must be kept consistent with
+    whatever value was passed to the paired `influence_coefficients!` call -- unlike
+    `finite_core`, which this function otherwise derives purely from `surface_id`,
+    `force_finite_core` is not recoverable from `AIC`/`surfaces` alone, so passing a
+    different value than `influence_coefficients!` used silently reintroduces
+    whichever finite_core treatment `force_finite_core` was meant to override, for
+    every trailing-edge column (see 2026-08-17 force_finite_core-ignored bugfix).
  - `xhat`: Direction in which trailing vortices are shed if `trailing_vortices = true`.
     Defaults to [1, 0, 0]
 """
@@ -728,6 +737,7 @@ function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:Abst
     wake_shedding_locations = fill(nothing, length(surfaces)),
     surface_id = 1:length(surfaces),
     trailing_vortices = fill(true, length(surfaces)),
+    force_finite_core = fill(false, length(surfaces)),
     xhat = SVector(1, 0, 0))
 
     nsurf = length(surfaces)
@@ -754,8 +764,10 @@ function update_trailing_edge_coefficients!(AIC, surfaces::AbstractVector{<:Abst
             # extract portion of AIC matrix for the two surfaces
             vAIC = view(AIC, iAIC+1:iAIC+nr, jAIC+1:jAIC+ns)
 
-            # check if it's the same surface
-            finite_core = surface_id[i] != surface_id[j]
+            # check if it's the same surface (mirrors influence_coefficients!'s
+            # finite_core determination, so a paired force_finite_core setting isn't
+            # silently undone for trailing-edge columns)
+            finite_core = surface_id[i] != surface_id[j] || force_finite_core[j]
 
             # populate entries in the AIC matrix
             update_trailing_edge_coefficients!(vAIC, receiving, sending;

@@ -1,3 +1,179 @@
+# WAKE_RHS_LOG (diagnostic, 2026-08-14): compares the wake's influence as seen by the
+# Gamma-solve's boundary condition (Vcp, populated by wake_on_all! BEFORE the AIC solve,
+# since normal_velocity! is called with include_wakes=false) against the wake's influence
+# as seen by near_field_forces!/viscous.jl's induced-velocity readback (Vh, populated by
+# vehicle_on_all! AFTER the solve) -- same wake state within the same timestep, two
+# independent computations. If they disagree, the Gamma-solve's boundary condition is
+# getting a different (and possibly wrong) picture of the wake than the verified-correct
+# force/velocity readback uses, which would explain a self-consistent-but-wrong Gamma.
+const WAKE_RHS_LOG_ENABLED = Ref(false)
+const WAKE_RHS_LOG = Vector{NTuple{6,Float64}}()  # (Vcp_x,y,z, Vh_x,y,z) per logged step, post-solve (wake+kinematic)
+const WAKE_RHS_KINEMATIC_LOG = Vector{NTuple{6,Float64}}()  # same, but right after kinematic_velocity! (pre-wake, kinematic only)
+const WAKE_RHS_POSTWAKE_LOG = Vector{NTuple{6,Float64}}()  # same, but right after wake_on_all! (post-wake, pre-solve, pre-vehicle_on_all!) -- isolates whether vehicle_on_all! (which runs later, post-solve) modifies Vh at all
+
+# VH_DECOMP_LOG (diagnostic, 2026-08-17): full-span, strip-frame-rotated (vx,vz) at blade 1
+# (surface 1), captured at the same three _simulate_step! stages as WAKE_RHS_LOG above --
+# right after kinematic_velocity!, right after wake_on_all!, and right after
+# vehicle_on_all! -- to test whether the wake_on_all! pass (particles + wake panels/
+# filaments) or the vehicle_on_all! pass (bound blade self-induction) is the source of the
+# tangential/swirl over-prediction found in vortexlattice_axial_tangential_asymmetry_found_
+# 2026_08_14. Rotation matches viscous.jl's `R = transpose(frame.Rp2g * frame.R)` convention
+# exactly, and freestream_velocity(fs) is added so these are directly comparable to
+# Velocity.txt's (vx,vz). Differencing WAKE_LOG-KINEMATIC_LOG isolates wake_on_all!'s
+# contribution; VEHICLE_LOG-WAKE_LOG isolates vehicle_on_all!'s. Enable with
+# VH_DECOMP_LOG_ENABLED[] = true; read out VH_DECOMP_KINEMATIC_LOG/_WAKE_LOG/_VEHICLE_LOG.
+const VH_DECOMP_LOG_ENABLED = Ref(false)
+const VH_DECOMP_KINEMATIC_LOG = Vector{Vector{Tuple{Float64,Float64}}}()
+const VH_DECOMP_WAKE_LOG      = Vector{Vector{Tuple{Float64,Float64}}}()
+const VH_DECOMP_VEHICLE_LOG   = Vector{Vector{Tuple{Float64,Float64}}}()
+
+# RHS_WAKE_DUMP (diagnostic, 2026-08-17): ground-truth cross-check of the wake's
+# contribution to the Gamma-solve's RHS. Dumps the exact wake state (particles +
+# active buffer-ring panels, plus the boundary-filament body count) and the Vcp
+# value at one control point immediately after wake_on_all! -- i.e. exactly what
+# normal_velocity! will read as the wake's contribution to the RHS (Vcp is not
+# touched again before the solve). An independent direct-sum Biot-Savart
+# evaluation over this dumped state can then be diffed against VL's own Vcp,
+# isolating the FMM/probe-writeback pipeline that feeds the RHS specifically --
+# previously only the post-solve Vh/force-readback path was checked this way
+# (see vortexlattice_probe_indexing_ruled_out_2026_08_14).
+const RHS_WAKE_DUMP_ENABLED = Ref(false)
+const RHS_WAKE_DUMP_STEP = Ref(-1)
+const RHS_WAKE_DUMP_DIR = Ref("")
+
+function _dump_rhs_wake_state(system, wake, i_step)
+    isurf = 1
+    ns = size(system.Vcp[isurf], 2)
+    j = ns ÷ 2  # matches WAKE_RHS_LOG's jmid convention, for cross-referencing
+    i = 1
+    rcp = controlpoint(system.surfaces[isurf][i, j])
+    vcp = system.Vcp[isurf][i, j]
+
+    dir = RHS_WAKE_DUMP_DIR[]
+    mkpath(dir)
+
+    open(joinpath(dir, "cp.csv"), "w") do io
+        println(io, "x,y,z,vcp_x,vcp_y,vcp_z")
+        println(io, "$(rcp[1]),$(rcp[2]),$(rcp[3]),$(vcp[1]),$(vcp[2]),$(vcp[3])")
+    end
+
+    np = FLOWVPM.get_np(wake.pfield)
+    open(joinpath(dir, "particles.csv"), "w") do io
+        println(io, "x,y,z,gx,gy,gz,sigma")
+        for p in 1:np
+            X = FLOWVPM.get_X(wake.pfield, p)
+            G = FLOWVPM.get_Gamma(wake.pfield, p)
+            s = FLOWVPM.get_sigma(wake.pfield, p)[]
+            println(io, "$(X[1]),$(X[2]),$(X[3]),$(G[1]),$(G[2]),$(G[3]),$s")
+        end
+    end
+
+    open(joinpath(dir, "rings.csv"), "w") do io
+        println(io, "rtl_x,rtl_y,rtl_z,rtr_x,rtr_y,rtr_z,rbl_x,rbl_y,rbl_z,rbr_x,rbr_y,rbr_z,core_size,gamma")
+        for k in eachindex(wake.wakes)
+            wk = wake.wakes[k]
+            nwk = wake.nwake[k]
+            nc, nsk = size(wk)
+            for jj in 1:nsk, ii in 1:min(nwk, nc)
+                p = wk[ii, jj]
+                println(io, "$(p.rtl[1]),$(p.rtl[2]),$(p.rtl[3]),$(p.rtr[1]),$(p.rtr[2]),$(p.rtr[3]),$(p.rbl[1]),$(p.rbl[2]),$(p.rbl[3]),$(p.rbr[1]),$(p.rbr[2]),$(p.rbr[3]),$(p.core_size),$(p.gamma)")
+            end
+        end
+    end
+
+    bfw = wake.boundary_filaments
+    open(joinpath(dir, "boundary_filaments.csv"), "w") do io
+        println(io, "r1_x,r1_y,r1_z,r2_x,r2_y,r2_z,core_size,gamma")
+        for isurf in eachindex(bfw.active)
+            bfw.active[isurf] || continue
+            for j in eachindex(bfw.r1[isurf])
+                r1 = bfw.r1[isurf][j]
+                r2 = bfw.r2[isurf][j]
+                println(io, "$(r1[1]),$(r1[2]),$(r1[3]),$(r2[1]),$(r2[2]),$(r2[3]),$(bfw.core_size[isurf][j]),$(bfw.gamma[isurf][j])")
+            end
+        end
+    end
+
+    nbf = FastMultipole.get_n_bodies(wake.boundary_filaments)
+
+    open(joinpath(dir, "meta.txt"), "w") do io
+        println(io, "i_step=$i_step np=$np nbf=$nbf")
+    end
+
+    println("RHS_WAKE_DUMP written to $dir at step $i_step (np=$np, nbf=$nbf)")
+end
+
+# AIC_CHECK_DUMP (diagnostic, 2026-08-17): dump surface-1's bound-panel geometry,
+# wake_shedding_locations, trailing_vortices/symmetric flags, solved Gamma, and the
+# surface-1 diagonal block of the production AIC matrix -- so a standalone script can
+# independently rebuild that AIC block via VortexLattice's OWN influence_coefficients!,
+# both through the production (finite_core=false, edge-reuse/bookkeeping) branch and
+# the simple (finite_core=true, no-bookkeeping, per-column) branch, and check that the
+# two code paths agree off the near-diagonal (where finite-core specifics shouldn't
+# matter at ~1.5 m core vs ~50 m span) -- isolating a possible indexing/wiring bug in
+# the edge-reuse bookkeeping from the (already independently verified, see
+# RHS_WAKE_DUMP) Biot-Savart kernel itself.
+function _dump_aic_check_state(system, config, i_step)
+    isurf = 1
+    surface = system.surfaces[isurf]
+    nc, ns = size(surface)
+    dir = RHS_WAKE_DUMP_DIR[]
+    mkpath(dir)
+
+    open(joinpath(dir, "bound_panels.csv"), "w") do io
+        println(io, "rtl_x,rtl_y,rtl_z,rtr_x,rtr_y,rtr_z,rbl_x,rbl_y,rbl_z,rbr_x,rbr_y,rbr_z,rcp_x,rcp_y,rcp_z,ncp_x,ncp_y,ncp_z,core_size")
+        for j in 1:ns, i in 1:nc
+            p = surface[i, j]
+            println(io, "$(p.rtl[1]),$(p.rtl[2]),$(p.rtl[3]),$(p.rtr[1]),$(p.rtr[2]),$(p.rtr[3]),$(p.rbl[1]),$(p.rbl[2]),$(p.rbl[3]),$(p.rbr[1]),$(p.rbr[2]),$(p.rbr[3]),$(p.rcp[1]),$(p.rcp[2]),$(p.rcp[3]),$(p.ncp[1]),$(p.ncp[2]),$(p.ncp[3]),$(p.core_size)")
+        end
+    end
+
+    wsl = system.wake_shedding_locations[isurf]
+    open(joinpath(dir, "wake_shedding_locations.csv"), "w") do io
+        println(io, "x,y,z")
+        for r in wsl
+            println(io, "$(r[1]),$(r[2]),$(r[3])")
+        end
+    end
+
+    n1 = nc * ns
+    Gamma1 = system.Γ[1:n1]
+    open(joinpath(dir, "gamma_surf1.csv"), "w") do io
+        println(io, "gamma")
+        for g in Gamma1
+            println(io, "$g")
+        end
+    end
+
+    AIC1 = system.AIC[1:n1, 1:n1]
+    open(joinpath(dir, "aic_surf1_block.csv"), "w") do io
+        for i in 1:n1
+            println(io, join(AIC1[i, :], ","))
+        end
+    end
+
+    open(joinpath(dir, "aic_meta.txt"), "w") do io
+        println(io, "nc=$nc ns=$ns symmetric=$(config.symmetric[isurf]) trailing_vortices=$(system.trailing_vortices[isurf]) xhat=$(config.xhat)")
+    end
+
+    println("AIC_CHECK_DUMP written to $dir at step $i_step (nc=$nc, ns=$ns)")
+end
+
+function _vh_decomp_row(system, frames, frames_index, fs)
+    isurf = 1
+    frame = frames[frames_index[isurf]]
+    R = transpose(frame.Rp2g * frame.R)
+    Vfs = freestream_velocity(fs)
+    Vh = system.Vh[isurf]
+    ns = size(Vh, 2)
+    row = Vector{Tuple{Float64,Float64}}(undef, ns)
+    for j in 1:ns
+        v = R * (Vfs + Vh[1, j])
+        row[j] = (v[1], v[3])
+    end
+    return row
+end
+
 struct DerivativesMonitor{TF}
     CFalpha::Vector{SVector{3,TF}}
     CFbeta::Vector{SVector{3,TF}}
@@ -322,7 +498,7 @@ function _warm_start!(system, wake::PanelParticleWake, frames, maneuver!, Vinf, 
         force_finite_core)
     update_trailing_edge_coefficients!(system.AIC, system.surfaces;
         symmetric, wake_shedding_locations=system.wake_shedding_locations,
-        trailing_vortices=system.trailing_vortices)
+        trailing_vortices=system.trailing_vortices, force_finite_core)
     system.fAIC[] = lu(system.AIC)
 
     # solve twice: once without wake influence, once with the first shed row
@@ -389,6 +565,17 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     system.freestream[] = fs
     kinematic_velocity!(system.Vcp, system.Vh, system.Vv, system.Vte, system.surfaces, frames; skip_top_level=false)
 
+    if WAKE_RHS_LOG_ENABLED[]
+        jmid_diag2 = size(system.Vcp[1], 2) ÷ 2
+        vcp0 = system.Vcp[1][1, jmid_diag2]
+        vh0 = system.Vh[1][1, jmid_diag2]
+        push!(WAKE_RHS_KINEMATIC_LOG, (vcp0[1], vcp0[2], vcp0[3], vh0[1], vh0[2], vh0[3]))
+    end
+
+    if VH_DECOMP_LOG_ENABLED[]
+        push!(VH_DECOMP_KINEMATIC_LOG, _vh_decomp_row(system, frames, frames_index, fs))
+    end
+
     dt = i_step == length(t_range) - 1 ? t_range[end] - t_range[end-1] : t_range[i_step + 2] - t_range[i_step + 1]
 
     if i_step == 0
@@ -406,6 +593,21 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
     end
 
+    if RHS_WAKE_DUMP_ENABLED[] && i_step == RHS_WAKE_DUMP_STEP[]
+        _dump_rhs_wake_state(system, wake, i_step)
+    end
+
+    if WAKE_RHS_LOG_ENABLED[]
+        jmid_diag3 = size(system.Vcp[1], 2) ÷ 2
+        vcp1 = system.Vcp[1][1, jmid_diag3]
+        vh1 = system.Vh[1][1, jmid_diag3]
+        push!(WAKE_RHS_POSTWAKE_LOG, (vcp1[1], vcp1[2], vcp1[3], vh1[1], vh1[2], vh1[3]))
+    end
+
+    if VH_DECOMP_LOG_ENABLED[]
+        push!(VH_DECOMP_WAKE_LOG, _vh_decomp_row(system, frames, frames_index, fs))
+    end
+
     #------- AIC + solve -------#
 
     AIC = system.AIC
@@ -419,7 +621,7 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             force_finite_core)
         update_trailing_edge_coefficients!(AIC, system.surfaces;
             symmetric, wake_shedding_locations=system.wake_shedding_locations,
-            trailing_vortices)
+            trailing_vortices, force_finite_core)
         system.fAIC[] = lu(AIC)
     else
         update_wake_shedding_locations!(system.wakes, system.wake_shedding_locations,
@@ -444,6 +646,21 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     system.dΓdt ./= dt
 
     vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
+
+    if RHS_WAKE_DUMP_ENABLED[] && i_step == RHS_WAKE_DUMP_STEP[]
+        _dump_aic_check_state(system, config, i_step)
+    end
+
+    if WAKE_RHS_LOG_ENABLED[]
+        jmid_diag = size(system.Vcp[1], 2) ÷ 2
+        vcp = system.Vcp[1][1, jmid_diag]
+        vh = system.Vh[1][1, jmid_diag]
+        push!(WAKE_RHS_LOG, (vcp[1], vcp[2], vcp[3], vh[1], vh[2], vh[3]))
+    end
+
+    if VH_DECOMP_LOG_ENABLED[]
+        push!(VH_DECOMP_VEHICLE_LOG, _vh_decomp_row(system, frames, frames_index, fs))
+    end
 
     #------- near-field forces + viscous -------#
 
@@ -579,7 +796,7 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
             surface_id, trailing_vortices, xhat,
             force_finite_core)
         update_trailing_edge_coefficients!(AIC, system.surfaces;
-            symmetric, wake_shedding_locations, trailing_vortices)
+            symmetric, wake_shedding_locations, trailing_vortices, force_finite_core)
         system.fAIC[] = lu(AIC)
     else
         update_wake_shedding_locations!(wakes, wake_shedding_locations,
@@ -701,7 +918,7 @@ function simulate!(system::System, wake::PanelParticleWake,
     wake_finite_core  = system.wake_finite_core
     xhat              = system.xhat[]
     symmetric        .= false
-    force_finite_core = fill(true, length(system.surfaces))
+    force_finite_core = system.surface_finite_core
 
     if isnothing(restart_state)
         _warm_start!(system, wake, frames, maneuver!, Vinf, Ωinf, t_range,
@@ -777,7 +994,7 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
 
     Γ_wake    = zeros(length(system.Γ))
     dΓdt_wake = zeros(length(system.Γ))
-    force_finite_core = fill(true, length(system.surfaces))
+    force_finite_core = system.surface_finite_core
 
     config = (;eta, trailing_vortices, derivatives, recalculate_influence_matrix, force_finite_core,
                fmm_wake_args, fmm_vehicle_args, particle_trailing_methods,

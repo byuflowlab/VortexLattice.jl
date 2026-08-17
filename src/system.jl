@@ -62,6 +62,12 @@ Contains pre-allocated storage for internal system variables.
  - `wake_finite_core`: Flag for each wake indicating whether the finite core
     model should be enabled when calculating the wake's influence on itself and
     surfaces/wakes with the same surface ID.
+ - `surface_finite_core`: Flag for each surface indicating whether the finite core
+    model should be enabled when calculating a bound surface's influence on itself
+    (both `influence_coefficients!` and `update_trailing_edge_coefficients!` read
+    this as their `force_finite_core` argument). Set at `System` construction
+    (defaults to `true` for each surface); `simulate!` reads it as-is rather than
+    choosing it internally.
  - `near_field_analysis`: Flag indicating whether a near field analysis has been
     performed for the current system state
  - `derivatives`: Flag indicating whether the derivatives with respect to the
@@ -95,6 +101,7 @@ struct System{TF}
     nwake::Vector{Int}
     surface_id::Vector{Int}
     wake_finite_core::Vector{Bool}
+    surface_finite_core::Vector{Bool}
     trailing_vortices::Vector{Bool}
     xhat::Array{SVector{3, TF}, 0}
     near_field_analysis::Array{Bool, 0}
@@ -212,7 +219,8 @@ variables
  - `grids`: Grids of the surfaces, represented by matrices of vertices
  - `ratios`: Ratios of the locations of each control point on each panel
 """
-function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing, core_size = 1e-3)
+function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing,
+    core_size = 1e-3, surface_finite_core = nothing)
 
     @assert length(nc) == length(ns) == length(nw)
 
@@ -247,6 +255,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     nwake = [0 for i = 1:nsurf]
     surface_id = [i for i = 1:nsurf]
     wake_finite_core = [true for i = 1:nsurf]
+    surface_finite_core = isnothing(surface_finite_core) ? [true for i = 1:nsurf] : surface_finite_core
     trailing_vortices = [false for i = 1:nsurf]
     xhat = fill(SVector{3,TF}(1, 0, 0))
     near_field_analysis = fill(false)
@@ -267,8 +276,8 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     probes = ProbeSystem(n_probes, TF)
 
     return System{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
-        properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
-        wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
+        properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id,
+        wake_finite_core, surface_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
         Vv, Vte, dΓdt, probes, core_size)
 end
