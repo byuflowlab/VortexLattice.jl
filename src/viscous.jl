@@ -2,6 +2,7 @@
 # --- viscous correction below, keyed by surface index, one Vector per call to viscous!.  ---
 # --- Added 2026-07-29 to compare local AoA against a CCBlade reference; does not affect   ---
 # --- forces/circulation. Enable with `ALPHA_LOG_ENABLED[] = true`; read out `ALPHA_LOG`.  ---
+const VISC_ITER_DEBUG = Ref(false)
 const ALPHA_LOG_ENABLED = Ref(false)
 const ALPHA_LOG = Dict{Int, Vector{Vector{Float64}}}()
 # Local strip-frame velocity components (v[1], v[3] -- the xz in-plane components used to
@@ -18,11 +19,13 @@ const VELOCITY_LOG = Dict{Int, Vector{Vector{Tuple{Float64,Float64}}}}()
 # forces/circulation are unaffected, this is read-only instrumentation.
 const CL_LOG = Dict{Int, Vector{Vector{Float64}}}()
 const CD_LOG = Dict{Int, Vector{Vector{Float64}}}()
+const CLDIRECT_LOG = Dict{Int, Vector{Vector{Float64}}}()
 function reset_alpha_log!()
     empty!(ALPHA_LOG)
     empty!(VELOCITY_LOG)
     empty!(CL_LOG)
     empty!(CD_LOG)
+    empty!(CLDIRECT_LOG)
     return nothing
 end
 
@@ -194,6 +197,14 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
     _velocity_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Tuple{Float64,Float64}}}() : nothing
     _cl_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
     _cd_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
+    # Diagnostic (2026-08-17): l_2d_norm/(q_local*c), i.e. the sectional cl you'd get from the
+    # REAL local dynamic pressure (q_local, built from the actual |v_induced|) instead of from
+    # cl_vlm's self-referential KJ formula (-2*RHO*gamma^2/(c*l_2d_norm), which implicitly uses
+    # an inferred "V_KJ" that need not equal the real |v_induced| -- see the 2026-08-14
+    # v_local-vs-V_KJ finding). Comparing this against cl_vlm tests whether the slow multi-
+    # iteration convergence is caused by that mismatch (relevant here since this is a 45-deg
+    # swept wing, where the bound-vortex segment isn't orthogonal to the local velocity).
+    _cldirect_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
 
     # loop over surfaces
     for isurf in eachindex(surfaces)
@@ -220,6 +231,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 _velocity_this_call[isurf] = Tuple{Float64,Float64}[]
                 _cl_this_call[isurf] = Float64[]
                 _cd_this_call[isurf] = Float64[]
+                _cldirect_this_call[isurf] = Float64[]
             end
 
             # loop over spanwise sections in this surface
@@ -298,14 +310,29 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # force per length
                 l_2d_norm /= abs(( R * (surface[1,j].rtl - surface[1,j].rtr) )[2])
 
-                # calculate effective cl predicted by the VLM, = 2π * α_eff
-                cl_vlm = -2 * RHO * γ * (γ / (l_2d_norm + eps(l_2d_norm))) / c * sign(γ)
+                # Effective sectional cl, from the REAL local dynamic pressure (q_local, built
+                # from |v_induced|) -- not from the self-referential KJ formula
+                # (-2*RHO*gamma^2/(c*l_2d_norm)) this used to use. That formula implicitly
+                # assumes the bound-vortex segment is perpendicular to the local velocity
+                # (valid for an unswept wing) via the scalar relation L'=RHO*V*Gamma; the real
+                # relation is the vector cross product F=RHO*Gamma*(V x Ds), which picks up a
+                # sin(theta) factor whenever the segment isn't orthogonal to V (i.e. any swept
+                # wing). Confirmed via the Weber & Brebner 45-deg swept wing (2026-08-17): the
+                # old cl_vlm and this cl_direct disagree by up to ~0.35 and iterating the old
+                # scheme crawls (13,000+ iterations) to a degenerate near-zero-Cl fixed point
+                # trying to reconcile the two; cl_direct has no such inconsistency to resolve.
+                cl_vlm = sign(γ) * l_2d_norm / (q_local * c + eps(l_2d_norm))
 
-                # get effective α
+                # get effective α (thin-airfoil inverse, same approximation as before, now
+                # applied to the physically-correct cl instead of the swept-biased one)
                 α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
 
                 if !isnothing(_alpha_this_call)
                     push!(_alpha_this_call[isurf], α_eff)
+                end
+
+                if !isnothing(_cldirect_this_call)
+                    push!(_cldirect_this_call[isurf], cl_vlm)
                 end
 
                 # additive viscous correction: Δcl(cl_inv), indexed by the
@@ -333,8 +360,26 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # globally-stored cfb / Δs / V vectors below)
                 lhat = Rp * lhat_strip
 
-                # spanwise extent of this strip (used to convert Δcl → ΔL)
+                # spanwise extent of this strip (used to convert Δcl → ΔL). This is a SIGNED
+                # coordinate difference (kept signed here -- see the abs()'d `Δs_y_mag` below for
+                # why the sign must NOT be dropped for the lift term specifically).
                 Δs_y = ( R * (surface[1,j].rtl - surface[1,j].rtr) )[2]
+
+                # magnitude-only version for the DRAG term below: on a mirrored wing Δs_y comes
+                # out negative across the ENTIRE span (confirmed: -0.06223 at every j on the Weber
+                # & Brebner 45deg swept-wing case, -0.3 at every j on the unswept NACA4415 case --
+                # never flips sign either way), so using the signed Δs_y for D_visc_strip made a
+                # positive polar cd produce a NEGATIVE dimensional drag force -- the "viscous
+                # drag" term SUBTRACTED drag instead of adding it (confirmed: Weber-wing total CD
+                # went from +0.00344 inviscid to -0.00232 with the bug). Confirmed via the real
+                # package call that using abs() ONLY here (not also on Δl_strip below) fixes that
+                # (CD -> +0.0092, physically correct: viscous = inviscid + profile drag, never
+                # less than inviscid) while leaving the NACA4415/Cocco lift correction unchanged
+                # (CL=1.1279, matching the pre-fix/memory-validated value) -- using abs() on BOTH
+                # terms (tried first) collapsed NACA4415's CL to 0.28, so the lift term's sign
+                # convention is NOT the same bug and must be left alone. Confirmed 2026-08-19,
+                # viscous_drag_sign_fix_prototype.jl (VPM-Validation repo).
+                Δs_y_mag = abs(Δs_y)
 
                 # strip-level prescribed dimensional lift increment
                 nc = size(surface, 1)
@@ -351,7 +396,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     push!(_cd_this_call[isurf], cd_raw)
                 end
                 cd = cd_raw
-                D_visc_strip = cd * q_local * c * Δs_y
+                D_visc_strip = cd * q_local * c * Δs_y_mag
                 # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
                 # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
                 # is a dimensional force, so it must go through the same normalization before
@@ -436,9 +481,562 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
         for (isurf, row) in _cd_this_call
             push!(get!(CD_LOG, isurf, Vector{Float64}[]), row)
         end
+        for (isurf, row) in _cldirect_this_call
+            push!(get!(CLDIRECT_LOG, isurf, Vector{Float64}[]), row)
+        end
     end
 end
 
 function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, dΓdt, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polar::Nothing, ref, dt) where TF
+    return nothing
+end
+
+"""
+    viscous_iterative!(properties, Γ, surfaces, wakes, grids, frames_index,
+        polars, ref, fs; symmetric, nwake, surface_id, wake_finite_core,
+        wake_shedding_locations, trailing_vortices, xhat, Vh=nothing, Vv=nothing,
+        dΓdt=nothing, maxiter=200, tol=1e-6, m=4, beta=0.3)
+
+Alpha-target Anderson-accelerated alternative to `viscous!`. Instead of `viscous!`'s single
+additive `Δcl(cl_inv)` correction applied once to the frozen inviscid `Γ` (a blind accumulator
+with no genuine fixed point when iterated -- see
+`vortexlattice_viscous_correction_diverges_confirmed_2026_08_17` /
+`vortexlattice_native_viscous_accumulator_bug_diagnosed_20260818` memory), this reassigns each
+viscous section's circulation directly to its target `Γ_target = 0.5 * cl_polar(α_local) * c *
+|V_local|` and iterates that map to an actual fixed point via Anderson(m) acceleration,
+refreshing induced velocities with a real `near_field_forces!` call (`calculate_vlm_induced =
+true`, i.e. the O(N²) direct VLM Biot-Savart pass, NOT whatever FMM-precomputed `Vh`/`Vv` term
+the outer unsteady loop may be using -- each trial `Γ` during the internal iteration needs its
+own self-consistent induced velocity, which a cached FMM evaluation from the ORIGINAL Γ cannot
+provide) once per internal iteration -- unlike the additive scheme, this map is provably
+convergent under damped/accelerated iteration away from stall (see
+`vortexlattice_native_viscous_target_fix_prototyped_tested_20260819` memory).
+
+Hard-capped at `maxiter` iterations (default 200, no fallback needed beyond that): if the cap is
+hit, the partially-converged `Γ` from the last Anderson step is used as-is. This is expected only
+within a few degrees of a local extremum in the polar's `dCl/dα` (e.g. right at post-stall
+rollover, confirmed structurally as a locally-expanding fixed-point map there, not fixable by any
+damping constant -- see `vortexlattice_intelligent_iteration_methods_tested_20260819` memory) and
+is a reasonable fallback since the outer unsteady time-marching re-seeds from a fresh (and
+typically nearby) inviscid `Γ` next step regardless (see
+`vortexlattice_warmstart_assumption_corrected_20260819` memory -- there is no persisted viscous
+`Γ` across timesteps in production to lose by falling back here).
+
+**`beta` default lowered to 0.3 (not full-step `beta=1.0`) after testing on a SWEPT wing**: the
+unswept NACA4415 validation converges cleanly at `beta=1.0`, but the 45°-swept Weber & Brebner
+case develops a spanwise checkerboard (alternating-sign cl error from station to station) at
+`beta=1.0`/`m=4` -- the same family of mirror-pair/cross-station-coupling instability documented
+for Cocco's per-station accelerators on swept geometry (see
+`vortexlattice_naca4415_smoothing_removed_secant_scheme_20260818` memory), here showing up in a
+plain Anderson-accelerated joint fixed-point map rather than a per-station one. Confirmed the fix
+is just damping harder: `beta=0.3` (with `m=4`) or plain damped Picard at `beta<=0.1` both
+converge cleanly to the same answer as `viscous!`/inviscid on the swept case, and `beta=0.3` costs
+no accuracy on the unswept case either (same CL to <0.02 away from the fold, `m=4` and 200
+iterations is generous headroom for the swept case's slower convergence at this damping).
+
+**Restricted to `nc == 1`** (one chordwise panel per section) for every surface with polar data;
+raises an `ArgumentError` otherwise. This mirrors the only configuration validated so far.
+Multiple surfaces ARE supported and iterated jointly (a single flat Anderson vector spanning
+every viscous station across every surface, so cross-surface induction is captured exactly, not
+approximated).
+
+The local (chordwise, normal) frame used to compute each station's effective angle of attack is
+derived directly from the panel/grid GEOMETRY (chordwise = leading-to-trailing-edge direction,
+normal = chordwise × spanwise), not from `frames`/`ReferenceFrame` rotations -- `ReferenceFrame`
+encodes a vehicle body-axis CONVENTION (e.g. `Rp2g` can include an axis flip such as
+`BackRightUp` vs `ForwardRightDown`) that is unrelated to the airfoil's actual chord direction;
+using it to split velocity into "chordwise"/"normal" components silently corrupted the effective
+angle of attack (confirmed via a debug case: `Rp2g = diag(-1,1,1)` flipped an 8° local alpha into
+~173°). The additive `viscous!` never hit this because it derives `cl` from force magnitude +
+`sign(γ)`, never from a raw velocity angle -- deriving the angle directly from geometry instead
+of any external frame convention is the general-case-correct fix, valid for any sweep/rotation.
+
+**Performance note**: because each internal iteration needs a full induced-velocity refresh at
+`calculate_vlm_induced = true`, the per-call cost scales like the direct O(N²) VLM Biot-Savart
+sum times the number of iterations (up to `maxiter`) -- validated cheap (a few ms/step) at
+~20-90 viscous stations; for very large panel counts (where the outer solve relies on FMM
+specifically to avoid an O(N²) cost) this internal iteration could become the dominant per-
+timestep cost and should be profiled before use at that scale.
+
+**`calculate_vlm_induced`/`additional_velocity` overrides (added 2026-08-19)**: default
+`calculate_vlm_induced=true` recomputes each station's local velocity directly from
+`surfaces`/`wakes` only -- correct for the steady `WakePanel` case, where `wakes` genuinely holds
+the entire wake. For the unsteady `PanelParticleWake` path, `wakes` is just the thin near-wake
+panel buffer; the bulk of the wake is vortex particles (`wake.pfield`) that never enter that direct
+sum, so a post-hoc call against an unsteady system silently sees only a ~1-chord-wake local flow
+regardless of how long the simulated wake actually is (confirmed: flat CL across a 1-16 chord
+sweep -- see `vortexlattice_viscous_iterative_steady_vs_unsteady_gap_found_20260819` memory).
+`system.Vh`/`system.Vv` do NOT help here -- they hold velocity due to rigid-body *vehicle motion*
+only (zero for a non-maneuvering vehicle in a fixed freestream), not wake/particle induction;
+setting `calculate_vlm_induced=false` with those fields just drops induction entirely (confirmed
+worse: CL becomes bit-identical across every wake length, since the local AoA collapses to the
+bare freestream angle). The correct fix is `additional_velocity` (already an unconditionally-added
+term in `near_field_forces!`, independent of `calculate_vlm_induced`): keep
+`calculate_vlm_induced=true` (still recomputes bound self + near-wake-row induction, which DOES
+depend on the trial Γ each Anderson iteration) and pass an `additional_velocity(rc)` closure
+supplying the particle wake's induced velocity at point `rc`. Since the particles are a frozen
+background field during this post-hoc call (only bound Γ changes iteration to iteration), that
+contribution can be evaluated ONCE per call (e.g. via one `FastMultipole.fmm!` pass of a
+`ProbeSystem` against `wake.pfield` alone, keeping bound self-induction out of the source set to
+avoid double-counting what `calculate_vlm_induced=true` already supplies) and reused every
+iteration.
+"""
+function viscous_iterative!(properties, Γ, surfaces, wakes, grids, frames_index::Vector{Int},
+        polars, ref::Reference, fs; symmetric, nwake, surface_id,
+        wake_finite_core, wake_shedding_locations, trailing_vortices, xhat, Vh=nothing, Vv=nothing,
+        dΓdt=nothing, maxiter=200, tol=1e-6, m=4, beta=0.3, calculate_vlm_induced=true,
+        additional_velocity=nothing)
+
+    TF = eltype(Γ)
+    nsurf = length(surfaces)
+
+    # ---- flat list of viscous stations (one per section) across every surface. `station_iΓ`
+    # holds the TRAILING-EDGE (cumulative-total) panel index for each station -- for nc==1 this
+    # is trivially the (only) panel's own index, preserving all prior nc==1 behavior exactly;
+    # for nc>1, `station_iΓ_first`/`station_nc` give the rest of that station's chordwise column
+    # (see station_target's Γ-weighted velocity average and write_station!'s proportional
+    # rescale below, both ported from naca4415_cocco_validation_test.jl's validated nc>1 handling
+    # -- vortexlattice_viscous_nc_gt1_support_added_20260820 memory).
+    iΓ = 1
+    station_iΓ = Int[]
+    station_iΓ_first = Int[]
+    station_nc = Int[]
+    station_isurf = Int[]
+    station_j = Int[]
+    for isurf in 1:nsurf
+        surface = surfaces[isurf]
+        n_i, n_j = size(surface)
+        if frames_index[isurf] > 0 && !isempty(polars[isurf])
+            for j in 1:n_j
+                push!(station_iΓ_first, iΓ)
+                push!(station_iΓ, iΓ + n_i - 1)
+                push!(station_nc, n_i)
+                push!(station_isurf, isurf)
+                push!(station_j, j)
+                iΓ += n_i
+            end
+        else
+            iΓ += n_i * n_j
+        end
+    end
+    n = length(station_iΓ)
+    n == 0 && return nothing
+
+    # section chord lengths + local (chordwise, normal) unit vectors, straight from panel/grid
+    # geometry in the SAME global frame `properties[...].velocity` is expressed in (see docstring
+    # note on why this must NOT go through `frames`/`ReferenceFrame` rotations)
+    c_arr = zeros(TF, n)
+    that_arr = Vector{SVector{3,TF}}(undef, n)
+    nhat_arr = Vector{SVector{3,TF}}(undef, n)
+    for k in 1:n
+        isurf = station_isurf[k]; j = station_j[k]
+        grid = grids[isurf]
+        le1 = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j])
+        te1 = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
+        le2 = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1])
+        te2 = SVector(grid[1,end,j+1], grid[2,end,j+1], grid[3,end,j+1])
+        c_arr[k] = 0.5 * (norm(le1 - te1) + norm(le2 - te2))
+        t_hat = normalize((te1 - le1) + (te2 - le2))  # chordwise, leading- to trailing-edge
+        s_hat = normalize(le2 - le1)                  # spanwise
+        that_arr[k] = t_hat
+        nhat_arr[k] = normalize(cross(t_hat, s_hat))  # airfoil "up" (suction-side) normal
+    end
+
+    function refresh_forces!()
+        near_field_forces!(properties, surfaces, wakes, ref, fs, Γ; dΓdt=dΓdt,
+            additional_velocity=additional_velocity, Vh=Vh, Vv=Vv, symmetric, nwake, surface_id,
+            wake_finite_core, wake_shedding_locations, trailing_vortices, xhat,
+            calculate_vlm_induced=calculate_vlm_induced)
+        return nothing
+    end
+
+    # local (chordwise, normal) flow angle at this station, and the polar's cl-target
+    # circulation implied by it: Γ_target = 0.5 * cl(α) * c * |V_local|
+    function station_target(k)
+        isurf = station_isurf[k]; j = station_j[k]
+        nc_k = station_nc[k]
+        if nc_k == 1
+            v_induced = properties[isurf][1, j].velocity * ref.V
+        else
+            # Γ-difference-weighted average velocity across chordwise rows: each row's
+            # bound-vortex FORCE contribution is weighted by its own net circulation
+            # Γ[i]-Γ[i-1], not a uniform 1/nc share -- see naca4415_cocco_validation_test.jl's
+            # cocco_targets for the original derivation/validation of this exact formula.
+            first = station_iΓ_first[k]
+            v_induced = zero(SVector{3,TF})
+            wsum = zero(TF)
+            Γprev = zero(TF)
+            for i in 1:nc_k
+                Γcur = Γ[first + i - 1]
+                Γrow_net = Γcur - Γprev
+                v_induced += Γrow_net * properties[isurf][i, j].velocity * ref.V
+                wsum += Γrow_net
+                Γprev = Γcur
+            end
+            if wsum == 0
+                # zero-circulation seed: Γ-weighted sum degenerates to 0/0 -- fall back to a
+                # plain unweighted average so the first iteration can bootstrap away from Γ=0.
+                v_induced = zero(SVector{3,TF})
+                for i in 1:nc_k
+                    v_induced += properties[isurf][i, j].velocity * ref.V
+                end
+                v_induced /= nc_k
+            else
+                v_induced /= wsum
+            end
+        end
+        u2D_t = dot(v_induced, that_arr[k])
+        u2D_n = dot(v_induced, nhat_arr[k])
+        u2D_mag = sqrt(u2D_t^2 + u2D_n^2)
+        α = atan(u2D_n, u2D_t) * 180 / pi
+        polar = polars[isurf][j]
+        cl_target = FLOWMath.linear(polar.alphas, polar.cls_visc, α)
+        return 0.5 * cl_target * c_arr[k] * u2D_mag, α, u2D_mag
+    end
+
+    # writes a new TOTAL (trailing-edge/cumulative) station circulation, redistributing the
+    # change across the station's chordwise column by uniformly rescaling every row's existing
+    # NET circulation -- preserves whatever chordwise loading shape the inviscid/prior-iteration
+    # solution already has while correcting the total to match the viscous target, without
+    # introducing a frame-dependent per-segment KJ solve (which would reintroduce the same class
+    # of ReferenceFrame-convention risk found in viscous!()'s per-segment reconstruction -- see
+    # vortexlattice_viscous_frame_mismatch_root_cause_20260820 memory). Exact for nc==1.
+    function write_station!(k, new_total)
+        nc_k = station_nc[k]
+        if nc_k == 1
+            Γ[station_iΓ[k]] = new_total
+        else
+            first = station_iΓ_first[k]
+            old_total = Γ[station_iΓ[k]]
+            if old_total == 0
+                for i in 1:nc_k
+                    Γ[first + i - 1] = new_total * i / nc_k
+                end
+            else
+                r = new_total / old_total
+                for i in 1:nc_k
+                    Γ[first + i - 1] *= r
+                end
+            end
+        end
+        return nothing
+    end
+
+    # ---- Anderson(m) acceleration of the Picard map g(x) = x + R(x), seeded from the
+    # incoming Γ (the fresh inviscid Γ this call actually receives -- see
+    # vortexlattice_warmstart_assumption_corrected_20260819 memory) ----
+    x = [Γ[station_iΓ[k]] for k in 1:n]
+    Xs = Vector{Vector{TF}}()
+    Fs = Vector{Vector{TF}}()
+    refresh_forces!()
+    for it in 0:maxiter-1
+        f = zeros(TF, n)
+        for k in 1:n
+            Γ_target, _, _ = station_target(k)
+            f[k] = Γ_target - x[k]
+        end
+        resid = maximum(abs.(f))
+        Γscale = maximum(abs.(x)) + eps(TF)
+        if VISC_ITER_DEBUG[]
+            println("  [visc_iter] it=$it resid/scale=$(resid/Γscale) Γ_target[1]=$(station_target(1)[1]) alpha[1]=$(station_target(1)[2]) x[1]=$(x[1])")
+        end
+        if resid / Γscale < tol
+            break
+        end
+        push!(Xs, copy(x)); push!(Fs, copy(f))
+        mk = min(m, length(Xs) - 1)
+        if mk == 0
+            x = x .+ beta .* f
+        else
+            ΔF = hcat([Fs[end-i+1] .- Fs[end-i] for i in 1:mk]...)
+            ΔX = hcat([Xs[end-i+1] .- Xs[end-i] for i in 1:mk]...)
+            γ = ΔF \ f
+            x = x .+ beta .* f .- (ΔX .+ beta .* ΔF) * γ
+        end
+        for k in 1:n
+            write_station!(k, x[k])
+        end
+        refresh_forces!()
+    end
+    for k in 1:n
+        write_station!(k, x[k])
+    end
+    refresh_forces!()  # final refresh so `properties` is consistent with the returned Γ
+
+    # ---- viscous drag: same convention as viscous!() (cd*q_local*c*Δs_y added to cfb), all in
+    # the global frame (matches how cfb/Δs are stored -- see docstring note on `frames`).
+    # Distributed as D_visc_strip/nc across every chordwise row (matches viscous!()'s per-segment
+    # d_viscous convention) rather than dumped entirely onto row 1.
+    q = 0.5 * RHO * ref.V * ref.V
+    for k in 1:n
+        isurf = station_isurf[k]; j = station_j[k]; nc_k = station_nc[k]
+        surface = surfaces[isurf]
+        _, α, u2D_mag = station_target(k)
+        polar = polars[isurf][j]
+        cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α)
+        q_local = 0.5 * RHO * u2D_mag^2
+        c = c_arr[k]
+        Δs_y = norm(surface[1,j].rtl - surface[1,j].rtr)
+        v_induced = properties[isurf][1, j].velocity * ref.V
+        u2D_t = dot(v_induced, that_arr[k])
+        u2D_n = dot(v_induced, nhat_arr[k])
+        dhat_global = (u2D_t * that_arr[k] + u2D_n * nhat_arr[k]) / u2D_mag
+        D_visc_strip = cd * q_local * c * Δs_y
+        d_viscous = (D_visc_strip / nc_k) * dhat_global / (q * ref.S)
+        for i in 1:nc_k
+            (; gamma, velocity, cfb, cfl, cfr) = properties[isurf][i, j]
+            properties[isurf][i, j] = PanelProperties(gamma, velocity, cfb + d_viscous, cfl, cfr)
+        end
+    end
+
+    return nothing
+end
+
+"""
+    viscous_iterative_shed!(system, wake::PanelParticleWake, trailing_edge_filaments,
+        Γ_wake, polars, ref, fs, frames_index; kwargs...)
+
+Per-step, fully Anderson-converged viscous coupling for the `PanelParticleWake` unsteady path,
+intended to REPLACE the single-pass `viscous!()` call in `_simulate_step!` when the shed wake's
+own strength needs to track the viscous-corrected circulation (enable via
+`simulate!(...; viscous_iterative_shed=true)`).
+
+**Why this exists** (2026-08-20): `viscous_iterative!()` applied post-hoc (after `simulate!`
+finishes, on an otherwise purely-inviscid-shed wake) plateaus far from the steady target,
+independent of wake length -- root-caused to the near-wake buffer/particle wake having been
+shed with the INVISCID Γ history the whole run, so its own downwash never reflects the
+viscous-corrected circulation (see
+vortexlattice_viscous_iterative_frozen_wake_selfconsistency_ROOT_CAUSE_20260820 memory). The
+fix is to converge the viscous circulation BEFORE shedding, every step -- not just once at the
+end -- exactly like single-pass `viscous!()` already does (it mutates `Γ_wake` in place before
+`shed_wake!` uses it), except with a full self-consistent Anderson solve instead of one additive
+increment (which is known to diverge when repeated every step, see
+vortexlattice_viscous_correction_diverges_confirmed_2026_08_17).
+
+**How the trial-Γ-dependent velocity is derived** (avoiding the ~2x error from the direct
+`calculate_vlm_induced=true` Biot-Savart recompute, see
+vortexlattice_viscous_iterative_induced_velocity_mismatch_20260820): the WAKE-on-vehicle
+contribution to `system.Vh`/`Vv` (populated earlier this step by `wake_on_all!`, before the AIC
+solve) is Γ-independent -- frozen once as a baseline. Only the VEHICLE-on-vehicle contribution
+(bound self + TE-to-wake_shedding_location interface ring) depends on the trial Γ, so
+`vehicle_on_all!` is re-run each Anderson iteration with the trial Γ written into `system.Γ`,
+added on top of the frozen baseline, then `near_field_forces!` runs with
+`calculate_vlm_induced=false` -- the IDENTICAL code path production uses, just re-evaluated at
+each trial Γ instead of only once.
+
+On return, `Γ_wake` holds the converged viscous circulation (for `shed_wake!`) and
+`system.properties`/`system.Vh`/`system.Vv` are left consistent with it (mirroring how
+`viscous!()` also leaves `system.properties` viscous-corrected). `system.Γ` is restored to its
+original (inviscid) value, since the next step's AIC solve overwrites it anyway but leaving it
+viscous-corrected mid-step would be surprising to any code reading it before then.
+"""
+function viscous_iterative_shed!(system, wake, trailing_edge_filaments, Γ_wake, polars,
+        ref, fs, frames_index; maxiter=200, tol=1e-6, m=4, beta=0.3,
+        fmm_wake_args=NamedTuple(), fmm_vehicle_args=NamedTuple())
+
+    nsurf = length(system.surfaces)
+    TF = eltype(system.Γ)
+
+    # ---- flat list of viscous stations (see viscous_iterative!'s equivalent block for the
+    # nc>1 generalization -- station_iΓ is the TRAILING-EDGE/cumulative-total panel index) ----
+    iΓ = 1
+    station_iΓ = Int[]; station_iΓ_first = Int[]; station_nc = Int[]
+    station_isurf = Int[]; station_j = Int[]
+    for isurf in 1:nsurf
+        n_i, n_j = size(system.surfaces[isurf])
+        if frames_index[isurf] > 0 && !isempty(polars[isurf])
+            for j in 1:n_j
+                push!(station_iΓ_first, iΓ)
+                push!(station_iΓ, iΓ + n_i - 1)
+                push!(station_nc, n_i)
+                push!(station_isurf, isurf); push!(station_j, j)
+                iΓ += n_i
+            end
+        else
+            iΓ += n_i * n_j
+        end
+    end
+    n = length(station_iΓ)
+    n == 0 && return nothing
+
+    grids_ = system.grids
+    c_arr = zeros(TF, n)
+    that_arr = Vector{SVector{3,TF}}(undef, n)
+    nhat_arr = Vector{SVector{3,TF}}(undef, n)
+    for k in 1:n
+        isurf = station_isurf[k]; j = station_j[k]; grid = grids_[isurf]
+        le1 = SVector(grid[1,1,j], grid[2,1,j], grid[3,1,j]); te1 = SVector(grid[1,end,j], grid[2,end,j], grid[3,end,j])
+        le2 = SVector(grid[1,1,j+1], grid[2,1,j+1], grid[3,1,j+1]); te2 = SVector(grid[1,end,j+1], grid[2,end,j+1], grid[3,end,j+1])
+        c_arr[k] = 0.5 * (norm(le1 - te1) + norm(le2 - te2))
+        t_hat = normalize((te1 - le1) + (te2 - le2))
+        s_hat = normalize(le2 - le1)
+        that_arr[k] = t_hat; nhat_arr[k] = normalize(cross(t_hat, s_hat))
+    end
+
+    Γ_seed = copy(system.Γ) # the inviscid solve this step already produced; restored at the end
+
+    # ---- frozen wake-on-vehicle baseline (Γ-independent) ----
+    # system.Vh/Vv at the call site (_simulate_step!, right after the INVISCID near_field_forces!
+    # call) already hold kinematic + wake_on_all!'s contribution + vehicle_on_all!'s contribution
+    # AT THE INVISCID Γ (vehicle_on_all! already ran earlier this step, before this function is
+    # called) -- NOT just the wake-only piece. Reusing that directly would double-count bound
+    # self-induction (stale inviscid + fresh trial, added again by vehicle_on_all! below every
+    # iteration). Recompute a clean wake-only baseline explicitly instead.
+    for isurf in 1:nsurf
+        system.Vh[isurf] .= Ref(zero(eltype(system.Vh[isurf])))
+        system.Vv[isurf] .= Ref(zero(eltype(system.Vv[isurf])))
+        system.Vcp[isurf] .= Ref(zero(eltype(system.Vcp[isurf])))
+        system.Vte[isurf] .= Ref(zero(eltype(system.Vte[isurf])))
+    end
+    wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+    Vh_base = deepcopy(system.Vh); Vv_base = deepcopy(system.Vv)
+
+    nsurf_range = 1:nsurf
+    symmetric_f = fill(false, nsurf)
+    trailing_vortices_f = fill(false, nsurf)
+
+    function refresh_forces!()
+        for isurf in 1:nsurf
+            system.Vh[isurf] .= Vh_base[isurf]
+            system.Vv[isurf] .= Vv_base[isurf]
+        end
+        vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
+        near_field_forces!(system.properties, system.surfaces, system.wakes, ref, fs, system.Γ;
+            dΓdt=nothing, additional_velocity=nothing, Vh=system.Vh, Vv=system.Vv,
+            symmetric=symmetric_f, nwake=system.nwake, surface_id=nsurf_range,
+            wake_finite_core=fill(true, nsurf), wake_shedding_locations=nothing,
+            trailing_vortices=trailing_vortices_f, xhat=system.xhat[], calculate_vlm_induced=false)
+    end
+
+    function station_target(k)
+        isurf = station_isurf[k]; j = station_j[k]
+        nc_k = station_nc[k]
+        if nc_k == 1
+            v_induced = system.properties[isurf][1, j].velocity * ref.V
+        else
+            first = station_iΓ_first[k]
+            v_induced = zero(SVector{3,TF})
+            wsum = zero(TF)
+            Γprev = zero(TF)
+            for i in 1:nc_k
+                Γcur = system.Γ[first + i - 1]
+                Γrow_net = Γcur - Γprev
+                v_induced += Γrow_net * system.properties[isurf][i, j].velocity * ref.V
+                wsum += Γrow_net
+                Γprev = Γcur
+            end
+            if wsum == 0
+                v_induced = zero(SVector{3,TF})
+                for i in 1:nc_k
+                    v_induced += system.properties[isurf][i, j].velocity * ref.V
+                end
+                v_induced /= nc_k
+            else
+                v_induced /= wsum
+            end
+        end
+        u2D_t = dot(v_induced, that_arr[k]); u2D_n = dot(v_induced, nhat_arr[k])
+        u2D_mag = sqrt(u2D_t^2 + u2D_n^2)
+        α = atan(u2D_n, u2D_t) * 180 / pi
+        pol = polars[isurf][j]
+        cl_target = FLOWMath.linear(pol.alphas, pol.cls_visc, α)
+        return 0.5 * cl_target * c_arr[k] * u2D_mag
+    end
+
+    function write_station!(k, new_total)
+        nc_k = station_nc[k]
+        if nc_k == 1
+            system.Γ[station_iΓ[k]] = new_total
+        else
+            first = station_iΓ_first[k]
+            old_total = system.Γ[station_iΓ[k]]
+            if old_total == 0
+                for i in 1:nc_k
+                    system.Γ[first + i - 1] = new_total * i / nc_k
+                end
+            else
+                r = new_total / old_total
+                for i in 1:nc_k
+                    system.Γ[first + i - 1] *= r
+                end
+            end
+        end
+        return nothing
+    end
+
+    x = [system.Γ[station_iΓ[k]] for k in 1:n]
+    Xs = Vector{Vector{TF}}(); Fs = Vector{Vector{TF}}()
+    refresh_forces!()
+    for it in 0:maxiter-1
+        f = zeros(TF, n)
+        for k in 1:n
+            f[k] = station_target(k) - x[k]
+        end
+        resid = maximum(abs.(f)); Γscale = maximum(abs.(x)) + eps(TF)
+        if VISC_ITER_DEBUG[]
+            println("  [visc_iter_shed] it=$it resid/scale=$(resid/Γscale)")
+        end
+        resid / Γscale < tol && break
+        push!(Xs, copy(x)); push!(Fs, copy(f))
+        mk = min(m, length(Xs) - 1)
+        if mk == 0
+            x = x .+ beta .* f
+        else
+            ΔF = hcat([Fs[end-i+1] .- Fs[end-i] for i in 1:mk]...)
+            ΔX = hcat([Xs[end-i+1] .- Xs[end-i] for i in 1:mk]...)
+            γ = ΔF \ f
+            x = x .+ beta .* f .- (ΔX .+ beta .* ΔF) * γ
+        end
+        for k in 1:n
+            write_station!(k, x[k])
+        end
+        refresh_forces!()
+    end
+    for k in 1:n
+        write_station!(k, x[k])
+    end
+    refresh_forces!()
+
+    # ---- viscous drag: missing block, found while chasing the residual CD gap after the
+    # row-1-staleness fix (vortexlattice_row1_staleness_bug_ROOT_CAUSE_FIXED_20260820) --
+    # this function only ever converged Γ toward the polar's cl_target (lift), it never added
+    # the polar's cd_target profile-drag contribution to cfb the way viscous_iterative! (steady)
+    # and viscous!() (single-pass unsteady) both do. Same convention as viscous_iterative!'s
+    # drag block below (cd*q_local*c*Δs_y added to cfb, all in the global frame), distributed
+    # across every chordwise row when nc>1 (see viscous_iterative!'s equivalent block).
+    q = 0.5 * RHO * ref.V * ref.V
+    for k in 1:n
+        isurf = station_isurf[k]; j = station_j[k]; nc_k = station_nc[k]
+        surface = system.surfaces[isurf]
+        v_induced = system.properties[isurf][1, j].velocity * ref.V
+        u2D_t = dot(v_induced, that_arr[k]); u2D_n = dot(v_induced, nhat_arr[k])
+        u2D_mag = sqrt(u2D_t^2 + u2D_n^2)
+        α = atan(u2D_n, u2D_t) * 180 / pi
+        pol = polars[isurf][j]
+        cd = FLOWMath.linear(pol.alphas, pol.cds_visc, α)
+        q_local = 0.5 * RHO * u2D_mag^2
+        c = c_arr[k]
+        Δs_y = norm(surface[1,j].rtl - surface[1,j].rtr)
+        dhat_global = (u2D_t * that_arr[k] + u2D_n * nhat_arr[k]) / u2D_mag
+        D_visc_strip = cd * q_local * c * Δs_y
+        d_viscous = (D_visc_strip / nc_k) * dhat_global / (q * ref.S)
+        for i in 1:nc_k
+            (; gamma, velocity, cfb, cfl, cfr) = system.properties[isurf][i, j]
+            system.properties[isurf][i, j] = PanelProperties(gamma, velocity, cfb + d_viscous, cfl, cfr)
+        end
+    end
+
+    Γ_wake .= system.Γ
+    # DO NOT restore system.Γ to Γ_seed here (previously done, see
+    # vortexlattice_row1_staleness_bug_ROOT_CAUSE_FIXED_20260820): the next step's
+    # `update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)`
+    # (unsteady.jl, called BEFORE that step's own AIC solve overwrites system.Γ) reads
+    # system.Γ to refresh the near-wake ring closest to the TE -- restoring to the inviscid
+    # value here silently discarded the viscous correction on that ring every single step,
+    # right before wake_on_all! used it. Leaving system.Γ at the converged viscous value keeps
+    # that ring consistent with what shed_wake! (below, via Γ_wake) actually just shed; the
+    # AIC solve next step still overwrites system.Γ completely regardless (ldiv! has no
+    # dependence on Γ's incoming value), so nothing else observes this changed convention.
+
     return nothing
 end

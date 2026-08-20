@@ -536,7 +536,7 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
       recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
       polars, frames_index, monitors, vtk_interval, body_name, write_restart,
       checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
-      Γ_wake, dΓdt_wake) = config
+      Γ_wake, dΓdt_wake, viscous_iterative_shed, viscous_frames) = config
 
     verbose && println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(FLOWVPM.get_np(wake.pfield))")
 
@@ -681,8 +681,30 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
 
     Γ_wake .= Γ
     if !isnothing(polars)
-        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
-            frames_index, polars, ref, dt)
+        if viscous_iterative_shed
+            # fully-converged (Anderson) per-step viscous coupling, fed to shed_wake! below,
+            # instead of the single-pass additive viscous!() correction (which diverges when
+            # applied every step -- see vortexlattice_viscous_correction_diverges_confirmed_2026_08_17).
+            # Reuses the SAME FMM machinery (wake_on_all!/vehicle_on_all!) this step already
+            # computed, re-run against a trial Gamma each iteration, so the shed wake's own
+            # strength tracks the viscous-corrected circulation instead of staying frozen at the
+            # inviscid history (see vortexlattice_viscous_iterative_frozen_wake_selfconsistency_ROOT_CAUSE_20260820).
+            viscous_iterative_shed!(system, wake, trailing_edge_filaments, Γ_wake, polars,
+                ref, fs, frames_index)
+        else
+            # NOTE: intentionally uses `viscous_frames` (a static, non-rotated axis reference),
+            # NOT the kinematic `frames` this step otherwise uses for Vh/Vv/motion bookkeeping.
+            # `viscous!()` derives its local (chordwise, normal) decomposition from
+            # transpose(frame.Rp2g * frame.R); the kinematic vehicle frame's R (chosen to orient
+            # Uinf(t)/Ωinf(t) correctly) does not represent the grid's own body-axis orientation
+            # and silently feeds viscous!() the wrong rotation (confirmed: nets to a Z-flip
+            # instead of the X-flip the validated steady single-pass usage relies on, corrupting
+            # every station's local alpha and making the per-step correction have ~zero net
+            # effect on the reported CL/CD regardless of wake resolution -- see
+            # vortexlattice_viscous_frame_mismatch_ROOT_CAUSE_FOUND_20260820 memory).
+            viscous!(system.properties, Γ_wake, system.surfaces, system.grids, viscous_frames,
+                frames_index, polars, ref, dt)
+        end
     end
     dΓdt_wake .+= Γ_wake
     dΓdt_wake ./= dt
@@ -734,7 +756,7 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
     (;eta, trailing_vortices, derivatives, recalculate_influence_matrix, force_finite_core,
       fmm_wake_args, fmm_vehicle_args, particle_trailing_methods, particle_unsteady_methods,
       polars, frames_index, monitors, path, name, vtk_args, vtk_postshed,
-      Vinf, Ωinf, maneuver!, verbose, Γ_wake, dΓdt_wake) = config
+      Vinf, Ωinf, maneuver!, verbose, Γ_wake, dΓdt_wake, viscous_frames) = config
 
     verbose && println("\tstep $(i_step)/$(length(t_range)-1) at time $(t) | particles: $(FLOWVPM.get_np(wake))")
 
@@ -838,7 +860,9 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
 
     Γ_wake .= Γ
     if !isnothing(polars)
-        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
+        # see the NOTE at the PanelParticleWake call site above: must use the static
+        # `viscous_frames`, not the kinematic `frames`.
+        viscous!(system.properties, Γ_wake, system.surfaces, system.grids, viscous_frames,
             frames_index, polars, ref, dt)
     end
     dΓdt_wake .+= Γ_wake
@@ -899,6 +923,7 @@ function simulate!(system::System, wake::PanelParticleWake,
         monitors=(),
         recalculate_influence_matrix=true,
         polars=nothing, frames_index=fill(-1, length(system.surfaces)),
+        viscous_iterative_shed::Bool=false,
         restart_from::Union{Nothing,String}=nothing,
         restart_idx::Union{Nothing,Int}=nothing,
         vtk_interval::Int=1,
@@ -918,6 +943,15 @@ function simulate!(system::System, wake::PanelParticleWake,
     wake_finite_core  = system.wake_finite_core
     xhat              = system.xhat[]
     symmetric        .= false
+    # real near/far wake panels + shed particles are the sole representation of trailing-vortex
+    # downwash for this wake type -- leaving system.trailing_vortices at its seeding-call default
+    # (true) double-counts that downwash (once via the AIC's semi-infinite filament assumption,
+    # again via the real wake), which compounds every step into runaway divergence (confirmed:
+    # rectangular NACA4415 AR=12 wing, aoa=4.2deg, inviscid, goes from steady CL=0.371 to
+    # unsteady CL=9453 at 8 chords without this, converging to ~0.367 at 16 chords with it).
+    # steady_analysis! avoids this by masking trailing_vortices off whenever wake panels are
+    # present (analyses.jl); do the same thing here for the PanelParticleWake stepping loop.
+    system.trailing_vortices .= false
     force_finite_core = system.surface_finite_core
 
     if isnothing(restart_state)
@@ -926,12 +960,21 @@ function simulate!(system::System, wake::PanelParticleWake,
             xhat, derivatives, fmm_wake_args, force_finite_core)
     end
 
+    # static, non-rotated axis reference for viscous!()'s local (chordwise, normal) velocity
+    # decomposition -- see the NOTE at its call site in _simulate_step! for why this must NOT be
+    # the kinematic `frames` used for Vh/Vv/motion elsewhere in the step.
+    viscous_frames = ReferenceFrame(system;
+        origin=SVector{3}(0.0, 0.0, 0.0), v=SVector{3}(0.0, 0.0, 0.0),
+        ω_axis=SVector{3}(1.0, 0.0, 0.0), ω=0.0,
+        R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+        name="viscous_static", child_index=Int[], dependent_index=collect(1:length(system.surfaces)))
+
     # bundle constant simulation parameters for the per-step function
     config = (;ref, symmetric, surface_id, wake_finite_core, xhat, force_finite_core,
                recalculate_influence_matrix, derivatives, fmm_wake_args, fmm_vehicle_args,
                polars, frames_index, monitors, vtk_interval, body_name, write_restart,
                checkpoint_base, body_writer, wake_writer, Vinf, Ωinf, maneuver!, verbose,
-               Γ_wake, dΓdt_wake)
+               Γ_wake, dΓdt_wake, viscous_iterative_shed, viscous_frames)
 
     println()
     start_step = isnothing(restart_state) ? 0 : restart_state.idx
@@ -996,11 +1039,18 @@ function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<
     dΓdt_wake = zeros(length(system.Γ))
     force_finite_core = system.surface_finite_core
 
+    # static, non-rotated axis reference for viscous!() -- see the NOTE at its call site.
+    viscous_frames = ReferenceFrame(system;
+        origin=SVector{3}(0.0, 0.0, 0.0), v=SVector{3}(0.0, 0.0, 0.0),
+        ω_axis=SVector{3}(1.0, 0.0, 0.0), ω=0.0,
+        R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+        name="viscous_static", child_index=Int[], dependent_index=collect(1:length(system.surfaces)))
+
     config = (;eta, trailing_vortices, derivatives, recalculate_influence_matrix, force_finite_core,
                fmm_wake_args, fmm_vehicle_args, particle_trailing_methods,
                particle_unsteady_methods, polars, frames_index, monitors,
                path, name, vtk_args, vtk_postshed, Vinf, Ωinf, maneuver!, verbose,
-               Γ_wake, dΓdt_wake)
+               Γ_wake, dΓdt_wake, viscous_frames)
 
     println()
     i_step = 0

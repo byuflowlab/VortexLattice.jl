@@ -1561,4 +1561,151 @@ end
     @test isapprox(monitor_fd.velocity[1, 2, 2][1], Vinf_ref; rtol=0.15)
 end
 
+@testset "Unsteady Viscous Coupling: frames_index / viscous frame regressions" begin
+    # Regression coverage for two bugs found together (2026-08-20, BTV25/VPM-Validation):
+    #  (1) simulate!()'s `frames_index` kwarg defaults to fill(-1, nsurf), which silently
+    #      no-ops viscous!()/viscous_iterative_shed!()'s entire per-surface correction loop
+    #      with no error/warning -- easy to forget, and produces plausible-looking-but-wrong
+    #      results (a full pps/nwakerows sweep was run before this was caught).
+    #  (2) simulate!() was internally feeding viscous!() the vehicle's KINEMATIC ReferenceFrame
+    #      (built for Uinf(t)/Vh/Vv orientation) instead of a static axis-reference frame,
+    #      corrupting viscous!()'s local lift-direction decomposition once frames_index was
+    #      actually enabled (fixed via a dedicated `viscous_frames` built inside simulate!()).
+    # Also covers nc>1 support added to viscous_iterative!()/viscous_iterative_shed!() (both
+    # previously threw ArgumentError for nc>1).
+
+    halfspan = 3.0
+    root_chord = 1.0
+    Vinf = 20.0
+    ns = 8
+    aoa_deg = 5.0
+
+    # small synthetic cambered polar (cl0=0.3 at alpha=0, roughly thin-airfoil slope, mild
+    # profile drag) -- deliberately different from the thin-airfoil cl=2*pi*alpha VLM result
+    # so a no-op viscous correction is easy to detect.
+    polar_alphas = collect(-20.0:2.0:20.0)
+    polar_cls = 0.3 .+ 2π .* deg2rad.(polar_alphas)
+    polar_cds = 0.01 .+ 0.001 .* polar_alphas.^2
+    polar = VortexLattice.Polar(polar_alphas, polar_cls, polar_cds)
+
+    function build_wing(nc)
+        xle = [0.0, 0.0]; yle = [0.0, halfspan]; zle = zeros(2)
+        chord = [root_chord, root_chord]; theta = zeros(2); phi = zeros(2)
+        Sref = halfspan * 2 * root_chord
+        cref = root_chord
+        bref = halfspan * 2
+        ref = Reference(Sref, cref, bref, [0.0, 0.0, 0.0], Vinf)
+        grid, ratios = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+            spacing_s=Uniform(), spacing_c=Uniform(), mirror=true)
+        grids = [grid]
+        ratios_v = [ratios]
+        ns_total = size(grid, 3) - 1
+        polars = [fill(polar, ns_total)]
+        return (; ref, grids, ratios_v, cref, ns_total, polars)
+    end
+
+    function body_CL(system)
+        CF, _ = body_forces(system; frame=Wind())
+        return CF[3]
+    end
+
+    fs = Freestream(Vinf, deg2rad(aoa_deg), 0.0, [0.0, 0.0, 0.0])
+
+    function run_unsteady(wing; polars_arg=nothing, viscous_iterative_shed=false,
+            frames_index=nothing, nwakerows=1, pps=2, nchords=4.0, steps_per_chord=3.0)
+        grids_case = deepcopy(wing.grids)
+        sys = System(grids_case; ratios=wing.ratios_v, nw=fill(nwakerows, length(grids_case)))
+        sys.reference[] = wing.ref
+        wakes = [Matrix{WakePanel{Float64}}(undef, nwakerows, size(sys.surfaces[i], 2)) for i in 1:length(sys.surfaces)]
+        steady_analysis!(sys, sys.reference[], fs; symmetric=false, wakes, nwake=fill(nwakerows, length(sys.surfaces)))
+        frames = ReferenceFrame(sys;
+            origin=SVector{3}(0.0, 0.0, -10.0), v=SVector{3}(0.0, 0.0, 0.0),
+            ω_axis=SVector{3}(0.0, 1.0, 0.0), ω=0.0,
+            R=SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
+            name="vehicle", child_index=Int[], dependent_index=collect(1:length(sys.surfaces)))
+        alpha_rad = deg2rad(aoa_deg)
+        Uinf(t) = SVector{3,Float64}(Vinf * cos(alpha_rad), 0.0, Vinf * sin(alpha_rad))
+        Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
+        dt = wing.cref / (Vinf * steps_per_chord)
+        nsteps = round(Int, nchords * steps_per_chord)
+        t_range = range(start=0.0, stop=nsteps * dt, length=nsteps + 1)
+        constant_maneuver!(fr, s, wk, t) = nothing
+        max_particles = (wing.ns_total + 1) * pps * nsteps + 2000
+        kwargs = (; wake_type=PanelParticleWake, nwakerows=nwakerows, max_particles=max_particles,
+            method_trailing=OverlapPPS(1.3, pps), method_unsteady=NoShed(),
+            derivatives=false, path=nothing, verbose=false)
+        if !isnothing(polars_arg)
+            kwargs = (; kwargs..., polars=polars_arg, viscous_iterative_shed=viscous_iterative_shed)
+        end
+        if !isnothing(frames_index)
+            kwargs = (; kwargs..., frames_index=frames_index)
+        end
+        simulate!(sys, frames, constant_maneuver!, Uinf, t_range, Ωinf; kwargs...)
+        return body_CL(sys)
+    end
+
+    wing1 = build_wing(1)
+
+    CL_inviscid_unsteady = run_unsteady(wing1)
+
+    # (1) forgetting frames_index with polars set must equal the pure-inviscid result -- this
+    # is the documented (if unfortunate) default behavior, tested explicitly so a future change
+    # to this default doesn't go unnoticed either way.
+    CL_forgot_frames_index = run_unsteady(wing1; polars_arg=wing1.polars, viscous_iterative_shed=true)
+    @test isapprox(CL_forgot_frames_index, CL_inviscid_unsteady; atol=1e-3)
+
+    # (2) with frames_index correctly set, both viscous coupling methods must produce a REAL,
+    # substantial change from the inviscid result (guards against bug (1) reappearing) ...
+    fidx = fill(1, length(wing1.grids))
+    CL_plain = run_unsteady(wing1; polars_arg=wing1.polars, viscous_iterative_shed=false, frames_index=fidx)
+    CL_iterative = run_unsteady(wing1; polars_arg=wing1.polars, viscous_iterative_shed=true, frames_index=fidx)
+    @test abs(CL_plain - CL_inviscid_unsteady) > 0.05
+    @test abs(CL_iterative - CL_inviscid_unsteady) > 0.05
+
+    # ... and must be reasonably close to the steady single-pass viscous!() target (guards
+    # against bug (2), the ReferenceFrame mismatch, reappearing -- that bug alone was capable
+    # of driving CL negative).
+    system_steady_visc = System(deepcopy(wing1.grids); ratios=wing1.ratios_v)
+    steady_analysis!(system_steady_visc, wing1.ref, fs; symmetric=false, derivatives=false)
+    frames_static = ReferenceFrame(system_steady_visc;
+        origin=SVector{3}(0.0, 0.0, 0.0), v=SVector{3}(0.0, 0.0, 0.0),
+        ω_axis=SVector{3}(1.0, 0.0, 0.0), ω=0.0,
+        R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+        name="vehicle", child_index=Int[], dependent_index=collect(1:length(system_steady_visc.surfaces)))
+    VortexLattice.viscous!(system_steady_visc.properties, system_steady_visc.Γ, system_steady_visc.surfaces,
+        wing1.grids, frames_static, fidx, wing1.polars, wing1.ref, 0.0)
+    CL_steady_target = body_CL(system_steady_visc)
+
+    @test CL_steady_target > 0.3 # sanity: the synthetic polar's camber should raise CL well above the thin-airfoil inviscid value
+    @test isapprox(CL_plain, CL_steady_target; rtol=0.3)
+    @test isapprox(CL_iterative, CL_steady_target; rtol=0.3)
+
+    # (3) nc>1 support: viscous_iterative!() (steady) must not throw for nc>1, and should be
+    # close to mesh-independent in nc, matching the nc-independence already established for the
+    # custom Cocco NL-VL scheme on this same style of case.
+    function steady_iterative_CL(wing)
+        system = System(deepcopy(wing.grids); ratios=wing.ratios_v)
+        steady_analysis!(system, wing.ref, fs; symmetric=false, derivatives=false)
+        fidx_local = fill(1, length(system.surfaces))
+        VortexLattice.viscous_iterative!(system.properties, system.Γ, system.surfaces, system.wakes, wing.grids,
+            fidx_local, wing.polars, wing.ref, fs;
+            symmetric=system.symmetric, nwake=system.nwake, surface_id=system.surface_id,
+            wake_finite_core=system.wake_finite_core, wake_shedding_locations=nothing,
+            trailing_vortices=system.trailing_vortices, xhat=system.xhat[])
+        return body_CL(system)
+    end
+
+    CL_nc1 = steady_iterative_CL(build_wing(1))
+    CL_nc2 = steady_iterative_CL(build_wing(2))
+    CL_nc4 = steady_iterative_CL(build_wing(4))
+    @test isapprox(CL_nc2, CL_nc1; rtol=0.05)
+    @test isapprox(CL_nc4, CL_nc1; rtol=0.05)
+
+    # nc>1 must also not throw for the unsteady viscous_iterative_shed! path.
+    wing2 = build_wing(2)
+    CL_iterative_nc2 = run_unsteady(wing2; polars_arg=wing2.polars, viscous_iterative_shed=true,
+        frames_index=fill(1, length(wing2.grids)))
+    @test isfinite(CL_iterative_nc2)
+end
+
 include("fmm_test.jl")
