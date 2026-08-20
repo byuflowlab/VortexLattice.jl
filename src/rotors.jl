@@ -153,7 +153,12 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     end
 
     chord = FLOWMath.linear(chorddist[:,1] .* Rtip, chorddist[:,2] .* Rtip, yle)
-    theta = .-FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]), yle)
+    # VL_TWIST_SIGN_OVERRIDE (diagnostic, 2026-08-14): flips the sign of the interpolated
+    # twist/pitch distribution, to test the "twist defined opposite" hypothesis for the
+    # a_VL~half-of-a_CCB induction deficit (BTV25, VPM-Validation vl-qvel-diagnostic
+    # investigation). Default 1.0 preserves the existing convention.
+    twist_sign = parse(Float64, get(ENV, "VL_TWIST_SIGN_OVERRIDE", "1.0"))
+    theta = twist_sign .* .-FLOWMath.linear(pitchdist[:,1] .* Rtip, deg2rad.(pitchdist[:,2]), yle)
     xle = .-FLOWMath.linear(sweepdist[:,1] .* Rtip, sweepdist[:,2] .* Rtip, yle)
     zle = .-FLOWMath.linear(heightdist[:,1] .* Rtip, heightdist[:,2] .* Rtip, yle)
 
@@ -175,7 +180,11 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     # the chord axis (z), mixing span into the shaft direction. Applied once
     # to the shared blade template before per-blade azimuthal placement.
     if precone != 0.0
-        phi = precone*pi/180
+        # VL_PRECONE_SIGN_OVERRIDE (diagnostic, 2026-08-14): flips the precone rotation
+        # direction, to test whether precone tilts the blade the wrong way relative to the
+        # a_VL~half-of-a_CCB induction deficit. Default 1.0 preserves the existing sign.
+        precone_sign = parse(Float64, get(ENV, "VL_PRECONE_SIGN_OVERRIDE", "1.0"))
+        phi = precone_sign * precone*pi/180
         R_precone = VortexLattice.Rodrigues(SVector{3}(0.0, 0.0, 1.0), phi)
         VortexLattice.rotate!(grid, R_precone)
     end
@@ -186,7 +195,12 @@ function _generate_rotor(Rtip, Rhub, B::Int,
     grids[1] = deepcopy(grid)
     ratios[1] = deepcopy(ratio)
 
-    diff_angle = 2π/B
+    # VL_BLADE_PLACEMENT_SIGN_OVERRIDE (diagnostic, 2026-08-14): flips the azimuthal
+    # blade-placement direction (which way blade 2, 3, ... sit relative to blade 1), to test
+    # the CW/CCW hypothesis independent of the omega/spin-direction test. Default 1.0
+    # preserves the existing convention.
+    placement_sign = parse(Float64, get(ENV, "VL_BLADE_PLACEMENT_SIGN_OVERRIDE", "1.0"))
+    diff_angle = placement_sign * 2π/B
     R1 = VortexLattice.Rodrigues(SVector{3}(1.0, 0.0, 0.0), diff_angle)
     for i = 2:B
         grids[i] = deepcopy(grids[i-1])

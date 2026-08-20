@@ -1,6 +1,7 @@
 using VortexLattice
 using CCBlade
 using StaticArrays
+using Plots
 
 save_path = "vortex_lattice_simulation"
 # Empty out the data_path directory
@@ -53,11 +54,13 @@ grid, ratios = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc; spacing_s=
 grids = [grid]
 ratios = [ratios]
 
-system = System(grids; ratios)
+nwakerows = 1
+system = System(grids; ratios, nw=fill(nwakerows, length(grids)))
 empty_system = deepcopy(system)
 system.reference[] = ref
 fs = Freestream(Vinf, deg2rad(aoa), 0.0, [0.0; 0.0; 0.0])
-steady_analysis!(system, system.reference[], fs; symmetric=false)
+wakes = [Matrix{VortexLattice.WakePanel{Float64}}(undef, nwakerows, size(system.surfaces[i], 2)) for i in 1:length(system.surfaces)]
+steady_analysis!(system, system.reference[], fs; symmetric=false, wakes, nwake=fill(nwakerows, length(system.surfaces)))
 
 cf_steady, cm_steady = lifting_line_coefficients(system; normalized=true)
 
@@ -74,20 +77,21 @@ frames = ReferenceFrame(system;
 
 alpha = aoa * (pi/180)
 Uinf(t) = SVector{3,Float64}(Vinf * cos(alpha), 0.0, Vinf * sin(alpha))
+Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
 t_range = range(start=0.0, stop=0.125, length=51)
 monitors = (VortexLattice.ForcesMonitor(length(t_range)),)
 
-wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range; 
+wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
+            wake_type=VortexLattice.PanelParticleWake,
+            nwakerows=nwakerows,
+            max_particles=10_000,
+            method_trailing=VortexLattice.OverlapPPS(1.3, 1),
+            method_unsteady=VortexLattice.NoShed(),
             monitors,
-            # particle_trailing_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            particle_trailing_methods=fill(VortexLattice.OverlapPPS(1.3,1), length(system.surfaces)),
-            # particle_unsteady_methods=fill(VortexLattice.OverlapPPS(1.3,5), length(system.surfaces)),
-            particle_unsteady_methods=fill(VortexLattice.NoShed(), length(system.surfaces)),
-            eta = 1.0,
-            derivatives = false,
-            vtk_args=(trailing_vortices=false,),
+            derivatives=false,
             polars,
-            nwakerows=1
+            path=nothing,
+            verbose=false,
             )
 
 # alpha = 4.2
