@@ -1496,3 +1496,81 @@ end
         end
     end
 end
+
+@testset "Stability Derivatives - Finite Difference Check" begin
+
+    # Verifies the analytic stability derivatives against a central difference
+    # of `body_forces`, which is the public output and therefore independent of
+    # any internal sign convention.
+    #
+    # This case is deliberately asymmetric -- a mirrored wing with both dihedral
+    # and twist, flown in sideslip -- so that Cl and Cn are nonzero.  On a
+    # symmetric aircraft at zero sideslip the roll and yaw moments vanish and
+    # this check cannot see an error in how they are rotated into the stability
+    # frame, which is why the AVL runs above do not cover it.
+
+    b = 15.0
+    Sref = 9.0
+    xle = [0.0, 0.3]
+    yle = [0.0, b/2]
+    zle = [0.0, 0.0]
+    chord = [1.5, 0.6]
+    theta = [0.0, -3.0*pi/180]
+    phi = [6.0*pi/180, 6.0*pi/180]
+    ns = 30
+    nc = 3
+
+    ref = Reference(Sref, Sref/b, b, [0.4, 0.0, 0.0], 30.0)
+
+    function solve(alpha, beta, Omega = [0.0, 0.0, 0.0])
+        grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+            mirror = true, spacing_s = Cosine(), spacing_c = Uniform())
+        system = System([grid]; ratios = [ratio])
+        fs = Freestream(ref.V, alpha, beta, Omega)
+        steady_analysis!(system, ref, fs; symmetric = false)
+        return system
+    end
+
+    alpha = 4.0*pi/180
+    beta = 10.0*pi/180
+    h = 0.02*pi/180
+
+    dCF, dCM = stability_derivatives(solve(alpha, beta))
+
+    # --- alpha derivatives ---
+    CFp, CMp = body_forces(solve(alpha + h, beta); frame = Stability())
+    CFm, CMm = body_forces(solve(alpha - h, beta); frame = Stability())
+    dCF_fd = (CFp .- CFm) ./ (2*h)
+    dCM_fd = (CMp .- CMm) ./ (2*h)
+
+    @test isapprox(dCF.alpha, dCF_fd, rtol = 1e-4)
+    @test isapprox(dCM.alpha, dCM_fd, rtol = 1e-4)
+
+    # Cl_alpha and Cn_alpha are the two this case exists to protect: they are
+    # the components that pick up `R_a*CMb` when the moment vector is rotated
+    # into the stability frame.
+    @test isapprox(dCM.alpha[1], dCM_fd[1], rtol = 1e-4)
+    @test isapprox(dCM.alpha[3], dCM_fd[3], rtol = 1e-4)
+
+    # --- beta derivatives ---
+    CFp, CMp = body_forces(solve(alpha, beta + h); frame = Stability())
+    CFm, CMm = body_forces(solve(alpha, beta - h); frame = Stability())
+
+    @test isapprox(dCF.beta, (CFp .- CFm) ./ (2*h), rtol = 1e-3)
+    @test isapprox(dCM.beta, (CMp .- CMm) ./ (2*h), rtol = 1e-3)
+
+    # --- roll rate derivative ---
+    # dCF.p and dCM.p are with respect to the nondimensional stability-frame
+    # roll rate pb = p*b/(2V), so the perturbation is applied about the
+    # stability x-axis: Omega_body = R'*Omega_stability, whose first column is
+    # (cos(alpha), 0, sin(alpha)).
+    dpb = 0.005
+    dp = dpb*2*ref.V/b
+    axis = [cos(alpha), 0.0, sin(alpha)]
+
+    CFp, CMp = body_forces(solve(alpha, beta,  dp*axis); frame = Stability())
+    CFm, CMm = body_forces(solve(alpha, beta, -dp*axis); frame = Stability())
+
+    @test isapprox(dCF.p, (CFp .- CFm) ./ (2*dpb), rtol = 1e-2, atol = 1e-6)
+    @test isapprox(dCM.p, (CMp .- CMm) ./ (2*dpb), rtol = 1e-2, atol = 1e-6)
+end
