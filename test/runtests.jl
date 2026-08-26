@@ -1496,3 +1496,70 @@ end
         end
     end
 end
+
+@testset "Grid Interpolation - Dihedral and Twist" begin
+
+    # `wing_to_grid` interpolates the defining sections onto the requested
+    # spanwise spacing.  Every spacing scheme places a station at eta = 0 and
+    # eta = 1, so for a wing defined by two sections the first and last spanwise
+    # columns of the returned grid must reproduce those two sections exactly.
+    #
+    # This is only sensitive when `phi` is nonzero *and* the section is twisted.
+    # The dihedral rotation makes y depend on z (y = cos(phi)*y_le - sin(phi)*z),
+    # and twist makes z vary along the chord, so y then varies chordwise too.
+    # Note that the AVL runs above obtain dihedral by raising `zle` rather than
+    # by setting `phi`, which leaves y constant along the chord and so cannot
+    # exercise this.
+
+    xle = [0.0, 0.3]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [1.5, 0.6]
+    theta = [0.0, -3.0*pi/180]
+    phi = [6.0*pi/180, 6.0*pi/180]
+    ns = 12
+    nc = 5
+
+    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        spacing_s = Uniform(), spacing_c = Uniform())
+
+    # the defining sections, built the way `wing_to_grid` builds them
+    function section(j)
+        st, ct = sincos(theta[j])
+        Rt = [ct 0 st; 0 1 0; -st 0 ct]
+        sp, cp = sincos(phi[j])
+        Rp = [1 0 0; 0 cp -sp; 0 sp cp]
+        rle = [xle[j], yle[j], zle[j]]
+        pts = Matrix{Float64}(undef, 3, nc+1)
+        for i = 1:nc+1
+            xc = (i-1)/nc
+            pts[:,i] = Rp*(Rt*[xc*chord[j], 0.0, 0.0] + rle)
+        end
+        return pts
+    end
+
+    @test isapprox(grid[:,:,1], section(1), atol = 1e-12)
+    @test isapprox(grid[:,:,end], section(2), atol = 1e-12)
+
+    # y must vary along the chord at the tip, and by the amount the dihedral
+    # rotation implies -- this is the quantity the interpolation has to carry
+    dy = grid[2,end,end] - grid[2,1,end]
+    @test isapprox(dy, -sin(phi[2])*(-sin(theta[2])*chord[2]), atol = 1e-12)
+    @test abs(dy) > 1e-4
+
+    # interpolation is parameterized by arc length, which is preserved by a
+    # rigid rotation, so it must commute with one
+    interp = (x, y, xpt) -> VortexLattice.FLOWMath.linear(x, y, xpt)
+    th = 0.7
+    R = [1 0 0; 0 cos(th) -sin(th); 0 sin(th) cos(th)]
+    rotgrid(g) = mapslices(v -> R*v, g; dims=1)
+    eta = collect(range(0, 1, length=7))
+
+    rotated_then_interpolated = VortexLattice.interpolate_grid(
+        rotgrid(grid), eta, interp; ydir = 2)
+    interpolated_then_rotated = rotgrid(VortexLattice.interpolate_grid(
+        grid, eta, interp; ydir = 2))
+
+    @test isapprox(rotated_then_interpolated, interpolated_then_rotated,
+        atol = 1e-12)
+end
