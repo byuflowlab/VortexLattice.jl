@@ -135,8 +135,6 @@ Interpolates the grid `xyz` along direction `dir`
  - `ydir`: Dependent variable direction `xyz` (`i=1`, `j=2`)
 """
 function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
-    
-    y = nothing
 
     ydim = ydir + 1
 
@@ -175,11 +173,8 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
         t /= t[end]
 
         x = interp(t, xyz_i[1,:], eta)
-        if !isnothing(y) && ydir==2
-        else
-            y = interp(t, xyz_i[2,:], eta)
-        end
-            z = interp(t, xyz_i[3,:], eta)
+        y = interp(t, xyz_i[2,:], eta)
+        z = interp(t, xyz_i[3,:], eta)
 
         if ydir == 2
             xyz_new[:,i,:] = vcat(x',y',z')
