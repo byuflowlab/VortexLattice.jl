@@ -1412,7 +1412,13 @@ function body_forces_derivatives(system::System)
     CM_r = CM_r ./ reference_length
 
     # positive Mx corresponds to negative roll, and positive Mz corresponds to negative yaw
+    # NOTE: this must be applied to `CM` as well as to its derivatives.  Both are
+    # used together by `stability_derivatives` in the product rule
+    # `CMs_a = R*CMb_a + R_a*CMb`, so a mismatch between them corrupts the
+    # rotated derivatives.  See the "Stability Derivatives - Finite Difference
+    # Check" testset.
     convention_change = [-1.0, 1.0, -1.0]
+    CM = CM .* convention_change
     CM_a = CM_a .* convention_change
     CM_b = CM_b .* convention_change
     CM_p = CM_p .* convention_change
