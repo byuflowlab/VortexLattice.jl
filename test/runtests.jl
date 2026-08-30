@@ -958,9 +958,12 @@ end
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
+    # old method to generate lifting line coefficients
     r_ll, c_ll = lifting_line_geometry(grids)
-
     cf, cm = lifting_line_coefficients(system, r_ll, c_ll; frame=Stability())
+
+    # new overloaded function that calls lifting_line_geometry
+    alt_cf, alt_cm = lifting_line_coefficients(system; frame=Stability())
 
     cl_avl = [0.2618, 0.2646, 0.2661, 0.2664, 0.2654, 0.2628, 0.2584, 0.2513,
         0.2404, 0.2233, 0.1952, 0.1434]
@@ -968,10 +971,13 @@ end
         0.0025, 0.0026, 0.0026, 0.0022]
     cm_avl = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
+    @test isapprox(cf, alt_cf, atol=1e-3, norm=(x)->norm(x, Inf))
+    @test isapprox(cm, alt_cm, atol=1e-3, norm=(x)->norm(x, Inf))
     @test isapprox(cf[1][3,:], cl_avl, atol=1e-3, norm=(x)->norm(x, Inf))
     @test isapprox(cf[1][1,:], cd_avl, atol=1e-4, norm=(x)->norm(x, Inf))
     @test isapprox(cm[1][2,:], cm_avl, atol=1e-4, norm=(x)->norm(x, Inf))
 end
+
 
 @testset "Geometry Generation" begin
 

@@ -124,6 +124,12 @@ Sectional coefficients may be calculated using the `lifting_line_coefficients` f
 cf, cm = lifting_line_coefficients(system; frame=Body())
 nothing #hide
 ```
+Alternatively, this block of code can be simplified by calling the single overloaded `lifting_line_coefficients` function with the `system` object.
+```
+# lifting line geometry and lifting line coefficients are also combined in the single overloaded function
+cf, cm = lifting_line_coefficients(system; frame=Body())
+nothing #hide
+```
 These coefficients are defined as ``c_f = \frac{F'}{q_\infty c}`` and ``c_m = \frac{M'}{q_\infty c^2}``, respectively, where ``F'`` is the force per unit length
 along the lifting line, ``M'`` is the moment per unit length along the lifting line, ``q_\infty`` is the freestream dynamic pressure, and ``c`` is the local chord length.  
 By default, these coefficients are defined in the body frame, but may be returned in the stability or wind frame by using the `frame` keyword argument.  Note that further manipulations upon these coefficients may be required to calculate local aerodynamic coefficients since 1) the local frame of reference is not necessarily equivalent to the global frame of reference and 2) the quantities used to normalize a given local aerodynamic coefficient may vary from those used in this package.
