@@ -87,6 +87,8 @@ export evaluate_fluid_domain!, evaluate_fluid_domain_from_restarts!
 
 include("viscous.jl")
 
+include("rhs_wake_dump.jl")
+
 include("unsteady.jl")
 export simulate!
 

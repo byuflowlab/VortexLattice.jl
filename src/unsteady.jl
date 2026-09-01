@@ -398,12 +398,21 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
 
     #------- wake coupling -------#
 
+    # RHS_WAKE_DUMP: snapshot Vcp before the wake contributes, so the dump can
+    # separate kinematic from wake-induced velocity at each control point.
+    _rhs_dump_vcp_kin = (RHS_WAKE_DUMP_ENABLED[] && i_step == RHS_WAKE_DUMP_STEP[]) ?
+        copy(system.Vcp[1]) : nothing
+
     system.nwake .= wake.nwake
     update_TE!(wake, system)
     update_trailing_edge_filaments!(trailing_edge_filaments, system.surfaces, system.Γ)
     if FLOWVPM.get_np(wake.pfield) > 0 || any(>(0), wake.nwake)
         wake.pfield.SFS(wake.pfield, FLOWVPM.BeforeUJ())
         wake_on_all!(system, wake, trailing_edge_filaments; fmm_wake_args...)
+    end
+
+    if RHS_WAKE_DUMP_ENABLED[] && i_step == RHS_WAKE_DUMP_STEP[]
+        _dump_rhs_wake_state(system, wake, i_step, _rhs_dump_vcp_kin)
     end
 
     #------- AIC + solve -------#
@@ -469,6 +478,12 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
     end
     dΓdt_wake .+= Γ_wake
     dΓdt_wake ./= dt
+
+    # RHS_WAKE_DUMP: surface-1 circulation before/after the polar correction, with the
+    # bound-midpoint velocity and force coefficient the correction used.
+    if RHS_WAKE_DUMP_ENABLED[] && i_step == RHS_WAKE_DUMP_STEP[]
+        _dump_gamma_correction(system, Γ_wake, ref, i_step)
+    end
 
     #------- monitors -------#
 
