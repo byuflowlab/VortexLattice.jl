@@ -858,6 +858,13 @@ function update_surface_panels!(surface, grid;
             # surface normal
             ncp = cross(rcp - rtr, rcp - rtl)
             ncp /= norm(ncp)
+            if !isempty(CAMBER_ALPHA0) && _camber_isurf[] <= length(CAMBER_ALPHA0)
+                # option 1 (2026-09-01): camber-equivalent incidence, normal rotated nose-up by -α_L0 about the span
+                δ = -CAMBER_ALPHA0[_camber_isurf[]][j] * pi / 180
+                chat = rbot - rtop; chat /= norm(chat)
+                ncp = ncp * cos(δ) - chat * sin(δ)
+                ncp /= norm(ncp)
+            end
 
             # set finite core size
             Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)
@@ -902,6 +909,13 @@ function update_surface_panels!(surface, grid;
         # surface normal
         ncp = cross(rcp - rtr, rcp - rtl)
         ncp /= norm(ncp)
+        if !isempty(CAMBER_ALPHA0) && _camber_isurf[] <= length(CAMBER_ALPHA0)
+            # option 1 (2026-09-01): camber-equivalent incidence, normal rotated nose-up by -α_L0 about the span
+            δ = -CAMBER_ALPHA0[_camber_isurf[]][j] * pi / 180
+            chat = rbot - rtop; chat /= norm(chat)
+            ncp = ncp * cos(δ) - chat * sin(δ)
+            ncp /= norm(ncp)
+        end
 
         # set finite core size
         Δs = sqrt((rtr[2]-rtl[2])^2 + (rtr[3]-rtl[3])^2)

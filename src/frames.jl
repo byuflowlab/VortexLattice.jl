@@ -28,6 +28,7 @@ function propagate_kinematics!(system::System, frames::Vector{<:ReferenceFrame},
 
     # update panels
     for isurf = 1:length(system.surfaces)
+        _camber_isurf[] = isurf
         update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore = (c, Δs) -> system.core_size)
     end
 end
@@ -340,6 +341,7 @@ function change_convention!(system, origin, to::ForwardRightDown, from::BackRigh
 
     for i_surf in 1:length(system.surfaces)
         rotate_translate!(system, i_surf, origin, R180_y, SVector{3}(0.0, 0.0, 0.0))
+        _camber_isurf[] = i_surf
         update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf], fcore = (c, Δs) -> system.core_size)
     end
 
@@ -356,6 +358,7 @@ function change_convention!(system, to::BackRightUp, from::ForwardRightDown)
 
     for i_surf in 1:length(system.surfaces)
         rotate_translate!(system, i_surf, origin, R180_y, SVector{3}(0.0, 0.0, 0.0))
+        _camber_isurf[] = i_surf
         update_surface_panels!(system.surfaces[i_surf], system.grids[i_surf]; ratios = system.ratios[i_surf], fcore = (c, Δs) -> system.core_size)
     end
 

@@ -471,8 +471,25 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             trailing_vortices, xhat, calculate_vlm_induced=false)
     end
 
+    if IMPOSE_POLAR_GAMMA[] && !isnothing(polars) && !derivatives
+        # option 3 (2026-09-01): FLOWVLM-style lifting line. Replace the AIC Γ by the polar
+        # circulation at the bound-midpoint velocity from the first force pass, then redo the
+        # KJ forces with it. viscous! afterwards sees drag-only polars (see run script).
+        _impose_polar_gamma!(system, ref)
+        # dΓ/dt from the imposed history, not from the discarded AIC solution
+        if isnothing(IMPOSE_POLAR_GAMMA_PREV[])
+            IMPOSE_POLAR_GAMMA_PREV[] = copy(Γ)
+        end
+        system.dΓdt .= (Γ .- IMPOSE_POLAR_GAMMA_PREV[]) ./ dt
+        IMPOSE_POLAR_GAMMA_PREV[] .= Γ
+        near_field_forces!(system.properties, system.surfaces, system.wakes,
+            ref, fs, Γ; dΓdt=system.dΓdt, additional_velocity=nothing,
+            Vh=system.Vh, Vv=system.Vv, symmetric, nwake=system.nwake, surface_id,
+            wake_finite_core, wake_shedding_locations=system.wake_shedding_locations,
+            trailing_vortices, xhat, calculate_vlm_induced=false)
+    end
     Γ_wake .= Γ
-    if !isnothing(polars)
+    if !isnothing(polars) && !IMPOSE_POLAR_GAMMA[]   # option 3: polar already applied, no viscous! pass (no drag)
         viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
             frames_index, polars, ref, dt)
     end

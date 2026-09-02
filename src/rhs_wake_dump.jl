@@ -14,6 +14,18 @@ const RHS_WAKE_DUMP_ENABLED = Ref(false)
 const RHS_WAKE_DUMP_STEP = Ref(-1)
 const RHS_WAKE_DUMP_DIR = Ref("")
 const PARTICLES_USE_GAMMA_WAKE = Ref(false)
+# Option 2 (2026-09-01): option B with a one-rev ramp and under-relaxation on the particle Γ correction
+const PARTICLES_GAMMA_RELAX = Ref(0.0)          # 0 = off; else ω in (0,1]
+const PARTICLES_GAMMA_RAMP_STEPS = Ref(36)
+const PARTICLES_GAMMA_CALLS = Ref(0)
+const PARTICLES_GAMMA_STATE = Vector{Vector{Float64}}()   # per surface, relaxed correction
+# Option 1 (2026-09-01): camber-equivalent panel-normal rotation by -α_L0 (deg) per surface/station
+const CAMBER_ALPHA0 = Vector{Vector{Float64}}()           # empty = off
+# Option 3 (2026-09-01): impose lifting-line Γ from the full polar (FLOWVLM-style), skip the AIC result
+const IMPOSE_POLAR_GAMMA = Ref(false)
+const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)
+const IMPOSE_POLAR_GAMMA_PREV = Ref{Any}(nothing)
+const _camber_isurf = Ref(1)
 
 function _dump_rhs_wake_state(system, wake, i_step, vcp_kin)
     isurf = 1
@@ -96,4 +108,41 @@ function _dump_gamma_correction(system, Γ_wake, ref, i_step)
         end
     end
     println("RHS_WAKE_DUMP gamma_correction_surf1.csv written at step $i_step (ref.V=$(ref.V), ref.S=$(ref.S))")
+end
+
+# Option 3 helper: replace system.Γ (surface isurf, nc=1) by the polar lifting-line circulation
+# from the bound-midpoint velocity already stored in system.properties by near_field_forces!.
+function _impose_polar_gamma!(system, ref)
+    polars = IMPOSE_POLAR_GAMMA_POLARS[]
+    iΓ = 0
+    for isurf in eachindex(system.surfaces)
+        surface = system.surfaces[isurf]
+        nc, ns = size(surface)
+        nc == 1 || error("IMPOSE_POLAR_GAMMA implemented for nc=1 only")
+        props = system.properties[isurf]
+        for j in 1:ns
+            panel = surface[1, j]
+            V = props[1, j].velocity * ref.V
+            shat = top_vector(panel); shat /= norm(shat)
+            chat = 0.5 * (bottom_left(panel) + bottom_right(panel)) - 0.5 * (top_left(panel) + top_right(panel))
+            chat -= dot(chat, shat) * shat; chat /= norm(chat)
+            nhat = panel.ncp
+            Vp = V - dot(V, shat) * shat
+            W = norm(Vp)
+            # VL's ncp points to the pressure side for this panel convention (the VLM's own Γ is
+            # negative at positive incidence here), so incidence and lift are measured toward -ncp
+            alpha = atan(-dot(Vp, nhat), dot(Vp, chat)) * 180 / pi
+            polar = polars[isurf][j]
+            cl = FLOWMath.linear(polar.alphas, polar.cls_visc, alpha)
+            lhat = cross(Vp, shat); lhat /= norm(lhat)
+            dot(lhat, nhat) > 0 && (lhat = -lhat)
+            L = 0.5 * RHO * W^2 * panel.chord * cl * norm(top_vector(panel))
+            proj = dot(cross(V, top_vector(panel)), lhat)
+            system.Γ[iΓ + j] = L / (RHO * proj)
+            if RHS_WAKE_DUMP_ENABLED[] && isurf == 1 && j in (5, 13, 21)
+                println("IMPOSE_DBG j=$j alpha=$(round(alpha,digits=2)) W=$(round(W,digits=2)) cl=$(round(cl,digits=3)) proj=$(round(proj,digits=2)) Γ=$(round(system.Γ[iΓ + j],digits=2))")
+            end
+        end
+        iΓ += nc * ns
+    end
 end

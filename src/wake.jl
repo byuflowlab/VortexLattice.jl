@@ -1262,6 +1262,17 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma; emit_particles::Boo
                 pending = wake[w.nwakerows, j]
                 if PARTICLES_USE_GAMMA_WAKE[]
                     pending = set_circulation_strength(pending, Gamma[iΓ + ls[end, j]])
+                elseif PARTICLES_GAMMA_RELAX[] > 0
+                    # option 2 (2026-09-01): ramp the correction in over the first rev, under-relax in time
+                    while length(PARTICLES_GAMMA_STATE) < isurf
+                        push!(PARTICLES_GAMMA_STATE, zeros(ns))
+                    end
+                    st = PARTICLES_GAMMA_STATE[isurf]
+                    ω = PARTICLES_GAMMA_RELAX[]
+                    corr = Gamma[iΓ + ls[end, j]] - circulation_strength(pending)
+                    st[j] = (1 - ω) * st[j] + ω * corr
+                    f = min(1.0, PARTICLES_GAMMA_CALLS[] / PARTICLES_GAMMA_RAMP_STEPS[])
+                    pending = set_circulation_strength(pending, circulation_strength(pending) + f * st[j])
                 end
                 w.pending_overflow[isurf][j] = pending
             end
@@ -1303,6 +1314,7 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma; emit_particles::Boo
         end
     end
 
+    PARTICLES_GAMMA_CALLS[] += 1
     _convert_to_particles!(w)
 
     if any(w.has_pending)
