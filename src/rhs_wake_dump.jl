@@ -26,6 +26,10 @@ const IMPOSE_POLAR_GAMMA = Ref(false)
 const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)
 const IMPOSE_POLAR_GAMMA_PREV = Ref{Any}(nothing)
 const _camber_isurf = Ref(1)
+# H10c (2026-09-02, opt-in): velocity used for the Kutta-Joukowski force = (1-β)·V(¼-chord bound midpoint,
+# all sources) + β·V(¾-chord control point, all sources except the panel's own leading-edge segment).
+# β = 0.5 approximates the half-chord onset flow without the Kutta-condition self-influence.
+const KJ_HALFCHORD_BETA = Ref(0.0)
 
 function _dump_rhs_wake_state(system, wake, i_step, vcp_kin)
     isurf = 1

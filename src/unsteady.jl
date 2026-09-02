@@ -454,6 +454,19 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
 
     vehicle_on_all!(system, wake, trailing_edge_filaments; fmm_vehicle_args...)
 
+    if KJ_HALFCHORD_BETA[] > 0
+        β = KJ_HALFCHORD_BETA[]; iΓ = 0
+        for isurf in eachindex(system.surfaces)
+            sf = system.surfaces[isurf]; ncs, nss = size(sf)
+            for j in 1:nss, i in 1:ncs
+                pn = sf[i, j]; rcp = controlpoint(pn)
+                u_le = bound_induced_velocity(rcp - top_left(pn), rcp - top_right(pn), true, pn.core_size) * Γ[iΓ + (j - 1) * ncs + i]
+                system.Vh[isurf][i, j] = (1 - β) * system.Vh[isurf][i, j] + β * (system.Vcp[isurf][i, j] - u_le)
+            end
+            iΓ += ncs * nss
+        end
+    end
+
     #------- near-field forces + viscous -------#
 
     if derivatives
