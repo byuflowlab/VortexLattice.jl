@@ -21,6 +21,9 @@ const PARTICLES_USE_GAMMA_WAKE = Ref(false)
 # measured from the zero-lift line (cl_inv = 2π(α − α_L0), cd looked up at the same shifted α).
 const CAMBER_FROM_POLARS = Ref(true)
 const CAMBER_ALPHA0 = Vector{Vector{Float64}}()           # per surface, per station, degrees; empty = off
+# map strip j of a surface with nj strips onto the per-input-station vectors (length n). Mirrored
+# surfaces (wing_to_grid mirror=true) carry 2n strips: 1..n are the reflected half in reverse order.
+@inline camber_station(j, n, nj) = nj == 2n ? (j <= n ? n + 1 - j : j - n) : j
 # Option 3 (2026-09-01): impose lifting-line Γ from the full polar (FLOWVLM-style), skip the AIC result
 const IMPOSE_POLAR_GAMMA = Ref(false)
 const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)

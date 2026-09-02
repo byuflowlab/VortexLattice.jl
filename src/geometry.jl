@@ -860,7 +860,8 @@ function update_surface_panels!(surface, grid;
             ncp /= norm(ncp)
             if !isempty(CAMBER_ALPHA0) && _camber_isurf[] <= length(CAMBER_ALPHA0)
                 # option 1 (2026-09-01): camber-equivalent incidence, normal rotated nose-up by -α_L0 about the span
-                δ = -(CAMBER_ALPHA0[_camber_isurf[]][j] - (isempty(CAMBER_DALPHA) ? 0.0 : CAMBER_DALPHA[_camber_isurf[]][j])) * pi / 180
+                jc = camber_station(j, length(CAMBER_ALPHA0[_camber_isurf[]]), ns)
+                δ = -(CAMBER_ALPHA0[_camber_isurf[]][jc] - (isempty(CAMBER_DALPHA) ? 0.0 : CAMBER_DALPHA[_camber_isurf[]][jc])) * pi / 180
                 chat = rbot - rtop; chat /= norm(chat)
                 ncp = ncp * cos(δ) - chat * sin(δ)
                 ncp /= norm(ncp)
@@ -911,7 +912,8 @@ function update_surface_panels!(surface, grid;
         ncp /= norm(ncp)
         if !isempty(CAMBER_ALPHA0) && _camber_isurf[] <= length(CAMBER_ALPHA0)
             # option 1 (2026-09-01): camber-equivalent incidence, normal rotated nose-up by -α_L0 about the span
-            δ = -(CAMBER_ALPHA0[_camber_isurf[]][j] - (isempty(CAMBER_DALPHA) ? 0.0 : CAMBER_DALPHA[_camber_isurf[]][j])) * pi / 180
+            jc = camber_station(j, length(CAMBER_ALPHA0[_camber_isurf[]]), ns)
+            δ = -(CAMBER_ALPHA0[_camber_isurf[]][jc] - (isempty(CAMBER_DALPHA) ? 0.0 : CAMBER_DALPHA[_camber_isurf[]][jc])) * pi / 180
             chat = rbot - rtop; chat /= norm(chat)
             ncp = ncp * cos(δ) - chat * sin(δ)
             ncp /= norm(ncp)

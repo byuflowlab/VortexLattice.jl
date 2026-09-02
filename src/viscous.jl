@@ -236,7 +236,8 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 cf = zero(SVector{3,TF})
 
                 # extract the polar for this section
-                polar = polar_array[j]
+                jc = camber_station(j, length(polar_array), size(surface, 2))
+                polar = polar_array[jc]
 
                 # initialize dynamic pressure
                 q_local = zero(TF)
@@ -304,7 +305,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
 
                 # get effective α
                 # dynamic camber (2026-09-02): the lattice already carries 2π·Δα of the polar's extra lift
-                dα_dc = (DYNAMIC_CAMBER[] && !isempty(CAMBER_DALPHA)) ? CAMBER_DALPHA[isurf][j] : 0.0 # deg
+                dα_dc = (DYNAMIC_CAMBER[] && !isempty(CAMBER_DALPHA)) ? CAMBER_DALPHA[isurf][jc] : 0.0 # deg
                 cl_vlm_true = cl_vlm - 2 * pi * dα_dc * pi / 180
                 α_eff = cl_vlm_true / (2 * pi) * 180 / pi # in degrees
                 if DYNAMIC_CAMBER[] && DYNAMIC_CAMBER_ALPHA_V[] && !isempty(CAMBER_ALPHA0)
@@ -317,7 +318,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     dot(ngeo, pn1.ncp) < 0 && (ngeo = -ngeo)
                     vsec = v_induced - (dot(v_induced, svec) / dot(svec, svec)) * svec
                     α_geo = -atan(dot(vsec, ngeo), dot(vsec, cvec)) * 180 / pi   # ncp points to the pressure side
-                    α_eff = α_geo - CAMBER_ALPHA0[isurf][j]
+                    α_eff = α_geo - CAMBER_ALPHA0[isurf][jc]
                 end
 
                 if !isnothing(_alpha_this_call)
@@ -337,14 +338,14 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                         Δcl = cl_target - cl_vlm
                         if _dyncamber_calls[] >= DYNAMIC_CAMBER_START[]
                             dα_ff = (cl_target - 2 * pi * α_eff * pi / 180) / (2 * pi) * 180 / pi
-                            CAMBER_DALPHA[isurf][j] = (1 - ω_dc) * dα_dc + ω_dc * dα_ff
+                            CAMBER_DALPHA[isurf][jc] = (1 - ω_dc) * dα_dc + ω_dc * dα_ff
                         end
                     else
-                        CAMBER_DALPHA[isurf][j] = (1 - ω_dc) * dα_dc + ω_dc * Δcl / (2 * pi) * 180 / pi
+                        CAMBER_DALPHA[isurf][jc] = (1 - ω_dc) * dα_dc + ω_dc * Δcl / (2 * pi) * 180 / pi
                         Δcl -= 2 * pi * dα_dc * pi / 180   # only the part the lattice does not yet produce
                     end
                     DYNAMIC_CAMBER_LOG[] && isurf == 1 && (j in (8, 13, 20)) &&
-                        println("DYNCAMBER j=$j α_eff=$(round(α_eff, digits=2)) cl_vlm=$(round(cl_vlm, digits=3)) Δcl=$(round(Δcl, digits=3)) Δα=$(round(CAMBER_DALPHA[isurf][j], digits=3)) Γ=$(round(γ, digits=2))")
+                        println("DYNCAMBER j=$j α_eff=$(round(α_eff, digits=2)) cl_vlm=$(round(cl_vlm, digits=3)) Δcl=$(round(Δcl, digits=3)) Δα=$(round(CAMBER_DALPHA[isurf][jc], digits=3)) Γ=$(round(γ, digits=2))")
                 end
 
                 if !isnothing(_cl_this_call)
