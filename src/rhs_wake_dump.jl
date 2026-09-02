@@ -31,7 +31,7 @@ const IMPOSE_POLAR_GAMMA_PREV = Ref{Any}(nothing)
 const _camber_isurf = Ref(1)
 # DYNAMIC CAMBER (2026-09-02): per-strip extra normal rotation Δα (deg) so the lattice produces the
 # polar's lift itself (Γ_pre → Γ_wake); updated in viscous! with under-relaxation. Opt-in.
-const DYNAMIC_CAMBER = Ref(false)
+const DYNAMIC_CAMBER = Ref(true)     # default on (Bruno, 2026-09-02 pm): mode C, closes the shed-Γ deficit (H12)
 const DYNAMIC_CAMBER_OMEGA = Ref(0.3)
 const DYNAMIC_CAMBER_ALPHA_V = Ref(true)   # α from ¼-chord velocity vs geometric chord (mode B); false = cl_vlm/2π − Δα (mode A, unstable)
 const DYNAMIC_CAMBER_LOG = Ref(false)
@@ -43,7 +43,7 @@ const CAMBER_DALPHA = Vector{Vector{Float64}}()
 # H10c (2026-09-02, opt-in): velocity used for the Kutta-Joukowski force = (1-β)·V(¼-chord bound midpoint,
 # all sources) + β·V(¾-chord control point, all sources except the panel's own leading-edge segment).
 # β = 0.5 approximates the half-chord onset flow without the Kutta-condition self-influence.
-const KJ_HALFCHORD_BETA = Ref(0.5)   # default 0.5 (Bruno, 2026-09-02); tunable
+const KJ_HALFCHORD_BETA = Ref(0.0)   # default 0 (Bruno, 2026-09-02 pm): 0.5 was resolution-dependent at hi-fi (−39% Tp at the tip); tunable
 
 function _dump_rhs_wake_state(system, wake, i_step, vcp_kin)
     isurf = 1
