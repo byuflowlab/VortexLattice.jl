@@ -14,13 +14,13 @@ const RHS_WAKE_DUMP_ENABLED = Ref(false)
 const RHS_WAKE_DUMP_STEP = Ref(-1)
 const RHS_WAKE_DUMP_DIR = Ref("")
 const PARTICLES_USE_GAMMA_WAKE = Ref(false)
-# Option 2 (2026-09-01): option B with a one-rev ramp and under-relaxation on the particle Γ correction
-const PARTICLES_GAMMA_RELAX = Ref(0.0)          # 0 = off; else ω in (0,1]
-const PARTICLES_GAMMA_RAMP_STEPS = Ref(36)
-const PARTICLES_GAMMA_CALLS = Ref(0)
-const PARTICLES_GAMMA_STATE = Vector{Vector{Float64}}()   # per surface, relaxed correction
-# Option 1 (2026-09-01): camber-equivalent panel-normal rotation by -α_L0 (deg) per surface/station
-const CAMBER_ALPHA0 = Vector{Vector{Float64}}()           # empty = off
+# Camber from polars (2026-09-01, default ON): a flat nc=1 panel solves a flat-plate circulation while
+# the polar-based strip forces respond to (α − α_L0); the wake then carried ~60% of the force-consistent
+# circulation (see research-notes VPM-convergence/2026-09-01). Each panel normal is rotated nose-up by
+# −α_L0 about its span axis (update_surface_panels!) and the polar tables are re-based so α is
+# measured from the zero-lift line (cl_inv = 2π(α − α_L0), cd looked up at the same shifted α).
+const CAMBER_FROM_POLARS = Ref(true)
+const CAMBER_ALPHA0 = Vector{Vector{Float64}}()           # per surface, per station, degrees; empty = off
 # Option 3 (2026-09-01): impose lifting-line Γ from the full polar (FLOWVLM-style), skip the AIC result
 const IMPOSE_POLAR_GAMMA = Ref(false)
 const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)
@@ -84,6 +84,18 @@ function _dump_rhs_wake_state(system, wake, i_step, vcp_kin)
         end
     end
 
+    open(joinpath(dir, "bound_panels_all.csv"), "w") do io
+        println(io, "isurf,j,rtl_x,rtl_y,rtl_z,rtr_x,rtr_y,rtr_z,rbl_x,rbl_y,rbl_z,rbr_x,rbr_y,rbr_z,wsl_l_x,wsl_l_y,wsl_l_z,wsl_r_x,wsl_r_y,wsl_r_z,gamma,core")
+        kk = 0
+        for (is, sf) in enumerate(system.surfaces)
+            ncs, nss = size(sf); wsl = system.wake_shedding_locations[is]
+            for j in 1:nss
+                pn = sf[ncs, j]; kk += ncs; g = system.Γ[kk]
+                println(io, "$is,$j,$(pn.rtl[1]),$(pn.rtl[2]),$(pn.rtl[3]),$(pn.rtr[1]),$(pn.rtr[2]),$(pn.rtr[3]),$(pn.rbl[1]),$(pn.rbl[2]),$(pn.rbl[3]),$(pn.rbr[1]),$(pn.rbr[2]),$(pn.rbr[3]),$(wsl[j][1]),$(wsl[j][2]),$(wsl[j][3]),$(wsl[j+1][1]),$(wsl[j+1][2]),$(wsl[j+1][3]),$g,$(pn.core_size)")
+            end
+        end
+    end
+
     nbf = FastMultipole.get_n_bodies(wake.boundary_filaments)
 
     open(joinpath(dir, "meta.txt"), "w") do io
@@ -98,13 +110,14 @@ function _dump_gamma_correction(system, Γ_wake, ref, i_step)
     nc, ns = size(surface)
     props = system.properties[1]
     open(joinpath(RHS_WAKE_DUMP_DIR[], "gamma_correction_surf1.csv"), "w") do io
-        println(io, "i,j,gamma_pre,gamma_wake,vx,vy,vz,cfb_x,cfb_y,cfb_z,ds_x,ds_y,ds_z")
+        println(io, "i,j,gamma_pre,gamma_wake,vx,vy,vz,cfb_x,cfb_y,cfb_z,ds_x,ds_y,ds_z,rtc_x,rtc_y,rtc_z,Vh_x,Vh_y,Vh_z,rbl_x,rbl_y,rbl_z,rbr_x,rbr_y,rbr_z,rtl_x,rtl_y,rtl_z,rtr_x,rtr_y,rtr_z")
         for j in 1:ns, i in 1:nc
             k = (j - 1) * nc + i
             v = props[i, j].velocity * ref.V
             cfb = props[i, j].cfb
             ds = top_vector(surface[i, j])
-            println(io, "$i,$j,$(system.Γ[k]),$(Γ_wake[k]),$(v[1]),$(v[2]),$(v[3]),$(cfb[1]),$(cfb[2]),$(cfb[3]),$(ds[1]),$(ds[2]),$(ds[3])")
+            pn = surface[i, j]; rtc = top_center(pn); vh = system.Vh[1][i, j]
+            println(io, "$i,$j,$(system.Γ[k]),$(Γ_wake[k]),$(v[1]),$(v[2]),$(v[3]),$(cfb[1]),$(cfb[2]),$(cfb[3]),$(ds[1]),$(ds[2]),$(ds[3]),$(rtc[1]),$(rtc[2]),$(rtc[3]),$(vh[1]),$(vh[2]),$(vh[3]),$(pn.rbl[1]),$(pn.rbl[2]),$(pn.rbl[3]),$(pn.rbr[1]),$(pn.rbr[2]),$(pn.rbr[3]),$(pn.rtl[1]),$(pn.rtl[2]),$(pn.rtl[3]),$(pn.rtr[1]),$(pn.rtr[2]),$(pn.rtr[3])")
         end
     end
     println("RHS_WAKE_DUMP gamma_correction_surf1.csv written at step $i_step (ref.V=$(ref.V), ref.S=$(ref.S))")
@@ -145,4 +158,24 @@ function _impose_polar_gamma!(system, ref)
         end
         iΓ += nc * ns
     end
+end
+
+# zero-lift angle (deg) of a polar from its Cl = 0 crossing within ±10°; 0 for lift-less sections
+function zero_lift_angle(p::Polar)
+    a, cl = p.alphas, p.cls_visc
+    m = (a .> -10) .& (a .< 10)
+    maximum(cl[m]) <= 0 && return zero(eltype(a))
+    return FLOWMath.linear(cl[m], a[m], zero(eltype(a)))
+end
+
+# fill CAMBER_ALPHA0 from `polars` and return polars re-based to the zero-lift line
+function camber_rebase_polars!(polars)
+    empty!(CAMBER_ALPHA0)
+    out = similar(polars)
+    for (isurf, ps) in enumerate(polars)
+        a0s = [zero_lift_angle(p) for p in ps]
+        push!(CAMBER_ALPHA0, a0s)
+        out[isurf] = [Polar(p.alphas .- a0, p.cls_visc, p.cds_visc) for (p, a0) in zip(ps, a0s)]
+    end
+    return out
 end

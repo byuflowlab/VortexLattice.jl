@@ -725,6 +725,15 @@ function simulate!(system::System, wake::PanelParticleWake,
         restart_from, restart_idx, write_restart, vtk_interval, t_range)
 
     ref               = system.reference[]
+    if !isnothing(polars) && CAMBER_FROM_POLARS[]
+        polars = camber_rebase_polars!(polars)
+        for isurf in eachindex(system.surfaces)   # apply the rotated normals before step 0
+            _camber_isurf[] = isurf
+            update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore = (c, Δs) -> system.core_size)
+        end
+    else
+        empty!(CAMBER_ALPHA0)
+    end
     Γ_wake            = zeros(length(system.Γ))
     dΓdt_wake         = zeros(length(system.Γ))
     trailing_edge_filaments = WakeBufferRings(wake)
