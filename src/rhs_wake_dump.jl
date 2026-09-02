@@ -13,6 +13,7 @@
 const RHS_WAKE_DUMP_ENABLED = Ref(false)
 const RHS_WAKE_DUMP_STEP = Ref(-1)
 const RHS_WAKE_DUMP_DIR = Ref("")
+const PARTICLES_USE_GAMMA_WAKE = Ref(false)
 
 function _dump_rhs_wake_state(system, wake, i_step, vcp_kin)
     isurf = 1

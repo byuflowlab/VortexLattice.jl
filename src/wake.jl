@@ -1254,7 +1254,16 @@ function shed_wake!(w::PanelParticleWake, system, dt, Gamma; emit_particles::Boo
         # when the buffer is full, save the oldest row before it is overwritten
         if w.nwake[isurf] == w.nwakerows
             for j in 1:ns
-                w.pending_overflow[isurf][j] = wake[w.nwakerows, j]
+                # PARTICLES_USE_GAMMA_WAKE (2026-09-01): the buffer ring is refreshed from the
+                # pre-polar-correction system.Γ every step (update_trailing_edge_filaments!) so
+                # its top edge cancels the AIC's extended trailing edge; but the particles it
+                # becomes must carry the force-consistent (polar-corrected) circulation, which
+                # is the `Gamma` passed here. Opt-in until validated.
+                pending = wake[w.nwakerows, j]
+                if PARTICLES_USE_GAMMA_WAKE[]
+                    pending = set_circulation_strength(pending, Gamma[iΓ + ls[end, j]])
+                end
+                w.pending_overflow[isurf][j] = pending
             end
             w.has_pending[isurf] = true
         else
