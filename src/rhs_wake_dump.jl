@@ -32,6 +32,8 @@ const DYNAMIC_CAMBER = Ref(false)
 const DYNAMIC_CAMBER_OMEGA = Ref(0.3)
 const DYNAMIC_CAMBER_ALPHA_V = Ref(true)   # α from ¼-chord velocity vs geometric chord (mode B); false = cl_vlm/2π − Δα (mode A, unstable)
 const DYNAMIC_CAMBER_LOG = Ref(false)
+const DRAG_ABS_SPAN = Ref(true)    # 2026-09-02 (H16): drag uses |Δs_y|; Δs_y is signed for the lift term and <0 on NREL 5MW, which flipped drag into spurious +Tp
+const DRAG_SIGN_LOG = Ref(false)
 const DYNAMIC_CAMBER_START = Ref(36)     # hold Δα = 0 for this many viscous! calls (impulsive-start transient)
 const _dyncamber_calls = Ref(0)
 const CAMBER_DALPHA = Vector{Vector{Float64}}()

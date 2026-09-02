@@ -386,7 +386,10 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     push!(_cd_this_call[isurf], cd_raw)
                 end
                 cd = cd_raw
-                D_visc_strip = cd * q_local * c * Δs_y
+                Δs_y_d = DRAG_ABS_SPAN[] ? abs(Δs_y) : Δs_y
+                DRAG_SIGN_LOG[] && isurf == 1 && j == 13 &&
+                    println("DRAGSIGN j=13 Δs_y=$(round(Δs_y, digits=4)) cd=$(round(cd_raw, digits=5)) q_local=$(round(q_local, digits=1)) c=$(round(c, digits=3))")
+                D_visc_strip = cd * q_local * c * Δs_y_d
                 # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
                 # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
                 # is a dimensional force, so it must go through the same normalization before
