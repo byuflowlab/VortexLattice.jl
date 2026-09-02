@@ -185,6 +185,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
 
     # index for circulation strengths
     iΓ = 1
+    _dyncamber_calls[] += 1
 
     # dynamic pressure for dimensionalizing forces
     q = 0.5 * RHO * ref.V * ref.V
@@ -302,7 +303,22 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 cl_vlm = -2 * RHO * γ * (γ / (l_2d_norm + eps(l_2d_norm))) / c * sign(γ)
 
                 # get effective α
-                α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
+                # dynamic camber (2026-09-02): the lattice already carries 2π·Δα of the polar's extra lift
+                dα_dc = (DYNAMIC_CAMBER[] && !isempty(CAMBER_DALPHA)) ? CAMBER_DALPHA[isurf][j] : 0.0 # deg
+                cl_vlm_true = cl_vlm - 2 * pi * dα_dc * pi / 180
+                α_eff = cl_vlm_true / (2 * pi) * 180 / pi # in degrees
+                if DYNAMIC_CAMBER[] && DYNAMIC_CAMBER_ALPHA_V[] && !isempty(CAMBER_ALPHA0)
+                    # mode B: geometric flow angle at the ¼-chord from the strip velocity, measured from
+                    # the zero-lift line (α_L0 from CAMBER_ALPHA0); independent of the Δα rotation
+                    pn1 = surface[1, j]; pnN = surface[end, j]
+                    cvec = 0.5 * (pnN.rbl + pnN.rbr) - 0.5 * (pn1.rtl + pn1.rtr); cvec /= norm(cvec)
+                    svec = pn1.rtr - pn1.rtl
+                    ngeo = cross(cvec, svec); ngeo /= norm(ngeo)
+                    dot(ngeo, pn1.ncp) < 0 && (ngeo = -ngeo)
+                    vsec = v_induced - (dot(v_induced, svec) / dot(svec, svec)) * svec
+                    α_geo = -atan(dot(vsec, ngeo), dot(vsec, cvec)) * 180 / pi   # ncp points to the pressure side
+                    α_eff = α_geo - CAMBER_ALPHA0[isurf][j]
+                end
 
                 if !isnothing(_alpha_this_call)
                     push!(_alpha_this_call[isurf], α_eff)
@@ -310,7 +326,26 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
 
                 # additive viscous correction: Δcl(cl_inv), indexed by the
                 # inviscid cl so the table stays smooth near zero lift
-                Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
+                Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm_true)
+                if DYNAMIC_CAMBER[] && !isempty(CAMBER_DALPHA)
+                    ω_dc = DYNAMIC_CAMBER_OMEGA[]
+                    if DYNAMIC_CAMBER_ALPHA_V[]
+                        # mode C: feed-forward from the polar at the velocity-based α (no lattice lift in the
+                        # loop); Δα → (cl_visc(α) − 2πα)/2π, relaxed, held at 0 during the start transient.
+                        # The force adds cl_visc(α) − cl_vlm so the total is polar-consistent either way.
+                        cl_target = FLOWMath.linear(polar.alphas, polar.cls_visc, α_eff)
+                        Δcl = cl_target - cl_vlm
+                        if _dyncamber_calls[] >= DYNAMIC_CAMBER_START[]
+                            dα_ff = (cl_target - 2 * pi * α_eff * pi / 180) / (2 * pi) * 180 / pi
+                            CAMBER_DALPHA[isurf][j] = (1 - ω_dc) * dα_dc + ω_dc * dα_ff
+                        end
+                    else
+                        CAMBER_DALPHA[isurf][j] = (1 - ω_dc) * dα_dc + ω_dc * Δcl / (2 * pi) * 180 / pi
+                        Δcl -= 2 * pi * dα_dc * pi / 180   # only the part the lattice does not yet produce
+                    end
+                    DYNAMIC_CAMBER_LOG[] && isurf == 1 && (j in (8, 13, 20)) &&
+                        println("DYNCAMBER j=$j α_eff=$(round(α_eff, digits=2)) cl_vlm=$(round(cl_vlm, digits=3)) Δcl=$(round(Δcl, digits=3)) Δα=$(round(CAMBER_DALPHA[isurf][j], digits=3)) Γ=$(round(γ, digits=2))")
+                end
 
                 if !isnothing(_cl_this_call)
                     push!(_cl_this_call[isurf], cl_vlm + Δcl)

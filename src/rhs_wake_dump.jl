@@ -26,6 +26,15 @@ const IMPOSE_POLAR_GAMMA = Ref(false)
 const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)
 const IMPOSE_POLAR_GAMMA_PREV = Ref{Any}(nothing)
 const _camber_isurf = Ref(1)
+# DYNAMIC CAMBER (2026-09-02): per-strip extra normal rotation Δα (deg) so the lattice produces the
+# polar's lift itself (Γ_pre → Γ_wake); updated in viscous! with under-relaxation. Opt-in.
+const DYNAMIC_CAMBER = Ref(false)
+const DYNAMIC_CAMBER_OMEGA = Ref(0.3)
+const DYNAMIC_CAMBER_ALPHA_V = Ref(true)   # α from ¼-chord velocity vs geometric chord (mode B); false = cl_vlm/2π − Δα (mode A, unstable)
+const DYNAMIC_CAMBER_LOG = Ref(false)
+const DYNAMIC_CAMBER_START = Ref(36)     # hold Δα = 0 for this many viscous! calls (impulsive-start transient)
+const _dyncamber_calls = Ref(0)
+const CAMBER_DALPHA = Vector{Vector{Float64}}()
 # H10c (2026-09-02, opt-in): velocity used for the Kutta-Joukowski force = (1-β)·V(¼-chord bound midpoint,
 # all sources) + β·V(¾-chord control point, all sources except the panel's own leading-edge segment).
 # β = 0.5 approximates the half-chord onset flow without the Kutta-condition self-influence.
@@ -174,11 +183,12 @@ end
 
 # fill CAMBER_ALPHA0 from `polars` and return polars re-based to the zero-lift line
 function camber_rebase_polars!(polars)
-    empty!(CAMBER_ALPHA0)
+    empty!(CAMBER_ALPHA0); empty!(CAMBER_DALPHA)
     out = similar(polars)
     for (isurf, ps) in enumerate(polars)
         a0s = [zero_lift_angle(p) for p in ps]
         push!(CAMBER_ALPHA0, a0s)
+        push!(CAMBER_DALPHA, zeros(length(a0s)))
         out[isurf] = [Polar(p.alphas .- a0, p.cls_visc, p.cds_visc) for (p, a0) in zip(ps, a0s)]
     end
     return out
