@@ -28,6 +28,7 @@ const CAMBER_ALPHA0 = Vector{Vector{Float64}}()           # per surface, per sta
 const IMPOSE_POLAR_GAMMA = Ref(false)
 const IMPOSE_POLAR_GAMMA_POLARS = Ref{Any}(nothing)
 const IMPOSE_POLAR_GAMMA_PREV = Ref{Any}(nothing)
+const PRESCRIBED_GAMMA = Ref{Any}(nothing)   # H9 comparator (2026-09-02): (r_m, Γ) table; overrides system.Γ every step (nc=1), no blade feedback
 const _camber_isurf = Ref(1)
 # DYNAMIC CAMBER (2026-09-02): per-strip extra normal rotation Δα (deg) so the lattice produces the
 # polar's lift itself (Γ_pre → Γ_wake); updated in viscous! with under-relaxation. Opt-in.
@@ -173,6 +174,24 @@ function _impose_polar_gamma!(system, ref)
             if RHS_WAKE_DUMP_ENABLED[] && isurf == 1 && j in (5, 13, 21)
                 println("IMPOSE_DBG j=$j alpha=$(round(alpha,digits=2)) W=$(round(W,digits=2)) cl=$(round(cl,digits=3)) proj=$(round(proj,digits=2)) Γ=$(round(system.Γ[iΓ + j],digits=2))")
             end
+        end
+        iΓ += nc * ns
+    end
+end
+
+# H9 comparator: replace system.Γ (nc=1) by a prescribed Γ(r) table, r = distance from the x axis of
+# the bound-vortex centre. The wake then carries a fixed, known circulation with no blade feedback.
+function _impose_prescribed_gamma!(system)
+    r_tab, Γ_tab = PRESCRIBED_GAMMA[]
+    iΓ = 0
+    for isurf in eachindex(system.surfaces)
+        surface = system.surfaces[isurf]
+        nc, ns = size(surface)
+        nc == 1 || error("PRESCRIBED_GAMMA implemented for nc=1 only")
+        for j in 1:ns
+            rtc = top_center(surface[1, j])
+            r = hypot(rtc[2], rtc[3])
+            system.Γ[iΓ + j] = FLOWMath.linear(r_tab, Γ_tab, clamp(r, r_tab[1], r_tab[end]))
         end
         iΓ += nc * ns
     end

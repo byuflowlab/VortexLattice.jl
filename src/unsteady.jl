@@ -501,6 +501,16 @@ function _simulate_step!(system, wake::PanelParticleWake, frames, trailing_edge_
             wake_finite_core, wake_shedding_locations=system.wake_shedding_locations,
             trailing_vortices, xhat, calculate_vlm_induced=false)
     end
+    if !isnothing(PRESCRIBED_GAMMA[]) && !derivatives
+        # H9 comparator: fixed Γ(r), so dΓ/dt = 0 and the forces are recomputed for the record only
+        _impose_prescribed_gamma!(system)
+        system.dΓdt .= 0
+        near_field_forces!(system.properties, system.surfaces, system.wakes,
+            ref, fs, Γ; dΓdt=system.dΓdt, additional_velocity=nothing,
+            Vh=system.Vh, Vv=system.Vv, symmetric, nwake=system.nwake, surface_id,
+            wake_finite_core, wake_shedding_locations=system.wake_shedding_locations,
+            trailing_vortices, xhat, calculate_vlm_induced=false)
+    end
     Γ_wake .= Γ
     if !isnothing(polars) && !IMPOSE_POLAR_GAMMA[]   # option 3: polar already applied, no viscous! pass (no drag)
         viscous!(system.properties, Γ_wake, system.surfaces, system.grids, frames,
