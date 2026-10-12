@@ -214,7 +214,7 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
         grids = [Array{TF,3}(undef, 3, nc[i]+1, ns[i]+1) for i = 1:nsurf]
     end
     if isnothing(ratios)
-        ratios = [zeros(TF, 2, nc[i], ns[i]) .+ [0.5; 0.75] for i = 1:nsurf]
+        ratios = [zeros(TF, 2, nc[i], ns[i]) .+ TF[0.5, 0.75] for i = 1:nsurf]
     end
 
     if isnothing(sections)
