@@ -968,9 +968,9 @@ end
         0.0025, 0.0026, 0.0026, 0.0022]
     cm_avl = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-    @test isapprox(cf[1][3,:], cl_avl, atol=1e-3, norm=(x)->norm(x, Inf))
-    @test isapprox(cf[1][1,:], cd_avl, atol=1e-4, norm=(x)->norm(x, Inf))
-    @test isapprox(cm[1][2,:], cm_avl, atol=1e-4, norm=(x)->norm(x, Inf))
+    @test all(isapprox.(cf[1][3,:], cl_avl, atol=1e-3))
+    @test all(isapprox.(cf[1][1,:], cd_avl, atol=1e-4))
+    @test all(isapprox.(cm[1][2,:], cm_avl, atol=1e-4))
 end
 
 @testset "Geometry Generation" begin
