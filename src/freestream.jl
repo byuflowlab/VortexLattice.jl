@@ -25,6 +25,9 @@ end
 Base.eltype(::Type{Freestream{TF}}) where TF = TF
 Base.eltype(::Freestream{TF}) where TF = TF
 
+Freestream{TF}(fs::Freestream) where TF = Freestream{TF}(fs.Vinf, fs.alpha, fs.beta, fs.Omega)
+Base.convert(::Type{Freestream{TF}}, fs::Freestream) where {TF} = Freestream{TF}(fs)
+
 """
     body_to_stability(freestream)
 

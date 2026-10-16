@@ -1,6 +1,8 @@
 using Test
 using VortexLattice
 using LinearAlgebra
+using ForwardDiff
+using ReverseDiff
 
 ztol = sqrt(eps())
 
@@ -1640,4 +1642,95 @@ end
 
     @test isapprox(dCF.p, (CFp .- CFm) ./ (2*dpb), rtol = 1e-2, atol = 1e-6)
     @test isapprox(dCM.p, (CMp .- CMm) ./ (2*dpb), rtol = 1e-2, atol = 1e-6)
+end
+
+@testset "Automatic Differentiation - steady_analysis!" begin
+
+    # Checks ForwardDiff against central differences and ReverseDiff against
+    # ForwardDiff for the Jacobian of the stability-frame force/moment
+    # coefficients and far-field drag.  The cases cover mirrored and symmetric
+    # wings, multiple surfaces, body rotation, and differentiating only the
+    # freestream on a Float64 geometry.  Grids are deliberately coarse.
+
+    function outputs(system)
+        CF, CM = body_forces(system; frame = Stability())
+        CD = far_field_drag(system)
+        return vcat(collect(CF), collect(CM), CD)
+    end
+
+    # mirrored wing; root/tip chord, tip twist, alpha, beta
+    function wing(x)
+        T = eltype(x)
+        xle = [zero(T), 0.25*(x[1] - x[2])]
+        grid, ratio = wing_to_grid(xle, T[0.0, 5.0], zeros(T, 2), x[1:2],
+            [zero(T), x[3]], zeros(T, 2), 4, 1; mirror = true, spacing_s = Cosine())
+        system = System([grid]; ratios = [ratio])
+        ref = Reference(15.0, 1.5, 10.0, [0.375, 0.0, 0.0], 20.0)
+        fs = Freestream(20.0, x[4], x[5], zeros(3))
+        steady_analysis!(system, ref, fs; derivatives = false)
+        return outputs(system)
+    end
+
+    # half wing with symmetry, dihedral, and nc = 2; chords, dihedral, alpha
+    function symmetric_wing(x)
+        T = eltype(x)
+        grid, ratio = wing_to_grid(zeros(T, 2), T[0.0, 4.0], [zero(T), 4*tan(x[3])],
+            x[1:2], zeros(T, 2), fill(x[3], 2), 4, 2; mirror = false,
+            spacing_s = Cosine(), spacing_c = Cosine())
+        system = System([grid]; ratios = [ratio])
+        ref = Reference(10.0, 1.25, 8.0, [0.3, 0.0, 0.0], 1.0)
+        fs = Freestream(1.0, x[4], 0.0, zeros(3))
+        steady_analysis!(system, ref, fs; symmetric = true)
+        return outputs(system)
+    end
+
+    # wing and tail; tail incidence, tail position, alpha, p, q, r
+    function wing_tail(x)
+        T = eltype(x)
+        gw, rw = wing_to_grid(zeros(T, 2), T[0.0, 5.0], zeros(T, 2), T[1.0, 0.6],
+            T[0.035, 0.035], zeros(T, 2), 3, 1; mirror = true)
+        gt, rt = wing_to_grid(fill(x[2], 2), T[0.0, 1.25], zeros(T, 2), T[0.7, 0.42],
+            fill(x[1], 2), zeros(T, 2), 2, 1; mirror = true)
+        system = System([gw, gt]; ratios = [rw, rt])
+        ref = Reference(9.0, 0.9, 10.0, [0.5, 0.0, 0.0], 1.0)
+        fs = Freestream(1.0, x[3], 0.0, x[4:6])
+        steady_analysis!(system, ref, fs; surface_id = [1, 2], derivatives = false)
+        return outputs(system)
+    end
+
+    # Float64 geometry, freestream-only design variables
+    fixed_grid, fixed_ratio = wing_to_grid([0.0, 0.2], [0.0, 5.0], [0.0, 0.5],
+        [1.0, 0.6], [0.02, 0.0], [0.1, 0.1], 4, 1; mirror = true)
+    function freestream_only(x)
+        system = System(eltype(x), [fixed_grid]; ratios = [fixed_ratio])
+        ref = Reference(8.0, 0.8, 10.0, [0.25, 0.0, 0.0], 1.0)
+        fs = Freestream(1.0, x[1], x[2], x[3:5])
+        steady_analysis!(system, ref, fs; derivatives = false)
+        return outputs(system)
+    end
+
+    function central_difference(f, x; h = 1e-6)
+        J = zeros(length(f(x)), length(x))
+        for j in eachindex(x)
+            xp = copy(x); xp[j] += h
+            xm = copy(x); xm[j] -= h
+            J[:, j] = (f(xp) - f(xm)) / (2*h)
+        end
+        return J
+    end
+
+    cases = [
+        (wing, [1.8, 1.2, -0.03, 0.08, 0.05]),
+        (symmetric_wing, [1.5, 1.0, 0.1, 0.07]),
+        (wing_tail, [-0.02, 4.0, 0.05, 0.01, -0.02, 0.015]),
+        (freestream_only, [0.06, 0.1, 0.01, 0.005, -0.01]),
+    ]
+
+    for (f, x) in cases
+        Jfd = central_difference(f, x)
+        Jf = ForwardDiff.jacobian(f, x)
+        Jr = ReverseDiff.jacobian(f, x)
+        @test isapprox(Jf, Jfd, rtol = 1e-6)
+        @test isapprox(Jr, Jf, rtol = 1e-10)
+    end
 end

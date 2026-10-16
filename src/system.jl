@@ -204,6 +204,10 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
 
     @assert length(nc) == length(ns) == length(nw)
 
+    # store values using the type arithmetic produces (strips ReverseDiff's
+    # TrackedReal origin parameter, a no-op for Float64 and ForwardDiff.Dual)
+    TF = Base.promote_op(+, TF, TF)
+
     # number of surfaces
     nsurf = length(nc)
 
@@ -212,9 +216,14 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
 
     if isnothing(grids)
         grids = [Array{TF,3}(undef, 3, nc[i]+1, ns[i]+1) for i = 1:nsurf]
+    else
+        # promote provided grids (e.g. Float64) to TF; no copy if already TF
+        grids = [convert(AbstractArray{TF,3}, grid) for grid in grids]
     end
     if isnothing(ratios)
         ratios = [zeros(TF, 2, nc[i], ns[i]) .+ TF[0.5, 0.75] for i = 1:nsurf]
+    else
+        ratios = [convert(Array{TF,3}, ratio) for ratio in ratios]
     end
 
     if isnothing(sections)
