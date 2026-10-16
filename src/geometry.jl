@@ -423,7 +423,7 @@ function grid_to_surface_panels(xyz, ns, nc;
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    ratios = zeros(2,nc,ns)
+    ratios = zeros(TF,2,nc,ns)
 
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
@@ -573,7 +573,7 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     etas, etabar = spanwise_spacing(ns+1, spacing_s)
     etac, eta_qtr, eta_thrqtr = chordwise_spacing(nc+1, spacing_c)
 
-    ratios = zeros(2,nc,ns)
+    ratios = zeros(TF,2,nc,ns)
 
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
