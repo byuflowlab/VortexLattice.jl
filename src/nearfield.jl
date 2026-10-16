@@ -53,7 +53,7 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             if !isnothing(Vh)
                 Vi += Vh[isurf][i]
             end
-            V_streamwise = deepcopy(Vi)
+            V_streamwise = Vi
 
             # induced velocity from surfaces and wakes
             jΓ = 0 # index for accessing Γ
@@ -281,7 +281,7 @@ function near_field_forces_multithreaded!(props, surfaces, wakes, ref, fs, Γ;
                 if !isnothing(Vh)
                     Vi += Vh[isurf][i]
                 end
-                V_streamwise = deepcopy(Vi)
+                V_streamwise = Vi
 
                 # induced velocity from surfaces and wakes
                 for jsurf = 1:nsurf
@@ -510,7 +510,7 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
                 Vi += Vh[isurf][i]
             end
 
-            V_streamwise = deepcopy(Vi)
+            V_streamwise = Vi
 
             # induced velocity from surfaces and wakes
             jΓ = 0 # index for accessing Γ
@@ -839,7 +839,7 @@ function near_field_forces_derivatives_multithreaded!(props, dprops, surfaces, w
                     Vi += Vh[isurf][i]
                 end
 
-                V_streamwise = deepcopy(Vi)
+                V_streamwise = Vi
 
                 # induced velocity from surfaces and wakes
                 for jsurf = 1:nsurf
