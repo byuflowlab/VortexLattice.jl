@@ -89,14 +89,17 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
     return nothing
 end
 
-function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; kwargs...)
+function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}};
+    symmetric = fill(false, length(wakes)), kwargs...)
+
+    symmetric = isa(symmetric, AbstractVector) ? symmetric : fill(symmetric, length(wakes))
 
     # create paraview multiblock file
     vtk_multiblock(name) do vtmfile
         # loop through all wakes
         for i = 1:length(wakes)
             # add paraview files corresponding to the wake to the multiblock file
-            write_vtk!(vtmfile, wakes[i]; kwargs..., surface_index = i)
+            write_vtk!(vtmfile, wakes[i]; symmetric = symmetric[i], kwargs...)
         end
     end
 
@@ -104,7 +107,10 @@ function write_vtk(name, wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}; k
 end
 
 function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
-    wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=nothing; kwargs...)
+    wakes::AbstractVector{<:AbstractMatrix{<:WakePanel}}, properties=fill(nothing, length(surfaces));
+    symmetric = fill(nothing, length(surfaces)), kwargs...)
+
+    symmetric = isa(symmetric, AbstractVector) ? symmetric : fill(symmetric, length(surfaces))
 
     # create multiblock file
     vtk_multiblock(name) do vtmfile
@@ -113,21 +119,27 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
         for i = 1:length(surfaces)
 
             # extract circulation at the trailing edge of `surface`
-            if isnothing(properties)
+            if isnothing(properties[i])
                 surface_circulation = zeros(size(surfaces[i], 2))
             else
                 surface_circulation = getproperty.(properties[i][end,:], :gamma)
             end
 
             # extract circulation at the leading edge of `wake`
-            wake_circulation = getproperty.(wakes[i][1,:], :gamma)
+            if isempty(wakes[i])
+                wake_circulation = zeros(size(surfaces[i], 2))
+            else
+                wake_circulation = getproperty.(wakes[i][1,:], :gamma)
+            end
 
             # add paraview files corresponding to the surface to the multiblock file
             write_vtk!(vtmfile, surfaces[i], properties[i]; wake_circulation,
-                trailing_edge = isempty(wakes[i]), kwargs..., trailing_vortices = false)
+                symmetric = symmetric[i], trailing_edge = isempty(wakes[i]), kwargs...,
+                trailing_vortices = isempty(wakes[i]))
 
             # add paraview files corresponding to the wake to the multiblock file
-            write_vtk!(vtmfile, wakes[i]; surface_circulation, kwargs...)
+            write_vtk!(vtmfile, wakes[i]; surface_circulation,
+                symmetric = something(symmetric[i], false), kwargs...)
         end
     end
 

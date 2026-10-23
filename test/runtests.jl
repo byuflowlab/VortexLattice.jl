@@ -1734,3 +1734,39 @@ end
         @test isapprox(Jr, Jf, rtol = 1e-10)
     end
 end
+
+@testset "write_vtk - surfaces and wakes" begin
+    # rectangular wing, symmetric and mirrored geometry
+    xle = [0.0, 0.0]; yle = [0.0, 2.0]; zle = [0.0, 0.0]
+    chord = [1.0, 1.0]; theta = [0.0, 0.0]; phi = [0.0, 0.0]
+    fc = fill((xc) -> 0, 2)
+    ref = Reference(4.0, 1.0, 4.0, [0.0, 0.0, 0.0], 1.0)
+    fs = Freestream(1.0, 5.0*pi/180, 0.0, [0.0, 0.0, 0.0])
+
+    mktempdir() do dir
+        cd(dir) do
+            for symmetric in (true, false)
+                grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, 4, 2;
+                    fc, mirror = !symmetric)
+
+                # steady system: no wake panels
+                system = steady_analysis([grid], ref, fs; symmetric)
+                write_vtk("steady-$symmetric", system; write_wakes = true)
+                @test isfile("steady-$symmetric.vtm")
+
+                # unsteady system: wake panels present
+                grid, ratio, surface = grid_to_surface_panels(grid; ratios = ratio)
+                dt = fill(0.25, 4)
+                system, surface_history, property_history, wake_history =
+                    unsteady_analysis([surface], ref, fs, dt; symmetric)
+                write_vtk("unsteady-$symmetric", system; write_wakes = true)
+                @test isfile("unsteady-$symmetric.vtm")
+                write_vtk("wakes-$symmetric", system; write_surfaces = false, write_wakes = true)
+                @test isfile("wakes-$symmetric.vtm")
+                write_vtk("direct-$symmetric", surface_history[end], wake_history[end],
+                    property_history[end]; symmetric)
+                @test isfile("direct-$symmetric.vtm")
+            end
+        end
+    end
+end
