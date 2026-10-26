@@ -83,8 +83,8 @@ function run_case(nwakerows, eta)
     frames = ReferenceFrame(system;
         origin=SVector{3}(0.0, 0.0, 0.0),
         v=SVector{3}(0.0, 0.0, 0.0),
-        ω_axis=SVector{3}(1.0, 0.0, 0.0),
-        ω=0.0,
+        omega_axis=SVector{3}(1.0, 0.0, 0.0),
+        omega=0.0,
         R=SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
         name="vehicle",
         child_index=Int[],

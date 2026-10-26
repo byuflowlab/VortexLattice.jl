@@ -1464,8 +1464,8 @@ function _build_short_restart_case()
     frames = ReferenceFrame(system;
         origin=SVector{3,Float64}(0.0, 0.0, 0.0),
         v=SVector{3,Float64}(0.0, 0.0, 0.0),
-        ω_axis=SVector{3,Float64}(1.0, 0.0, 0.0),
-        ω=0.0,
+        omega_axis=SVector{3,Float64}(1.0, 0.0, 0.0),
+        omega=0.0,
         R=SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0,
                                  0.0, 1.0, 0.0,
                                  0.0, 0.0, 1.0),
@@ -1580,7 +1580,7 @@ function _viscous_wing_CF(polar; ns=6, nt=6, aoa=4.2, Vinf=50.0)
     end
     # body frame flipped in x and z relative to global, as in test/weber_wing.jl
     frames = ReferenceFrame(system; origin=SVector(0.0, 0.0, -10.0), v=SVector(0.0, 0.0, 0.0),
-        ω_axis=SVector(0.0, 1.0, 0.0), ω=0.0, R=SMatrix{3,3}(-1.0, 0, 0, 0, 1.0, 0, 0, 0, -1.0),
+        omega_axis=SVector(0.0, 1.0, 0.0), omega=0.0, R=SMatrix{3,3}(-1.0, 0, 0, 0, 1.0, 0, 0, 0, -1.0),
         name="vehicle", child_index=Int[], dependent_index=[1])
     a = deg2rad(aoa)
     Uinf(t) = SVector(Vinf * cos(a), 0.0, Vinf * sin(a))

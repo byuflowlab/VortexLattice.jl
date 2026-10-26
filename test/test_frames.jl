@@ -117,8 +117,8 @@ steady_analysis!(system, ref, fs; symmetric)
 frames = ReferenceFrame(system;
     origin = SVector{3}(0.0, 0.0, -10.0),
     v = SVector{3}(0.0, 0.0, 0.0),
-    ω_axis = SVector{3}(0.0, 1.0, 0.0),
-    ω = 1.0 * 2 * pi,
+    omega_axis = SVector{3}(0.0, 1.0, 0.0),
+    omega = 1.0 * 2 * pi,
     R = SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
     name = "vehicle",
     child_index = Int[],
@@ -127,7 +127,7 @@ frames = ReferenceFrame(system;
 
 # add propeller and blade frames
 VortexLattice.add_frame!(frames, "propeller1", "vehicle", SVector{3}(0.0, 0.0, -10.0) + o_p, [4,5]; 
-    v = SVector{3}(0.0, 0.0, 0.0), ω_axis = SVector{3}(1.0, 0.0, 0.0), ω = -5.0 * 2 * pi,
+    v = SVector{3}(0.0, 0.0, 0.0), omega_axis = SVector{3}(1.0, 0.0, 0.0), omega = -5.0 * 2 * pi,
     R = SMatrix{3,3}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
 #--- perform maneuver ---#

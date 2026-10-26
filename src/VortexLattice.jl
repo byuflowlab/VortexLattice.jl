@@ -6,6 +6,8 @@ using FLOWMath
 using WriteVTK
 using VSPGeom
 using CCBlade
+import SixDOF
+import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!
 using FastMultipole
 using FLOWVPM
 using ReadVTK

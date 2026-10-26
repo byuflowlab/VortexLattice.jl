@@ -65,8 +65,8 @@ function prepare_simulation(St, heave_amplitude, pitch_amplitude, phase, n_cycle
     frames = ReferenceFrame(system;
         origin = origin,
         v = SVector{3}(0.0, 0.0, h0 * ω),
-        ω_axis = SVector{3}(0.0, 1.0, 0.0),
-        ω = θ0 * ω * cos(ψ),
+        omega_axis = SVector{3}(0.0, 1.0, 0.0),
+        omega = θ0 * ω * cos(ψ),
         R = Rinit,
         name = "wing",
         child_index = Int[],

@@ -66,8 +66,8 @@ cf_steady, cm_steady = lifting_line_coefficients(system; normalized=true)
 frames = ReferenceFrame(system;
     origin = SVector{3}(0.0, 0.0, -10.0),
     v = SVector{3}(0.0, 0.0, 0.0),
-    ω_axis = SVector{3}(0.0, 1.0, 0.0),
-    ω = 0.0 * 2 * pi,
+    omega_axis = SVector{3}(0.0, 1.0, 0.0),
+    omega = 0.0 * 2 * pi,
     R = SMatrix{3,3}(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
     name = "vehicle",
     child_index = Int[],

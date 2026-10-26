@@ -397,8 +397,8 @@ function _flatten_reference_frames(frames::AbstractVector{<:ReferenceFrame}, TF)
         frame = frames[i]
         frame_x[i3+1:i3+3] .= frame.x
         frame_v[i3+1:i3+3] .= frame.v
-        frame_axis[i3+1:i3+3] .= frame.ω_axis
-        frame_omega[i] = frame.ω
+        frame_axis[i3+1:i3+3] .= frame.omega_axis
+        frame_omega[i] = frame.omega
         frame_R[i9+1:i9+9] .= vec(frame.R)
         frame_Rp2g[i9+1:i9+9] .= vec(frame.Rp2g)
     end
