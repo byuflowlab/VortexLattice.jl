@@ -701,6 +701,8 @@ function simulate!(system::VortexLatticeSystem, wake::PanelParticleWake,
     wake_finite_core  = system.wake_finite_core
     xhat              = system.xhat[]
     symmetric        .= false
+    # the particle wake carries the trailing vorticity; a prior steady_analysis! may have left this on
+    system.trailing_vortices .= false
     force_finite_core = fill(true, length(system.surfaces))
 
     if isnothing(restart_state)
