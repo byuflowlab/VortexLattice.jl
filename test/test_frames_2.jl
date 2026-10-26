@@ -238,7 +238,6 @@ println("Unsteady Analysis:")
 system.Γ .= zero(eltype(system.Γ))  # reset circulation
 Uinf(t) = SVector{3,Float64}(-10.0,0.0,-1.0)
 t_range = range(0, stop=3.0, length=301)
-# VortexLattice.DEBUG[] = true
 monitors = (VortexLattice.DerivativesMonitor(length(t_range)),
             VortexLattice.ForcesMonitor(length(t_range)),
            )

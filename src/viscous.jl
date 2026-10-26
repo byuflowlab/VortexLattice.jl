@@ -1,31 +1,3 @@
-# --- Diagnostic instrumentation: capture per-section effective AoA (deg) computed by the ---
-# --- viscous correction below, keyed by surface index, one Vector per call to viscous!.  ---
-# --- Added 2026-07-29 to compare local AoA against a CCBlade reference; does not affect   ---
-# --- forces/circulation. Enable with `ALPHA_LOG_ENABLED[] = true`; read out `ALPHA_LOG`.  ---
-const ALPHA_LOG_ENABLED = Ref(false)
-const ALPHA_LOG = Dict{Int, Vector{Vector{Float64}}}()
-# Local strip-frame velocity components (v[1], v[3] -- the xz in-plane components used to
-# build dhat_strip below), one (v1,v3) pair per section per call. Added 2026-08-10 alongside
-# the alpha bias investigation, to decompose VL's local relative wind into axial/tangential-like
-# components for comparison against CCBlade's induction factors (a, ap). Same enable flag/reset
-# as ALPHA_LOG since both are populated together in the same loop.
-const VELOCITY_LOG = Dict{Int, Vector{Vector{Tuple{Float64,Float64}}}}()
-# Corrected lift coefficient (cl_vlm + Δcl, i.e. the polar-informed cl actually used to
-# build Δl_strip) and the RAW polar-lookup drag coefficient BEFORE the `*0.0` disable
-# (see the viscous-drag comment below) -- added 2026-08-11 to compare VL's own Cl/Cd
-# against a CCBlade polar-lookup reference, same enable flag/history convention as
-# ALPHA_LOG/VELOCITY_LOG. Logging the raw (undisabled) Cd does not re-enable it --
-# forces/circulation are unaffected, this is read-only instrumentation.
-const CL_LOG = Dict{Int, Vector{Vector{Float64}}}()
-const CD_LOG = Dict{Int, Vector{Vector{Float64}}}()
-function reset_alpha_log!()
-    empty!(ALPHA_LOG)
-    empty!(VELOCITY_LOG)
-    empty!(CL_LOG)
-    empty!(CD_LOG)
-    return nothing
-end
-
 struct Polar{TF}
     alphas::Vector{TF}
     cls_inv::Vector{TF}
@@ -54,91 +26,6 @@ function Polar{TF}(alphas, cls_visc, cds_visc) where TF
     cls_inv = TF(2π) .* (alphas .* TF(π/180))  # thin-airfoil: cl_inv = 2π·α[rad]
     cls_delta = cls_visc .- cls_inv
     return Polar{TF}(TF.(alphas), cls_inv, cls_delta, TF.(cls_visc), TF.(cds_visc))
-end
-
-"""
-    get_polars2(section_rs, rotor_file, TF=Float64; data_path)
-
-Generates a vector of vectors of `::Polar` objects for use in the `viscous!` function.
-
-**Arguments**
-- `section_rs::Vector{Vector{Float64}}`: `section_rs[i]` contains a vector of radial coordinates of each airfoil in the `i`th surface, normalized by the radius. Note that a 0-length vector indicates no airfoil correction is to be used.
-- `rotor_file::String`: name of the file containing the radial coordinates and polar files
-
-**Optional Arguments**
-- `data_path::String`: path where `rotors/` and `airfoils/` directories live
-
-**Returns**
-- `polars::Vector{Vector{Polar{Float64}}}`: polar object for each section in each surface of the corresponding `::System`
-"""
-function get_polars2(section_rs::Vector{<:Vector}, rotor_files, TF=Float64; data_path="VortexLattice_rotor_data")
-    
-    # check vector lengths
-    @assert length(section_rs) == length(rotor_files)
-    
-    # create vector of polars to push to
-    polars = Vector{Vector{Polar{TF}}}(undef, length(section_rs))
-
-    # loop over surfaces
-    for i_surface in eachindex(section_rs)
-
-        section_r = section_rs[i_surface]
-        if length(section_r) > 0
-
-            # instantiate polar vector
-            sections = Vector{Polar{TF}}(undef, length(section_r))
-
-            # get this rotor file
-            rotor_file = rotor_files[i_surface]
-
-            # read rotor data
-            data = readdlm(joinpath(data_path, "rotors", rotor_file), ',', skipstart=1)
-
-            # generate polar objects
-            polars_list = Vector{Polar{TF}}(undef, size(data,1))
-            af_files = String.(data[:,3])
-            for i_polar in axes(data,1)
-                # get file name
-                af_file = af_files[i_polar]
-
-                # read file
-                af_data = readdlm(joinpath(data_path, "airfoils", af_file), ',', skipstart=1)
-
-                # generate polar
-                polars_list[i_polar] = Polar{TF}(af_data[:,1], af_data[:,2], af_data[:,3])
-            end
-
-            # calculate ranges for each airfoil
-            rRs = Float64.(data[:,1])
-            rRmids = (rRs[1:end-1] .+ rRs[2:end]) .* 0.5
-            rRranges = zeros(length(rRs))
-            rRranges[1:end-1] .= rRmids
-            rRranges[end] = 1.0
-
-            # loop over sections
-            for i_r in eachindex(section_r)
-                
-                # radial coordinate of this section
-                r = section_r[i_r]
-
-                # find which airfoil corresponds
-                i_polar = findfirst((x) -> (x>=r), rRranges)
-
-                # populate sections
-                sections[i_r] = polars_list[i_polar]
-
-            end
-
-            polars[i_surface] = sections
-        
-        else
-
-            # push 0-length vector
-            polars[i_surface] = Vector{Polar{TF}}(undef,0)
-        end
-    end
-
-    return polars
 end
 
 """
@@ -189,12 +76,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
     # dynamic pressure for dimensionalizing forces
     q = 0.5 * RHO * ref.V * ref.V
 
-    # diagnostic AoA capture for this call (see ALPHA_LOG above)
-    _alpha_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
-    _velocity_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Tuple{Float64,Float64}}}() : nothing
-    _cl_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
-    _cd_this_call = ALPHA_LOG_ENABLED[] ? Dict{Int, Vector{Float64}}() : nothing
-
     # loop over surfaces
     for isurf in eachindex(surfaces)
 
@@ -214,13 +95,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
             R = transpose(Rp)
 
             # @show R # verified: basis vectors of the frame expressed in global coordinates
-
-            if !isnothing(_alpha_this_call)
-                _alpha_this_call[isurf] = Float64[]
-                _velocity_this_call[isurf] = Tuple{Float64,Float64}[]
-                _cl_this_call[isurf] = Float64[]
-                _cd_this_call[isurf] = Float64[]
-            end
 
             # loop over spanwise sections in this surface
             for j in axes(surface, 2)
@@ -304,26 +178,14 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # get effective α
                 α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
 
-                if !isnothing(_alpha_this_call)
-                    push!(_alpha_this_call[isurf], α_eff)
-                end
-
                 # additive viscous correction: Δcl(cl_inv), indexed by the
                 # inviscid cl so the table stays smooth near zero lift
                 Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
-
-                if !isnothing(_cl_this_call)
-                    push!(_cl_this_call[isurf], cl_vlm + Δcl)
-                end
 
                 # lift direction in the strip xz plane: perpendicular to local
                 # flow projected into xz. well-defined whenever there is any
                 # freestream over the section.
                 v_induced_strip = R * v_induced
-
-                if !isnothing(_velocity_this_call)
-                    push!(_velocity_this_call[isurf], (v_induced_strip[1], v_induced_strip[3]))
-                end
 
                 dhat_strip = SVector(v_induced_strip[1], 0.0, v_induced_strip[3])
                 dhat_strip /= norm(dhat_strip)
@@ -346,11 +208,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # zero (e.g. Ct~990 instead of ~0.77) -- see prior disable note. q_local comes
                 # from the total local velocity (props.velocity), independent of γ, so it stays
                 # well-behaved through zero-circulation stations. Re-enabled 2026-08-12.
-                cd_raw = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
-                if !isnothing(_cd_this_call)
-                    push!(_cd_this_call[isurf], cd_raw)
-                end
-                cd = cd_raw
+                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
                 D_visc_strip = cd * q_local * c * Δs_y
                 # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
                 # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
@@ -420,21 +278,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
             end
         else
             iΓ += size(surfaces[isurf], 1) * size(surfaces[isurf], 2) # skip circulation strengths for this surface
-        end
-    end
-
-    if !isnothing(_alpha_this_call)
-        for (isurf, row) in _alpha_this_call
-            push!(get!(ALPHA_LOG, isurf, Vector{Float64}[]), row)
-        end
-        for (isurf, row) in _velocity_this_call
-            push!(get!(VELOCITY_LOG, isurf, Vector{Tuple{Float64,Float64}}[]), row)
-        end
-        for (isurf, row) in _cl_this_call
-            push!(get!(CL_LOG, isurf, Vector{Float64}[]), row)
-        end
-        for (isurf, row) in _cd_this_call
-            push!(get!(CD_LOG, isurf, Vector{Float64}[]), row)
         end
     end
 end

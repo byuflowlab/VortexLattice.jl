@@ -5,10 +5,8 @@ using StaticArrays
 using FLOWMath
 using WriteVTK
 using VSPGeom
-using CCBlade
 using FastMultipole
 using FLOWVPM
-using DelimitedFiles
 using ReadVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms
@@ -71,9 +69,6 @@ export body_derivatives, stability_derivatives
 include("frames.jl")
 export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, ForwardRightDown
 
-include("rotors.jl")
-export generate_rotor
-
 include("visualization.jl")
 export write_vtk
 export write_restart_checkpoint, read_restart_checkpoint_info, restore_restart!
@@ -89,8 +84,5 @@ include("viscous.jl")
 
 include("unsteady.jl")
 export simulate!
-
-const DEBUG = Array{Bool,0}(undef)
-DEBUG[] = false
 
 end # module

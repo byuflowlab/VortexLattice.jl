@@ -264,8 +264,6 @@ function freestream_velocity(fs)
 end
 
 function freestream_velocity(Vinf, sa, ca, sb, cb) 
-    # println("NON-deriv")
-    # @show Vinf*SVector(ca*cb, -sb, sa*cb)
     return Vinf*SVector(ca*cb, -sb, sa*cb)
 end
 
@@ -292,8 +290,6 @@ function freestream_velocity_derivatives(Vinf, sa, ca, sb, cb)
 
     dV = (V_a, V_b)
 
-    # println("Deriv:")
-    # @show V
 
     return V, dV
 end

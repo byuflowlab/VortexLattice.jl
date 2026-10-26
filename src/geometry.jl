@@ -560,7 +560,6 @@ of ratios to place control points when converting to surface panels.
  - `spacing_c`: chordwise discretization scheme, defaults to `Uniform()`
  - `interp_s`: interpolation function between spanwise stations, defaults to linear interpolation
  - 'invert_cambers': invert the camber of the grid, defaults to `false`.
-        used in generating rotors/turbines
 """
 function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     fc = fill(x->0, length(xle)),

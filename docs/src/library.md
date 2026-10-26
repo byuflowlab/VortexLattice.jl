@@ -30,7 +30,6 @@ translate!
 rotate
 rotate!
 reflect(surface::AbstractMatrix)
-generate_rotor
 SectionProperties
 grid_to_sections
 ```
