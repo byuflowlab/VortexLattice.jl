@@ -20,16 +20,32 @@ shedding, with buffered rows). Without buffered rows the closing edges come off
 and the legs to the shedding line stay open.
 =#
 
-"""
-    SurfaceBody(system, i)
+# The AIC depends only on the surfaces' relative geometry, so it is built again only
+# when they moved relative to each other; the trailing-edge columns follow the shedding
+# line every solve, and the LU is refactored only when they change.
+mutable struct AICCache{TF}
+    valid::Bool
+    te::Matrix{TF}     # the trailing-edge columns the LU was factored with
+end
 
-Surface `i` of `system` as a body of FLOWUnsteadyCore's time loop. A handle: the
-geometry stays in `system`, and moving the body moves `system.grids[i]`.
 """
-struct SurfaceBody{TF} <: AbstractBody
+    SurfaceBody
+
+Surface `i` of a `VortexLatticeSystem` as a body of FLOWUnsteadyCore's time loop
+(built by [`surface_bodies`](@ref)). A handle: the geometry stays in the system,
+and moving the body moves `system.grids[i]`. It carries the surface's polars (one
+per spanwise strip, or `nothing` for no viscous correction) and its axes in global
+coordinates, which turn with it.
+"""
+struct SurfaceBody{TF,P} <: AbstractBody
     system::VortexLatticeSystem{TF}
     index::Int
+    polars::P
+    basis::Base.RefValue{SMatrix{3,3,TF,9}}
+    motion::Base.RefValue{Tuple{SMatrix{3,3,TF,9},SVector{3,TF}}}   # rigid motion since the AIC was built
+    aic::AICCache{TF}                                              # shared by the system's surfaces
 end
+
 
 """
     SurfaceState(system, i)
@@ -49,6 +65,8 @@ struct SurfaceState{TF} <: AbstractBodyState
 end
 
 Base.eltype(::SurfaceBody{TF}) where TF = TF
+SurfaceBody(system::VortexLatticeSystem{TF}, i) where TF = SurfaceBody(system, i, nothing,
+    Ref(SMatrix{3,3,TF,9}(I)), Ref((SMatrix{3,3,TF,9}(I), zero(SVector{3,TF}))), AICCache(false, zeros(TF, 0, 0)))
 Base.eltype(::SurfaceState{TF}) where TF = TF
 
 function SurfaceState(system::VortexLatticeSystem{TF}, i::Integer) where TF
@@ -59,15 +77,20 @@ function SurfaceState(system::VortexLatticeSystem{TF}, i::Integer) where TF
 end
 
 """
-    surface_bodies(system) -> (bodies, states)
+    surface_bodies(system; polars = nothing, basis = I) -> (bodies, states)
 
 One [`SurfaceBody`](@ref) and one [`SurfaceState`](@ref) per surface of `system`,
 for FLOWUnsteadyCore's `simulate!`. Builds the panels from the grids, and sets the
 system up for the core: full surfaces (no mirror image) and no trailing vortices
 (the core's wake replaces them). `system.reference[]` must be set; its velocity
 nondimensionalizes the panel forces.
+
+`polars`: per surface, one polar per spanwise strip (or `nothing`) for the viscous
+correction. `basis`: per surface (or one for all), the surface's chordwise,
+spanwise and normal axes in global coordinates as matrix columns; the identity
+suits a wing laid out along y.
 """
-function surface_bodies(system::VortexLatticeSystem)
+function surface_bodies(system::VortexLatticeSystem{TF}; polars = nothing, basis = I) where TF
     system.symmetric .= false
     system.trailing_vortices .= false
     for i in eachindex(system.surfaces)
@@ -75,7 +98,12 @@ function surface_bodies(system::VortexLatticeSystem)
             fcore = (c, Δs) -> system.core_size)
     end
     n = length(system.surfaces)
-    return [SurfaceBody(system, i) for i in 1:n], [SurfaceState(system, i) for i in 1:n]
+    aic = AICCache(false, zeros(TF, 0, 0))
+    pick(x, i) = x isa AbstractVector && !(x isa AbstractVector{<:Number}) ? x[i] : x
+    bodies = [SurfaceBody(system, i, isnothing(polars) ? nothing : polars[i],
+                          Ref(SMatrix{3,3,TF,9}(pick(basis, i))), Ref((SMatrix{3,3,TF,9}(I), zero(SVector{3,TF}))), aic)
+              for i in 1:n]
+    return bodies, [SurfaceState(system, i) for i in 1:n]
 end
 
 # the trailing-edge vertices of a surface, ns+1 of them
@@ -217,6 +245,8 @@ function FLOWUnsteadyCore.solve_group!(states::AbstractVector{<:SurfaceState}, b
     nsurf = length(system.surfaces)
     sort([s.index for s in states]) == 1:nsurf && all(s -> s.system === system, states) ||
         throw(ArgumentError("a VortexLatticeSystem is solved whole: the group must hold every surface of one system"))
+    all(b -> b.system === system, bodies) || throw(ArgumentError(
+        "the bodies point at a different VortexLatticeSystem than their states (a deepcopy detached them)"))
 
     for (s, ext) in zip(states, externals)
         s.external === ext || copyto!(s.external, ext)
@@ -228,12 +258,7 @@ function FLOWUnsteadyCore.solve_group!(states::AbstractVector{<:SurfaceState}, b
     closed = [implicit_shed isa Bool ? implicit_shed : Bool(implicit_shed[k]) for k in perm]
 
     off = fill(false, nsurf)
-    influence_coefficients!(system.AIC, system.surfaces;
-        symmetric = off, surface_id = system.surface_id,
-        wake_shedding_locations = system.wake_shedding_locations,
-        trailing_vortices = off, force_finite_core = off, xhat = system.xhat[])
-    _open_trailing_edges!(system, ordered, closed)
-    system.fAIC[] = lu(system.AIC)
+    _update_aic!(system, bodies, ordered, closed, off)
 
     # the external velocity (freestream, motion, wake, other groups) through each control point
     iw = 0
@@ -258,6 +283,14 @@ function FLOWUnsteadyCore.solve_group!(states::AbstractVector{<:SurfaceState}, b
         wake_shedding_locations = system.wake_shedding_locations, trailing_vortices = off,
         xhat = system.xhat[], calculate_vlm_induced = true)
 
+    # the sectional polars' correction, surface by surface
+    for s in ordered
+        b = bodies[findfirst(b -> b.index == s.index, bodies)]
+        isnothing(b.polars) && continue
+        viscous!(system.properties[s.index], view(system.Γ, _panel_range(system, s.index)), system.surfaces[s.index],
+            system.grids[s.index], b.polars, b.basis[], system.reference[])
+    end
+
     # the flight state body_forces turns coefficients into the stability and wind frames with
     system.freestream[] = velocity_to_freestream(SVector{3,TF}(freestream.velocity))
     system.near_field_analysis[] = true
@@ -274,6 +307,35 @@ end
 function _vertical_centre_velocity(s::SurfaceState)
     nc, ns = size(s.system.surfaces[s.index])
     return reshape(view(s.external, 2nc*ns+1:2nc*ns+nc*(ns+1)), nc, ns+1)
+end
+
+# The AIC for the current shedding line: built whole when the surfaces moved relative to each
+# other since the last build (or never were), else only its trailing-edge columns, and the LU
+# refactored only when those changed.
+function _update_aic!(system::VortexLatticeSystem{TF}, bodies, ordered, closed, off) where TF
+    cache = first(bodies).aic
+    R1, t1 = first(bodies).motion[]
+    scale = one(TF) + maximum(maximum(abs, g) for g in system.grids)
+    rigid = all(b -> (Rb = b.motion[]; maximum(abs, Rb[1] - R1) <= 1e-12 && maximum(abs, Rb[2] - t1) <= 1e-12 * scale), bodies)
+    for b in bodies
+        b.motion[] = (SMatrix{3,3,TF,9}(I), zero(SVector{3,TF}))
+    end
+    te = [first(_panel_range(system, i)) - 1 + (j-1)*size(system.surfaces[i], 1) + size(system.surfaces[i], 1)
+          for i in eachindex(system.surfaces) for j in 1:size(system.surfaces[i], 2)]
+    kw = (; symmetric = off, surface_id = system.surface_id, wake_shedding_locations = system.wake_shedding_locations,
+            trailing_vortices = off, force_finite_core = off, xhat = system.xhat[])
+    if cache.valid && rigid
+        update_trailing_edge_coefficients!(system.AIC, system.surfaces; kw...)
+        _open_trailing_edges!(system, ordered, closed)
+        maximum(abs, view(system.AIC, :, te) - cache.te) <= 1e-12 * maximum(abs, cache.te) && return system
+    else
+        influence_coefficients!(system.AIC, system.surfaces; kw...)
+        _open_trailing_edges!(system, ordered, closed)
+        cache.valid = true
+    end
+    system.fAIC[] = lu(system.AIC)
+    cache.te = system.AIC[:, te]
+    return system
 end
 
 # The closing edges along the shedding line are part of influence_coefficients! and of the
@@ -323,6 +385,30 @@ function _open_trailing_edge_velocity(Vh, system, ordered, closed)
         end
     end
     return Vh
+end
+
+# --- monitor ---
+
+"""
+    ForcesMonitor(system, nsteps; frame = Body())
+
+A FLOWUnsteadyCore `simulate!` monitor that records `system`'s force and moment
+coefficients ([`body_forces`](@ref) in `frame`) after each step's solve, in
+`CF[step]` and `CM[step]`.
+"""
+struct ForcesMonitor{TF,F}
+    system::VortexLatticeSystem{TF}
+    CF::Vector{SVector{3,TF}}
+    CM::Vector{SVector{3,TF}}
+    frame::F
+end
+
+ForcesMonitor(system::VortexLatticeSystem{TF}, nsteps::Integer; frame = Body()) where TF =
+    ForcesMonitor(system, zeros(SVector{3,TF}, nsteps), zeros(SVector{3,TF}, nsteps), frame)
+
+function (m::ForcesMonitor)(step, t, systems, geometries, wake, frames)
+    m.CF[step], m.CM[step] = body_forces(m.system; frame = m.frame)
+    return nothing
 end
 
 # --- the surface as vortex filaments ---
@@ -388,8 +474,11 @@ FLOWUnsteadyCore.self_influence!(dest, s::SurfaceState, b::SurfaceBody, options;
 
 # --- motion ---
 
-function SixDOF.move(b::SurfaceBody, origin, R, dx)
+function SixDOF.move(b::SurfaceBody{TF}, origin, R, dx) where TF
     system = b.system
+    Ra, ta = b.motion[]
+    b.motion[] = (SMatrix{3,3,TF,9}(R * Ra), SVector{3,TF}(R * ta + origin + dx - R * origin))
+    b.basis[] = SMatrix{3,3,TF,9}(R * b.basis[])
     rotate_translate!(system, b.index, origin, R, dx)
     update_surface_panels!(system.surfaces[b.index], system.grids[b.index]; ratios = system.ratios[b.index],
         fcore = (c, Δs) -> system.core_size)
@@ -414,13 +503,30 @@ function FLOWUnsteadyCore.restore_system!(s::SurfaceState, d::Dict)
     return s
 end
 
-FLOWUnsteadyCore.body_state(b::SurfaceBody) = Dict{Symbol,Any}(:grid => copy(b.system.grids[b.index]))
+FLOWUnsteadyCore.body_state(b::SurfaceBody) = Dict{Symbol,Any}(:grid => copy(b.system.grids[b.index]), :basis => b.basis[])
 
 function FLOWUnsteadyCore.restore_body(b::SurfaceBody, d::Dict)
     system = b.system
     system.grids[b.index] .= d[:grid]
+    haskey(d, :basis) && (b.basis[] = d[:basis])
+    b.aic.valid = false
     update_surface_panels!(system.surfaces[b.index], system.grids[b.index]; ratios = system.ratios[b.index],
         fcore = (c, Δs) -> system.core_size)
+    return b
+end
+
+# the geometry lives in the shared system, so a snapshot is the surface's grid and axes,
+# written back in place (a deepcopy would detach a copy of the whole system)
+FLOWUnsteadyCore.snapshot_body(b::SurfaceBody) =
+    (grid = copy(b.system.grids[b.index]), basis = b.basis[], motion = b.motion[])
+
+function FLOWUnsteadyCore.restore_snapshot(b::SurfaceBody, snap)
+    system = b.system
+    system.grids[b.index] .= snap.grid
+    update_surface_panels!(system.surfaces[b.index], system.grids[b.index]; ratios = system.ratios[b.index],
+        fcore = (c, Δs) -> system.core_size)
+    b.basis[] = snap.basis
+    b.motion[] = snap.motion
     return b
 end
 

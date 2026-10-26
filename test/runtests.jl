@@ -1310,3 +1310,96 @@ end
     @test_throws ArgumentError stability_derivatives(run1(; mirror=false, symmetric=true))
 end
 
+
+#------- the time domain on FLOWUnsteadyCore -------#
+
+# A wing through the core's simulate!. The wake is kept as rings (`nwakerows >= nsteps`,
+# no particles), fast and deterministic.
+function core_wing_run(; ns = 6, nc = 1, aoa = 4.2, V = 50.0, nsteps = 6, nwakerows = nsteps, dt = 0.01, polars = nothing,
+                         freestream = Freestream(SVector(V * cosd(aoa), 0.0, V * sind(aoa))), kwargs...)
+    grid, ratios = wing_to_grid([0.0, 0.5], [0.0, 1.25], zeros(2), [0.5, 0.5], zeros(2), zeros(2), ns, nc;
+        spacing_s=Uniform(), spacing_c=Uniform(), mirror=true)
+    system = VortexLatticeSystem([grid]; ratios=[ratios])
+    system.reference[] = Reference(2.5 * 0.5, 0.5, 2.5, [0.0, 0.0, 0.0], V)
+    bodies, states = surface_bodies(system; polars)
+    frames = ReferenceFrame(system; origin=SVector(0.0, 0.0, 0.0))
+    wake = PanelParticleWake(Float64, bodies; nwakerows)
+    monitor = ForcesMonitor(system, nsteps)
+    simulate!(states, bodies, frames, wake, freestream; nsteps, dt, monitor, backend=DirectBackend(), kwargs...)
+    return monitor, system
+end
+
+# A polar through the sectional_coefficients interface: cl = scale * 2πα, constant cd
+struct ViscousTestPolar
+    scale::Float64
+    cd::Float64
+end
+VortexLattice.sectional_coefficients(p::ViscousTestPolar, alpha, Re, Mach) = (p.scale * 2pi * alpha, p.cd)
+
+@testset "Viscous correction (viscous!)" begin
+    run(polar) = core_wing_run(; polars=isnothing(polar) ? nothing : [fill(polar, 12)])[1].CF[end]
+    CF0 = run(nothing)
+    freestream = SVector(cosd(4.2), 0.0, sind(4.2))
+    # a thin-airfoil polar agrees with the vortex lattice: no correction
+    @test isapprox(run(ViscousTestPolar(1.0, 0.0)), CF0; atol=1e-12)
+    # 10% less section lift lowers the wing lift, by less than 10% once the circulation responds
+    @test 0.85 < run(ViscousTestPolar(0.9, 0.0))[3] / CF0[3] < 0.95
+    # a constant section cd adds that drag along the freestream (CF is in the grid axes, where the
+    # freestream points along +x; the old test expected it upstream, which was a sign bug in viscous!)
+    @test isapprox(dot(run(ViscousTestPolar(1.0, 0.01)) - CF0, freestream), 0.01; rtol=0.02)
+end
+
+@testset "Unsteady forces scale with the speed" begin
+    # A heaving wing (as a time-varying inflow) at the same reduced frequency and two speeds:
+    # the force coefficients must not depend on the dimensional speed. The dΓ/dt force once
+    # carried an extra velocity factor and failed this by 3.7x.
+    function heave_CL(U; k = 0.3, h0 = 0.02, nsteps = 24)
+        b = 0.25; ω = k * U / b
+        u(t) = SVector(U, 0.0, h0 * ω * sin(ω * t))
+        m, _ = core_wing_run(; V=U, nsteps, dt=2pi / ω / 12, freestream=Freestream(u))
+        return [cf[3] for cf in m.CF]
+    end
+    CL1 = heave_CL(1.0); CL10 = heave_CL(10.0)
+    @test maximum(abs.(CL10 .- CL1)) < 1e-10 * maximum(abs, CL1)
+end
+
+@testset "Suddenly started wing (Wagner)" begin
+    # A flat plate of aspect ratio 100 started impulsively at 5 deg: its lift over the
+    # steady lift follows Wagner's function of the distance travelled in half-chords.
+    AR = 100.0; alpha = 5pi/180; dt = 0.25; nsteps = 20
+    grid, ratio = wing_to_grid([0.0, 0.0], [-AR/2, AR/2], zeros(2), [1.0, 1.0], zeros(2), zeros(2), 1, 4; mirror=false)
+    system = VortexLatticeSystem([grid]; ratios=[ratio])
+    ref = Reference(AR, 1.0, AR, [0.0, 0.0, 0.0], 1.0)
+    system.reference[] = ref
+    bodies, states = surface_bodies(system)
+    monitor = ForcesMonitor(system, nsteps; frame=Wind())
+    simulate!(states, bodies, ReferenceFrame(system; origin=SVector(0.0, 0.0, 0.0)),
+        PanelParticleWake(Float64, bodies; nwakerows=nsteps), Freestream(SVector(cos(alpha), 0.0, sin(alpha)));
+        nsteps, dt, monitor, backend=DirectBackend())
+    grid, ratio = wing_to_grid([0.0, 0.0], [-AR/2, AR/2], zeros(2), [1.0, 1.0], zeros(2), zeros(2), 1, 4; mirror=false)
+    steady = VortexLatticeSystem([grid]; ratios=[ratio])
+    steady_analysis!(steady, ref, flight_condition(steady, ref, 1.0; alpha)...)
+    CLs = body_forces(steady; frame=Wind())[1][3]
+    wagner(s) = 1 - 0.165exp(-0.0455s) - 0.335exp(-0.3s)
+    for k in (8, 10, 15, 20)   # s = 4 to 10; the first steps carry the impulsive dΓ/dt
+        @test isapprox(monitor.CF[k][3] / CLs, wagner(2k * dt); rtol=0.01)
+    end
+end
+
+@testset "Checkpoint restart" begin
+    dir = mktempdir()
+    m_full, s_full = core_wing_run(; nsteps=6)
+    _, s_part = core_wing_run(; nsteps=3, nwakerows=6, checkpoint=joinpath(dir, "run"), checkpoint_every=3)
+    # the restart picks the run up after step 3 and finishes it
+    grid, ratios = wing_to_grid([0.0, 0.5], [0.0, 1.25], zeros(2), [0.5, 0.5], zeros(2), zeros(2), 6, 1;
+        spacing_s=Uniform(), spacing_c=Uniform(), mirror=true)
+    system = VortexLatticeSystem([grid]; ratios=[ratios])
+    system.reference[] = Reference(2.5 * 0.5, 0.5, 2.5, [0.0, 0.0, 0.0], 50.0)
+    bodies, states = surface_bodies(system)
+    monitor = ForcesMonitor(system, 6)
+    simulate!(states, bodies, ReferenceFrame(system; origin=SVector(0.0, 0.0, 0.0)),
+        PanelParticleWake(Float64, bodies; nwakerows=6), Freestream(SVector(50cosd(4.2), 0.0, 50sind(4.2)));
+        nsteps=6, dt=0.01, monitor, backend=DirectBackend(), restart=joinpath(dir, "run_00000003.jls"))
+    @test isapprox(system.Γ, s_full.Γ; rtol=1e-12)
+    @test isapprox(monitor.CF[6], m_full.CF[6]; rtol=1e-12)
+end

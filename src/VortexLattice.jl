@@ -67,6 +67,11 @@ export write_vtk
 include("viscous.jl")
 
 include("core_bodies.jl")
-export SurfaceBody, SurfaceState, surface_bodies
+export SurfaceBody, SurfaceState, surface_bodies, ForcesMonitor
+# the time domain is the core's; re-exported so `using VortexLattice` is enough
+using FLOWUnsteadyCore: simulate!, PanelParticleWake, Shedding, WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS,
+    SigmaOverlap, AbstractBackend, DirectBackend
+export simulate!, PanelParticleWake, Shedding, WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS, SigmaOverlap,
+    AbstractBackend, DirectBackend
 
 end # module
