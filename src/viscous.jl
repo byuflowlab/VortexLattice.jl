@@ -1,32 +1,16 @@
-struct Polar{TF}
-    alphas::Vector{TF}
-    cls_inv::Vector{TF}
-    cls_delta::Vector{TF}
-    cls_visc::Vector{TF}
-    cds_visc::Vector{TF}
-end
+# Sectional polars are read through `sectional_coefficients(polar, alpha, Re, Mach)`, the
+# interface FLOWUnsteadyCore defines, so the polars LiftingLines takes work here too. Until
+# VortexLattice depends on the core, the `CCBlade.AlphaAF` method is duplicated here.
 
 """
-    Polar(alphas, cls_visc, cds_visc)
+    sectional_coefficients(polar, alpha, Re, Mach) -> (cl, cd)
 
-Construct a `Polar` from a viscous polar table. Inviscid lift is taken as the
-thin-airfoil approximation `cl_inv = 2π·α` (with `alphas` in degrees), and the
-additive correction table is precomputed as `cls_delta = cls_visc - cls_inv`.
-This allows the viscous correction to be applied as a smooth additive lookup
-indexed by inviscid `cl`, rather than as a ratio `cl_visc / cl_inv`.
+Lift and drag coefficient of a section polar at angle of attack `alpha` [rad]. For a
+`CCBlade.AlphaAF` (what `CCBlade.AlphaAF(file)` or `FLOWUnsteadyCore.read_polar`
+return) this forwards to `CCBlade.afeval`; another polar type adds a method.
 """
-function Polar(alphas, cls_visc, cds_visc)
-    TF = eltype(cls_visc)
-    cls_inv = TF(2π) .* (alphas .* TF(π/180))  # thin-airfoil: cl_inv = 2π·α[rad]
-    cls_delta = cls_visc .- cls_inv
-    return Polar{TF}(alphas, cls_inv, cls_delta, cls_visc, cds_visc)
-end
-
-function Polar{TF}(alphas, cls_visc, cds_visc) where TF
-    cls_inv = TF(2π) .* (alphas .* TF(π/180))  # thin-airfoil: cl_inv = 2π·α[rad]
-    cls_delta = cls_visc .- cls_inv
-    return Polar{TF}(TF.(alphas), cls_inv, cls_delta, TF.(cls_visc), TF.(cds_visc))
-end
+@inline sectional_coefficients(af::CCBlade.AlphaAF, alpha, Re, Mach) =
+    CCBlade.afeval(af, alpha, Re, Mach)
 
 """
     viscous!(properties, Γ, dΓdt, surfaces, grids, frames, frames_index, polars, ref, dt)
@@ -49,8 +33,10 @@ Note: `dΓdt` should contain `-Γ` from the previous timestep.
 - `grids`: grid coordinates for each surface
 - `frames`: reference frames for each surface
 - `frames_index`: map from surfaces to entries in `frames`
-- `polars`: sectional viscous polar data for each surface, or `nothing` to skip
-  viscous corrections
+- `polars`: one polar per spanwise section for each surface (anything with a
+  [`sectional_coefficients`](@ref) method, e.g. a `CCBlade.AlphaAF`), or `nothing`
+  to skip viscous corrections. Reynolds and Mach number are not computed and are
+  passed as zero, so polars that correct for them are not supported yet
 - `ref`: aerodynamic reference quantities used for dimensional scaling
 - `dt`: timestep used to convert the updated `Γ` values into `dΓdt`
 
@@ -58,7 +44,7 @@ Note: `dΓdt` should contain `-Γ` from the previous timestep.
 
 Mutates `properties`, `Γ`, and `dΓdt` in place and returns `nothing`.
 """
-function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polars::Vector{<:Vector{<:Polar}}, ref::Reference, dt) where TF
+function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces::Vector{Matrix{SurfacePanel{TF}}}, grids, frames::Vector{<:ReferenceFrame}, frames_index::Vector{Int}, polars::Vector{<:Vector}, ref::Reference, dt) where TF
     # properties contains:
     # * cf
     # surface contains:
@@ -176,11 +162,12 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 cl_vlm = -2 * RHO * γ * (γ / (l_2d_norm + eps(l_2d_norm))) / c * sign(γ)
 
                 # get effective α
-                α_eff = cl_vlm / (2 * pi) * 180 / pi # in degrees
+                α_eff = cl_vlm / (2 * pi) # in radians
 
-                # additive viscous correction: Δcl(cl_inv), indexed by the
-                # inviscid cl so the table stays smooth near zero lift
-                Δcl = FLOWMath.linear(polar.cls_inv, polar.cls_delta, cl_vlm)
+                # additive viscous correction: the polar's cl at the effective α minus the
+                # inviscid (thin-airfoil) cl there, which is cl_vlm itself
+                cl_visc, cd = sectional_coefficients(polar, α_eff, zero(TF), zero(TF))
+                Δcl = cl_visc - cl_vlm
 
                 # lift direction in the strip xz plane: perpendicular to local
                 # flow projected into xz. well-defined whenever there is any
@@ -208,7 +195,6 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # zero (e.g. Ct~990 instead of ~0.77) -- see prior disable note. q_local comes
                 # from the total local velocity (props.velocity), independent of γ, so it stays
                 # well-behaved through zero-circulation stations. Re-enabled 2026-08-12.
-                cd = FLOWMath.linear(polar.alphas, polar.cds_visc, α_eff)
                 D_visc_strip = cd * q_local * c * Δs_y
                 # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
                 # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip

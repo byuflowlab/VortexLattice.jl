@@ -4,6 +4,7 @@ version = "0.2.1"
 authors = ["Taylor McDonnell <taylormcd@byu.edu", "Ryan Anderson <rymanderson@gmail.com>", "Andrew Ning <aning@byu.edu>"]
 
 [deps]
+CCBlade = "e1828068-15df-11e9-03e4-ef195ea46fa4"
 FLOWMath = "6cb5d3fb-0fe8-4cc2-bd89-9fe0b19a99d3"
 FLOWVPM = "6e19019d-7c31-4940-9d16-c3f15dfe6020"
 FastMultipole = "ce07d0d3-2b9f-49ba-89eb-12c800257c85"
@@ -14,6 +15,7 @@ VSPGeom = "9b3f6a95-fce2-4bc5-94a2-f99b39986ea6"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [compat]
+CCBlade = "1"
 FLOWMath = "0.4"
 FastMultipole = "2.0.3"
 ReadVTK = "0.2"

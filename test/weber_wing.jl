@@ -23,8 +23,7 @@ Vinf=ft2meter(163.0)
 
 polars = CCBlade.AlphaAF("VortexLattice_rotor_data/airfoils/rae101_12.dat"; radians=false)
 
-polars = VortexLattice.Polar(polars.alpha, polars.cl, polars.cd)
-polars = fill(polars, ns) # wrap in array for compatibility with simulate!
+polars = fill(polars, 2ns) # one per spanwise strip (mirrored wing: 2ns); wrap in array for simulate!
 polars = [polars]
 
 halfspan = inch2meter(98.0)/2
@@ -90,6 +89,7 @@ wake = simulate!(system, frames, constant_maneuver!, Uinf, t_range, Ωinf;
             monitors,
             derivatives=false,
             polars,
+            frames_index=[1], # viscous! corrects only surfaces with a frame
             path=nothing,
             verbose=false,
             )

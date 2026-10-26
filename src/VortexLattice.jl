@@ -5,6 +5,7 @@ using StaticArrays
 using FLOWMath
 using WriteVTK
 using VSPGeom
+using CCBlade
 using FastMultipole
 using FLOWVPM
 using ReadVTK
