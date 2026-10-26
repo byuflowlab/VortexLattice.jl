@@ -4,7 +4,7 @@
 To incorporate airfoil polars a nonlinear vortex lattice method is used. In order to use this method system.sections must be correctly populated.
 
 ```
-system = System(grids; sections)
+system = VortexLatticeSystem(grids; sections)
 ```
 
 sections is a vector of vector of SectionProperties objects. The length of grids and sections must be the same, for each grid there is a vector of SectionProperties. These vectors of section properties are created as follows:
@@ -16,7 +16,7 @@ section = grid_to_sections(grid, airfoils)
 If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each object containing a CCBlade AlphaAF object that contains the polars for the airfoil. For more information see CCBlade.jl.
 
 ```
-system = System(grids; sections)
+system = VortexLatticeSystem(grids; sections)
 nonlinear_analysis!(system)
 ```
 
@@ -53,7 +53,7 @@ Key parameters:
 - `method_trailing`/`method_unsteady`: controls how panel rows are converted to particles (`NoShed`, `SigmaPPS`, or `OverlapPPS`).
 - `eta`: relaxation parameter for the particle time integration (0–1).
 
-The `System` must be allocated with `nw=fill(nwakerows, length(grids))` so the panel buffer has the correct row count.
+The `VortexLatticeSystem` must be allocated with `nw=fill(nwakerows, length(grids))` so the panel buffer has the correct row count.
 
 ## Restart / Checkpoints
 

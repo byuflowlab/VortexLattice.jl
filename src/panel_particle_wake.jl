@@ -194,7 +194,7 @@ function FastMultipole.direct!(target_system, target_index, switch::DerivativesS
             end
         end
         # switch-aware setter -- see the comment on the same substitution in
-        # src/fmm.jl's direct! for System
+        # src/fmm.jl's direct! for VortexLatticeSystem
         FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
@@ -209,7 +209,7 @@ end
 FMM-compatible source wrapper over the *active* portion of a
 `PanelParticleWake`'s panel buffer. Represents each active wake panel as a
 full vortex ring (all four edges), matching the accuracy of the steady-wake
-`System` source representation.
+`VortexLatticeSystem` source representation.
 """
 struct WakeBufferRings{TF}
     wakes::Vector{Matrix{WakePanel{TF}}}
@@ -301,7 +301,7 @@ function FastMultipole.direct!(target_system, target_index, switch::DerivativesS
             end
         end
         # switch-aware setter -- see the comment on the same substitution in
-        # src/fmm.jl's direct! for System
+        # src/fmm.jl's direct! for VortexLatticeSystem
         FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
@@ -410,7 +410,7 @@ function FastMultipole.direct!(target_system, target_index, switch::DerivativesS
             end
         end
         # switch-aware setter -- see the comment on the same substitution in
-        # src/fmm.jl's direct! for System
+        # src/fmm.jl's direct! for VortexLatticeSystem
         FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end

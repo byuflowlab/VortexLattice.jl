@@ -80,7 +80,7 @@ Monitor callable. Evaluates total velocity (induced + freestream) and vorticity
 results in `m.velocity` and `m.vorticity`. Writes a VTK file when
 `vtk_interval > 0` and `i_step % vtk_interval == 0`.
 """
-function (m::FluidDomainMonitor{TF})(system::System, wake::PanelParticleWake,
+function (m::FluidDomainMonitor{TF})(system::VortexLatticeSystem, wake::PanelParticleWake,
         i_step::Int; fmm_wake_args=(), fmm_vehicle_args=()) where TF
 
     FastMultipole.reset!(m.probes)
@@ -137,7 +137,7 @@ end
 Evaluate the fluid domain at the current system/wake state. Convenience wrapper
 around the monitor callable; use after a manual [`restore_restart!`](@ref) call.
 """
-function evaluate_fluid_domain!(monitor::FluidDomainMonitor, system::System,
+function evaluate_fluid_domain!(monitor::FluidDomainMonitor, system::VortexLatticeSystem,
         wake::PanelParticleWake, i_step::Int=0; kwargs...)
     monitor(system, wake, i_step; kwargs...)
     return monitor
@@ -162,7 +162,7 @@ step, reusing the pre-allocated `monitor` arrays to keep peak memory at
 """
 function evaluate_fluid_domain_from_restarts!(
         monitor::FluidDomainMonitor,
-        system::System,
+        system::VortexLatticeSystem,
         wake::PanelParticleWake,
         frames::AbstractVector{<:ReferenceFrame},
         restart_name::String;

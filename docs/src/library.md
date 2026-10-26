@@ -51,8 +51,8 @@ trajectory_to_freestream
 
 ### Performing an Analysis
 ```@docs
-System
-System()
+VortexLatticeSystem
+VortexLatticeSystem()
 steady_analysis
 steady_analysis!
 unsteady_analysis
@@ -64,7 +64,7 @@ nonlinear_analysis!
 ```@docs
 PanelProperties
 get_surface_properties
-body_forces(system::System{TF}; frame = Body()) where TF
+body_forces(system::VortexLatticeSystem{TF}; frame = Body()) where TF
 body_forces_history
 lifting_line_coefficients
 lifting_line_coefficients!

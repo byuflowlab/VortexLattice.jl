@@ -61,7 +61,7 @@ function get_system(AR; ns=24, nc=6)
     ratios=[ratio]
 
     # Construct the system
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     return system, ref
 end
@@ -88,7 +88,7 @@ function plot_stuff(ARs = [10, 20, 40, 80, 160, 320, 640])
     return cls_list
 end
 
-function get_CL_circ(system::System{TF}, alpha, vinf_vec) where TF
+function get_CL_circ(system::VortexLatticeSystem{TF}, alpha, vinf_vec) where TF
     println("\n==== BEGIN CL CALCULATION ====\n")
 
     # solve system with unit reference

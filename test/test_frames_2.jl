@@ -144,7 +144,7 @@ translate!(p2grid2, o_p2)
 grids = [w1grid, w2grid, hgrid, vgrid, p1grid1, p1grid2, p2grid1, p2grid2]
 ratios = [w1ratio, w2ratio, hratio, vratio, p1ratio1, p1ratio2, p2ratio1, p2ratio2]
 surface_id = [1, 2, 3, 4, 5, 6, 7, 8]
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 system.reference[] = ref
 symmetric = [false for _ in grids]  # no implied symmetry
 

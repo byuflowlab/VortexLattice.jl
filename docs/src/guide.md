@@ -46,12 +46,12 @@ nothing #hide
 We can generate the lifting surface from the grid and ratios using
 `grid_to_surface_panels`.
 
-The last step in defining our geometry is to combine all grids in a single vector and all our ratios into a single vector.  Since we only have one grid, we create two vectors with single elements. These are loaded into `System`. 
+The last step in defining our geometry is to combine all grids in a single vector and all our ratios into a single vector.  Since we only have one grid, we create two vectors with single elements. These are loaded into `VortexLatticeSystem`. 
 
 ```@example guide
 grids = [grid]
 ratios = [ratio]
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 nothing #hide
 ```
 

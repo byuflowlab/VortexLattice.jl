@@ -43,7 +43,7 @@ function prepare_simulation(St, heave_amplitude, pitch_amplitude, phase, n_cycle
 
     grids = [grid]
     ratios = [ratio]
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     # wing reference
     Sref = c*b

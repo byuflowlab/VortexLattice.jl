@@ -54,7 +54,7 @@ grids = [grid]
 ratios = [ratios]
 
 nwakerows = 1
-system = System(grids; ratios, nw=fill(nwakerows, length(grids)))
+system = VortexLatticeSystem(grids; ratios, nw=fill(nwakerows, length(grids)))
 empty_system = deepcopy(system)
 system.reference[] = ref
 fs = Freestream(Vinf, deg2rad(aoa), 0.0, [0.0; 0.0; 0.0])

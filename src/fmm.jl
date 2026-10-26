@@ -1,4 +1,4 @@
-#------- FastMultipole compatibility functions for System -------#
+#------- FastMultipole compatibility functions for VortexLatticeSystem -------#
 
 """
     fmm(; kwargs...)
@@ -8,7 +8,7 @@ through `VortexLattice` without importing `FLOWVPM` directly.
 """
 fmm(; p=20, kwargs...) = FLOWVPM.FMM(; p=p, kwargs...)
 
-# function vlm_to_fmm_index(system::System, i_surf, i, j)
+# function vlm_to_fmm_index(system::VortexLatticeSystem, i_surf, i, j)
 #     surfaces = system.surfaces
 #     n = 0
 #     for k in 1:i_surf-1
@@ -21,7 +21,7 @@ fmm(; p=20, kwargs...) = FLOWVPM.FMM(; p=p, kwargs...)
 #     return n
 # end
 
-function fmm_to_vlm_index(system::System, n)
+function fmm_to_vlm_index(system::VortexLatticeSystem, n)
     n_counter = 0
     for i_surf in 1:length(system.surfaces)
         nc, ns = size(system.surfaces[i_surf])
@@ -39,7 +39,7 @@ function fmm_to_vlm_index(system::System, n)
     end
 end
 
-function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System, i_body)
+function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::VortexLatticeSystem, i_body)
 
     # vlm index
     i_surf, i, j = fmm_to_vlm_index(system, i_body)
@@ -108,15 +108,15 @@ function FastMultipole.source_system_to_buffer!(buffer, i_buffer, system::System
 
 end
 
-function FastMultipole.data_per_body(system::System)
+function FastMultipole.data_per_body(system::VortexLatticeSystem)
     return 19
 end
 
-# function reset!(system::System{TF}) where TF
+# function reset!(system::VortexLatticeSystem{TF}) where TF
 #     system.potential .= zero(TF)
 # end
 
-function FastMultipole.get_position(system::System, i)
+function FastMultipole.get_position(system::VortexLatticeSystem, i)
     i_surf, i, j = fmm_to_vlm_index(system, i)
     if i > 0
         panel = system.surfaces[i_surf][i, j]
@@ -129,15 +129,15 @@ function FastMultipole.get_position(system::System, i)
     end
 end
 
-function FastMultipole.strength_dims(system::System)
+function FastMultipole.strength_dims(system::VortexLatticeSystem)
     return 1
 end
 
-FastMultipole.has_vector_potential(system::System) = true
+FastMultipole.has_vector_potential(system::VortexLatticeSystem) = true
 
 FastMultipole.get_n_bodies(sys::AbstractVector{<:AbstractMatrix}) = sum(size(m, 2) for m in sys)
 
-function FastMultipole.get_n_bodies(system::System)
+function FastMultipole.get_n_bodies(system::VortexLatticeSystem)
     n_bodies = length(system.Γ) # regular panels
     # add wake interface panels
     for isurf in eachindex(system.surfaces)
@@ -146,7 +146,7 @@ function FastMultipole.get_n_bodies(system::System)
     return n_bodies
 end
 
-# FastMultipole.body_to_multipole!(system::System, args...) = FastMultipole.body_to_multipole_quad!(Panel{Dipole}, system, args...)
+# FastMultipole.body_to_multipole!(system::VortexLatticeSystem, args...) = FastMultipole.body_to_multipole_quad!(Panel{Dipole}, system, args...)
 
 function body_to_multipole_vl!(multipole_coefficients, harmonics, x1, x2, center, gamma, expansion_order)
     # delta
@@ -160,7 +160,7 @@ function body_to_multipole_vl!(multipole_coefficients, harmonics, x1, x2, center
     FastMultipole.body_to_multipole_filament!(FastMultipole.Filament{FastMultipole.Vortex}, multipole_coefficients, harmonics, x0, xu, Gamma, expansion_order)
 end
 
-function FastMultipole.body_to_multipole!(system::System, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
+function FastMultipole.body_to_multipole!(system::VortexLatticeSystem, multipole_coefficients, buffer::Matrix, center, bodies_index, harmonics, expansion_order)
     # loop over bodies
     for i_body in bodies_index
 
@@ -191,7 +191,7 @@ function FastMultipole.body_to_multipole!(system::System, multipole_coefficients
     end
 end
 
-function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::System, source_buffer, source_index) where {PS,VS,GS}
+function FastMultipole.direct!(target_system, target_index, switch::DerivativesSwitch{PS,VS,GS}, source_system::VortexLatticeSystem, source_buffer, source_index) where {PS,VS,GS}
     @inbounds for i_source in source_index
         v1 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 1)
         v2 = FastMultipole.get_vertex(source_buffer, source_system, i_source, 2)
@@ -220,8 +220,8 @@ function FastMultipole.direct!(target_system, target_index, switch::DerivativesS
     end
 end
 
-function FastMultipole.buffer_to_target_system!(target_system::System, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
-    @warn "A VortexLattice.System object should not be used as a target in an FMM call."
+function FastMultipole.buffer_to_target_system!(target_system::VortexLatticeSystem, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
+    @warn "A VortexLattice.VortexLatticeSystem object should not be used as a target in an FMM call."
 end
 
 #------- FastMultipole compatibility functions for Vector{<:WakePanel} -------#
@@ -323,11 +323,11 @@ function FastMultipole.direct!(target_system, target_index, switch::DerivativesS
                 v += bound_induced_velocity(target-v1, target-v2, true, cs) * gamma
             end
         end
-        # see the comment on the same substitution in direct! for System, above
+        # see the comment on the same substitution in direct! for VortexLatticeSystem, above
         FastMultipole.set_gradient!(target_system, switch, j_target, v)
     end
 end
 
 function FastMultipole.buffer_to_target_system!(target_system::FilamentWrapper, i_target, ::FastMultipole.DerivativesSwitch{PS,VS,GS}, target_buffer, i_buffer) where {PS,VS,GS}
-    @warn "A VortexLattice.System.wakes object should not be used as a target in an FMM call."
+    @warn "A VortexLattice.VortexLatticeSystem.wakes object should not be used as a target in an FMM call."
 end

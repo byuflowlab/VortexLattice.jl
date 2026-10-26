@@ -47,7 +47,7 @@ beta = 0.0
 Omega = [0.0, 0.0, 0.0]
 
 function build_system(nwakerows=0)
-    system = System([grid]; ratios=[ratio], nw=[nwakerows])
+    system = VortexLatticeSystem([grid]; ratios=[ratio], nw=[nwakerows])
     for isurf in eachindex(system.surfaces)
         VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
             ratios=system.ratios[isurf], fcore=(c, Δs) -> system.core_size)

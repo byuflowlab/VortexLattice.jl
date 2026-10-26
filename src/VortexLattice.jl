@@ -50,7 +50,7 @@ include("induced.jl")
 include("circulation.jl")
 
 include("system.jl")
-export System
+export VortexLatticeSystem
 export PanelProperties, get_surface_properties
 
 include("analyses.jl")

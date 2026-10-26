@@ -103,7 +103,7 @@ translate!(pgrid2, o_p)
 grids = [wgrid, hgrid, vgrid, pgrid1, pgrid2]
 ratios = [wratio, hratio, vratio, pratio1, pratio2]
 surface_id = [1, 2, 3, 4, 5]
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 symmetric = [false, false, false, false, false]  # no implied symmetry
 
 # force generation of surface panels

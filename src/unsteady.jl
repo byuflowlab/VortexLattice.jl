@@ -27,7 +27,7 @@ function DerivativesMonitor(nt::Int, TF=Float64)
         CFp, CFq, CFr, CMalpha, CMbeta, CMp, CMq, CMr)
 end
 
-function (monitor::DerivativesMonitor)(system::System, wake, i_step::Int)
+function (monitor::DerivativesMonitor)(system::VortexLatticeSystem, wake, i_step::Int)
     CF, CM = stability_derivatives(system)
     monitor.CFalpha[i_step + 1] = CF.alpha
     monitor.CFbeta[i_step + 1] = CF.beta
@@ -54,7 +54,7 @@ function ForcesMonitor(nt::Int, TF=Float64; frame=Body())
     return ForcesMonitor{TF,typeof(frame)}(CF, CM, frame)
 end
 
-function (monitor::ForcesMonitor)(system::System, wake, i_step::Int)
+function (monitor::ForcesMonitor)(system::VortexLatticeSystem, wake, i_step::Int)
     CF, CM = body_forces(system.surfaces, system.properties,
                             system.reference[], system.freestream[], 
                             system.symmetric, monitor.frame)
@@ -69,13 +69,13 @@ struct PanelForcesMonitor{TF}
     nc::Int
 end
 
-function PanelForcesMonitor(nt::Int, system::System, TF=Float64; surface_index=1)
+function PanelForcesMonitor(nt::Int, system::VortexLatticeSystem, TF=Float64; surface_index=1)
     nc, ns = size(system.surfaces[surface_index])
     CF = zeros(TF, 3, nc, ns, nt)
     return PanelForcesMonitor{TF}(CF, surface_index, ns, nc)
 end
 
-function (monitor::PanelForcesMonitor)(system::System, wake, i_step::Int)
+function (monitor::PanelForcesMonitor)(system::VortexLatticeSystem, wake, i_step::Int)
     CF = view(monitor.CF, 1:3, 1:monitor.nc, 1:monitor.ns, i_step + 1)
     ns = monitor.ns
     nc = monitor.nc
@@ -95,7 +95,7 @@ struct LiftingLineCoefficientsMonitor{TF, F}
     normalized::Bool
 end
 
-function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; frame=Body(), normalized=true)
+function LiftingLineCoefficientsMonitor(nt::Int, system::VortexLatticeSystem, TF=Float64; frame=Body(), normalized=true)
     nsurf = length(system.surfaces)
     ns = zeros(Int, nsurf)
     CF = Vector{Array{TF, 3}}(undef, nsurf)
@@ -108,7 +108,7 @@ function LiftingLineCoefficientsMonitor(nt::Int, system::System, TF=Float64; fra
     return LiftingLineCoefficientsMonitor{TF,typeof(frame)}(CF, CM, ns, frame, normalized)
 end
 
-function (monitor::LiftingLineCoefficientsMonitor)(system::System, wake, i_step::Int)
+function (monitor::LiftingLineCoefficientsMonitor)(system::VortexLatticeSystem, wake, i_step::Int)
     cf, cm = lifting_line_coefficients(system; frame=monitor.frame, normalized=monitor.normalized)
     for isurf in 1:length(system.surfaces)
         CF = view(monitor.CF[isurf], 1:3, 1:monitor.ns[isurf], i_step + 1)
@@ -124,7 +124,7 @@ struct FrameForcesMonitor{TF,F}
     frame::F
 end
 
-function simulate!(system::System{TF}, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
+function simulate!(system::VortexLatticeSystem{TF}, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range;
         particle_trailing_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         particle_unsteady_methods=fill(OverlapPPS(1.3, 2), length(system.surfaces)),
         wake_args=(), kwargs...) where TF
@@ -148,7 +148,7 @@ Auto-construct a `PanelParticleWake` for `system` and drive the unsteady
 simulation. The `system` must have been allocated with `nw=fill(nwakerows, ...)`
 so that the panel buffer has the expected row count.
 """
-function simulate!(system::System, frames::AbstractVector{<:ReferenceFrame},
+function simulate!(system::VortexLatticeSystem, frames::AbstractVector{<:ReferenceFrame},
         maneuver!::Function, Vinf::Function, t_range,
         Ωinf::Function; wake_type::Type{PanelParticleWake},
         nwakerows::Int=size(system.wakes[1], 1),
@@ -186,7 +186,7 @@ function force!(val, force_val)
     val .= force_val
 end
 
-function check_for_nans(system::System)
+function check_for_nans(system::VortexLatticeSystem)
     if any(isnan.(system.Γ))
         error("NaN detected in circulation")
     end
@@ -668,12 +668,12 @@ function _simulate_step!(system, wake::ParticleField, frames, trailing_edge_fila
 end
 
 """
-    simulate!(system::System, wake::PanelParticleWake, frames, maneuver!, Vinf, t_range,
+    simulate!(system::VortexLatticeSystem, wake::PanelParticleWake, frames, maneuver!, Vinf, t_range,
               Ωinf=(t)->SVector{3}(0,0,0); kwargs...)
 
 Drive an unsteady simulation against a buffer-overflow `PanelParticleWake`.
 """
-function simulate!(system::System, wake::PanelParticleWake,
+function simulate!(system::VortexLatticeSystem, wake::PanelParticleWake,
         frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function,
         Vinf::Function, t_range, Ωinf=(t)->SVector{3}(0.0, 0.0, 0.0);
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
@@ -732,7 +732,7 @@ function simulate!(system::System, wake::PanelParticleWake,
     return wake
 end
 
-function simulate!(system::System, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range, Ωinf=(t)->SVector{3}(0.0, 0.0, 0.0);
+function simulate!(system::VortexLatticeSystem, wake::ParticleField, frames::AbstractVector{<:ReferenceFrame}, maneuver!::Function, Vinf::Function, t_range, Ωinf=(t)->SVector{3}(0.0, 0.0, 0.0);
         name="vortex_lattice_simulation", path="./vortex_lattice_simulation",
         vtk_args=(trailing_vortices=false, write_wakes=false), vtk_postshed=false,
         fmm_wake_args=(), fmm_vehicle_args=(),
@@ -816,7 +816,7 @@ function update_trailing_edge_filaments!(trailing_edge_filaments::FilamentWrappe
     end
 end
 
-function wake_on_all!(system::System, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_wake_args...)
+function wake_on_all!(system::VortexLatticeSystem, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_wake_args...)
     # reset probes
     FastMultipole.reset!(system.probes)
 
@@ -920,7 +920,7 @@ function get_max_particles(surface::AbstractMatrix{<:SurfacePanel}, method::NoSh
     return 0
 end
 
-function get_max_particles(system::System, particle_trailing_methods)
+function get_max_particles(system::VortexLatticeSystem, particle_trailing_methods)
     np = 0
     for (isurf, surface) in enumerate(system.surfaces)
         np += get_max_particles(surface, particle_trailing_methods[isurf])
@@ -934,7 +934,7 @@ function get_max_particles(system, particle_trailing_methods, particle_unsteady_
     return np_trailing + np_unsteady
 end
 
-function vehicle_on_all!(system::System, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_vehicle_args...)
+function vehicle_on_all!(system::VortexLatticeSystem, wake::ParticleField, trailing_edge_filaments::FilamentWrapper; fmm_vehicle_args...)
     # reset probes
     FastMultipole.reset!(system.probes)
 

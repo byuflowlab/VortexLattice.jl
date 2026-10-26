@@ -37,9 +37,11 @@ Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
 Base.eltype(::PanelProperties{TF}) where TF = TF
 
 """
-    System{TF}
+    VortexLatticeSystem{TF}
 
-Contains pre-allocated storage for internal system variables.
+A set of lifting surfaces solved together: their grids and panels, the shared influence
+coefficient matrix and its factorization, the circulation and the loads. Surfaces may sit on
+different reference frames; all of them are solved in one linear system.
 
 # Fields:
  - `AIC`: Aerodynamic influence coefficient matrix from the surface panels
@@ -65,7 +67,7 @@ Contains pre-allocated storage for internal system variables.
  - `surface_finite_core`: Flag for each surface indicating whether the finite core
     model should be enabled when calculating a bound surface's influence on itself
     (both `influence_coefficients!` and `update_trailing_edge_coefficients!` read
-    this as their `force_finite_core` argument). Set at `System` construction
+    this as their `force_finite_core` argument). Set at `VortexLatticeSystem` construction
     (defaults to `true` for each surface); `simulate!` reads it as-is rather than
     choosing it internally.
  - `near_field_analysis`: Flag indicating whether a near field analysis has been
@@ -83,7 +85,7 @@ Contains pre-allocated storage for internal system variables.
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
  - `probes`: FastMultipole probe system for FMM interactions
 """
-struct System{TF}
+struct VortexLatticeSystem{TF}
     AIC::Matrix{TF}
     fAIC::Array{LU{TF, Matrix{TF}, Vector{Int64}}, 0}
     w::Vector{TF}
@@ -120,13 +122,13 @@ struct System{TF}
     core_size::TF
 end
 
-Base.eltype(::Type{System{TF}}) where TF = TF
-Base.eltype(::System{TF}) where TF = TF
+Base.eltype(::Type{VortexLatticeSystem{TF}}) where TF = TF
+Base.eltype(::VortexLatticeSystem{TF}) where TF = TF
 
 """
-    System([TF], surfaces; kwargs...)
+    VortexLatticeSystem([TF], surfaces; kwargs...)
 
-Return an object of type `System` with pre-allocated storage for internal system
+Return an object of type `VortexLatticeSystem` with pre-allocated storage for internal system
 variables
 
 # Arguments:
@@ -146,38 +148,38 @@ variables
  - `grids`: Grids of the surfaces, represented by matrices of vertices
  - `ratios`: Ratios of the locations of each control point on each panel
 """
-System(args...; kwargs...)
+VortexLatticeSystem(args...; kwargs...)
 
 # grid inputs, no provided type
-function System(grids::AbstractVector{<:AbstractArray{TF, 3}}; kwargs...) where TF
+function VortexLatticeSystem(grids::AbstractVector{<:AbstractArray{TF, 3}}; kwargs...) where TF
 
-    return System(TF, grids; kwargs...)
+    return VortexLatticeSystem(TF, grids; kwargs...)
 end
 
 # grid inputs, provided type
-function System(TF::Type, grids::AbstractVector{<:AbstractArray{<:Any, 3}}; kwargs...)
+function VortexLatticeSystem(TF::Type, grids::AbstractVector{<:AbstractArray{<:Any, 3}}; kwargs...)
 
     nc = size.(grids, 2) .- 1
     ns = size.(grids, 3) .- 1
 
-    return System(TF, nc, ns; grids=grids, kwargs...)
+    return VortexLatticeSystem(TF, nc, ns; grids=grids, kwargs...)
 end
 
 # surface inputs, no provided type
-function System(surfaces::AbstractVector{<:AbstractMatrix{SurfacePanel{TF}}};
+function VortexLatticeSystem(surfaces::AbstractVector{<:AbstractMatrix{SurfacePanel{TF}}};
     kwargs...) where TF
 
-    return System(TF, surfaces; kwargs...)
+    return VortexLatticeSystem(TF, surfaces; kwargs...)
 end
 
 # surface inputs, provided type
-function System(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}};
+function VortexLatticeSystem(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}};
     kwargs...)
 
     nc = size.(surfaces, 1)
     ns = size.(surfaces, 2)
 
-    return System(TF, nc, ns; kwargs...)
+    return VortexLatticeSystem(TF, nc, ns; kwargs...)
 end
 
 """
@@ -203,9 +205,9 @@ function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}}, nw=zer
 end
 
 """
-    System(TF, nc, ns; nw = zero(nc))
+    VortexLatticeSystem(TF, nc, ns; nw = zero(nc))
 
-Return an object of type `System` with pre-allocated storage for internal system
+Return an object of type `VortexLatticeSystem` with pre-allocated storage for internal system
 variables
 
 # Arguments:
@@ -219,7 +221,7 @@ variables
  - `grids`: Grids of the surfaces, represented by matrices of vertices
  - `ratios`: Ratios of the locations of each control point on each panel
 """
-function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing,
+function VortexLatticeSystem(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothing,
     core_size = 1e-3, surface_finite_core = nothing)
 
     @assert length(nc) == length(ns) == length(nw)
@@ -275,14 +277,14 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     n_probes = get_n_probes(surfaces, nw)
     probes = ProbeSystem(n_probes, TF)
 
-    return System{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
+    return VortexLatticeSystem{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id,
         wake_finite_core, surface_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
         Vv, Vte, dΓdt, probes, core_size)
 end
 
-function update_probes!(system::System{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
+function update_probes!(system::VortexLatticeSystem{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
     i_probe = 1
 
     # Vcp
@@ -370,7 +372,7 @@ function update_probes!(system::System{TF}; nwake_active::Union{Nothing, Vector{
     return i_probe - 1  # return number of active probes
 end    
 
-function probes_to_surfaces!(system::System{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
+function probes_to_surfaces!(system::VortexLatticeSystem{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
     i_probe = 1
     
     # Vcp

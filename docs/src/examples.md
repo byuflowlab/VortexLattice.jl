@@ -58,7 +58,7 @@ grids=[grid]
 ratios=[ratio]
 
 # Construct the system
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 # we can use symmetry since the geometry and flow conditions are symmetric about the X-Z axis
 symmetric = true
@@ -131,7 +131,7 @@ grids=[grid]
 ratios=[ratio]
 
 # Construct the system
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 # perform steady state analysis
 steady_analysis!(system, ref, fs; symmetric=symmetric)
@@ -320,7 +320,7 @@ grids = [grid]
 ratios = [ratio]
 
 # create the system object
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 # perform steady state analysis
 steady_analysis!(system, ref, fs; symmetric=symmetric)
@@ -531,7 +531,7 @@ grids = [wgrid, hgrid, vgrid]
 ratios = [wratio, hratio, vratio]
 surface_id = [1, 2, 3]
 
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
@@ -734,7 +734,7 @@ grids = [wgrid, hgrid, vgrid]
 ratios = [wratio, hratio, vratio]
 surface_id = [1, 2, 3]
 
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 # overwrite normal vector for each wing panel
 for i = 1:length(system.surfaces[1])
@@ -1401,7 +1401,7 @@ symmetric = false
 ratios = [ratio]
 grids = [grid]
 
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 
 steady_analysis!(system, ref, fs; symmetric=symmetric)
 write_vtk("samplewing", system)

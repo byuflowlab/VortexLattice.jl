@@ -927,12 +927,12 @@ function PanelParticleWake(system;
     nsurf = length(system.surfaces)
 
     for i in 1:nsurf
-        @assert size(system.wakes[i], 1) == nwakerows "System.wakes[$i] has " *
+        @assert size(system.wakes[i], 1) == nwakerows "VortexLatticeSystem.wakes[$i] has " *
             "$(size(system.wakes[i], 1)) rows but PanelParticleWake expects " *
-            "nwakerows=$nwakerows. Rebuild the System with nw=fill($nwakerows, nsurf)."
+            "nwakerows=$nwakerows. Rebuild the VortexLatticeSystem with nw=fill($nwakerows, nsurf)."
     end
 
-    # Alias panel-wake storage from System (shared arrays — not copies).
+    # Alias panel-wake storage from VortexLatticeSystem (shared arrays — not copies).
     wakes = system.wakes
     wake_shedding_locations = system.wake_shedding_locations
     wake_velocities = system.V             # persistent wake-node velocity buffer
@@ -1006,7 +1006,7 @@ function reset!(w::PanelParticleWake)
 end
 
 """
-    update_TE!(w::PanelParticleWake, system::System)
+    update_TE!(w::PanelParticleWake, system::VortexLatticeSystem)
 
 Snap the first row of wake panels to the current `wake_shedding_locations`,
 preserving the bottom edge, core size, and circulation of each panel.
@@ -1224,7 +1224,7 @@ function _shed_wake_particles_only!(w::PanelParticleWake{TF}, system, Gamma;
 end
 
 """
-    shed_wake!(w::PanelParticleWake, system::System, dt, Gamma)
+    shed_wake!(w::PanelParticleWake, system::VortexLatticeSystem, dt, Gamma)
 
 Advance the hybrid wake one step: convert the oldest row of any surface whose
 buffer is full into particles, shed a new row of wake panels at the trailing

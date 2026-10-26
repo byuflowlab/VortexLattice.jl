@@ -2,7 +2,7 @@
     steady_analysis(surfaces, reference, freestream; kwargs...)
 
 Perform a steady vortex lattice method analysis.  Return an object of type
-[`System`](@ref) containing the system state.
+[`VortexLatticeSystem`](@ref) containing the system state.
 
 # Arguments
  - `surfaces`:
@@ -52,7 +52,7 @@ Perform a steady vortex lattice method analysis.  Return an object of type
 function steady_analysis(grids, reference, freestream; kwargs...)
 
     # pre-allocate system storage
-    system = System(grids)
+    system = VortexLatticeSystem(grids)
 
     return steady_analysis!(system, reference, freestream; kwargs...,
         calculate_influence_matrix = true)
@@ -63,6 +63,15 @@ end
 
 Pre-allocated version of `steady_analysis`.
 """
+# A mirrored half (symmetric = true) is exact only in symmetric flight: sideslip or a roll
+# or yaw rate is mirrored too, which silently zeroes the lateral loads (CL 3.4x off at a
+# roll rate of 0.05, checked 2026-10-26 against the full mirrored wing).
+function _check_symmetric_flight(fs)
+    (iszero(fs.beta) && iszero(fs.Omega[1]) && iszero(fs.Omega[3])) || throw(ArgumentError(
+        "symmetric = true needs symmetric flight (beta = 0, no roll or yaw rate); model the full surface (mirror = true in wing_to_grid) instead"))
+    return nothing
+end
+
 function steady_analysis!(system, ref, fs;
     symmetric = fill(false, length(system.surfaces)),
     wakes = [Matrix{WakePanel{Float64}}(undef, 0, size(system.surfaces[i],2)) for i = 1:length(system.surfaces)],
@@ -84,6 +93,7 @@ function steady_analysis!(system, ref, fs;
     symmetric = isa(symmetric, Number) ? fill(symmetric, nsurf) : symmetric
     nwake = isa(nwake, Number) ? fill(nwake, nsurf) : nwake
     surface_id = isa(surface_id, Number) ? fill(surface_id, nsurf) : surface_id
+    any(symmetric) && _check_symmetric_flight(fs)
     wake_finite_core = isa(wake_finite_core, Number) ? fill(wake_finite_core, nsurf) : wake_finite_core
     trailing_vortices = isa(trailing_vortices, Number) ? fill(trailing_vortices, nsurf) : trailing_vortices
 
@@ -198,7 +208,7 @@ end
     unsteady_analysis(surfaces, reference, freestream, dt; kwargs...)
 
 Perform a unsteady vortex lattice method analysis.  Return an object of type
-[`System`](@ref) containing the final system state, a matrix of surface panels
+[`VortexLatticeSystem`](@ref) containing the final system state, a matrix of surface panels
 (see [`SurfacePanel`](@ref) for each surface at each time step, a matrix of surface
 panel properties (see [`PanelProperties`](@ref)) for each surface at each time step,
 and a matrix of wake panels (see [`WakePanel`](@ref)) for each surface at each time
@@ -255,7 +265,7 @@ function unsteady_analysis(surfaces::AbstractVector{<:AbstractArray}, ref, fs, d
     nwake = fill(length(dt), length(surfaces)), kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces; nw = nwake)
+    system = VortexLatticeSystem(surfaces; nw = nwake)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -266,7 +276,7 @@ function unsteady_analysis(surfaces::AbstractVector{<:AbstractVector{<:AbstractA
     ref, fs, dt; nwake = fill(length(dt), length(surfaces[1])), kwargs...)
 
     # pre-allocate system storage
-    system = System(surfaces[1]; nw = nwake)
+    system = VortexLatticeSystem(surfaces[1]; nw = nwake)
 
     return unsteady_analysis!(system, surfaces, ref, fs, dt;
         kwargs..., nwake, calculate_influence_matrix = true)
@@ -318,7 +328,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
         initial_surfaces = surfaces
     end
 
-    # --- Update System Parameters --- #
+    # --- Update VortexLatticeSystem Parameters --- #
 
     system.reference[] = ref
     system.symmetric .= symmetric

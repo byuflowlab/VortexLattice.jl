@@ -58,7 +58,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -87,7 +87,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -146,7 +146,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -205,7 +205,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -281,7 +281,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -358,7 +358,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -474,7 +474,7 @@ end
     ratios = [wratio, hratio, vratio]
     surface_id = [1, 1, 1]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
 
@@ -588,7 +588,7 @@ end
     ratios = [wratio, hratio, vratio]
     surface_id = [1, 2, 3]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id, derivatives=false)
 
@@ -648,7 +648,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -708,7 +708,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -770,7 +770,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -826,7 +826,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -898,7 +898,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -955,7 +955,7 @@ end
     grids = [grid]
     ratios = [ratio]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
 
@@ -1434,7 +1434,7 @@ end
     surfaces = [surface]
     ratios = [ratios]
 
-    system = System(grids; ratios)
+    system = VortexLatticeSystem(grids; ratios)
 
     steady_analysis!(system, ref, fs; symmetric=symmetric)
     CF, CM = body_forces(system; frame=Wind())
@@ -1452,7 +1452,7 @@ function _build_short_restart_case()
         [1.0, 1.0], [0.0, 0.0], [0.0, 0.0], 2, 1;
         mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
 
-    system = System([grid]; nw=[2], ratios=[ratios])
+    system = VortexLatticeSystem([grid]; nw=[2], ratios=[ratios])
     system.reference[] = Reference(2.0, 1.0, 2.0, [0.0, 0.0, 0.0], 10.0)
     system.freestream[] = Freestream(10.0, 0.0, 0.0, [0.0, 0.0, 0.0])
 
@@ -1571,7 +1571,7 @@ VortexLattice.sectional_coefficients(p::ViscousTestPolar, alpha, Re, Mach) = (p.
 function _viscous_wing_CF(polar; ns=6, nt=6, aoa=4.2, Vinf=50.0)
     grid, ratios = wing_to_grid([0.0, 0.5], [0.0, 1.25], zeros(2), [0.5, 0.5], zeros(2), zeros(2), ns, 1;
         spacing_s=Uniform(), spacing_c=Uniform(), mirror=true)
-    system = System([grid]; ratios=[ratios], nw=[1])
+    system = VortexLatticeSystem([grid]; ratios=[ratios], nw=[1])
     system.reference[] = Reference(2.5 * 0.5, 0.5, 2.5, [0.0, 0.0, 0.0], Vinf)
     system.freestream[] = Freestream(Vinf, deg2rad(aoa), 0.0, [0.0, 0.0, 0.0])
     for isurf in eachindex(system.surfaces)
@@ -1610,6 +1610,28 @@ end
     # a constant section cd adds that drag along the freestream
     CF, _ = _viscous_wing_CF(ViscousTestPolar(1.0, 0.01))
     @test isapprox(dot(CF - CF0, freestream_body), 0.01; rtol=0.02)
+end
+
+@testset "Symmetric solve needs symmetric flight" begin
+    # AVL run 1's wing, as a mirrored half and as the full span
+    function run1(; mirror, symmetric, beta = 0.0, Omega = [0.0, 0.0, 0.0])
+        theta = [2.0, 2.0] .* pi / 180
+        grid, ratio = wing_to_grid([0.0, 0.4], [0.0, 7.5], [0.0, 0.0], [2.2, 1.8] ./ cos.(theta), theta, [0.0, 0.0], 12, 1;
+            mirror, spacing_s=Uniform(), spacing_c=Uniform())
+        system = VortexLatticeSystem([grid]; ratios=[ratio])
+        steady_analysis!(system, Reference(30.0, 2.0, 15.0, [0.50, 0.0, 0.0], 1.0),
+            Freestream(1.0, 2.0 * pi / 180, beta, Omega); symmetric)
+        return system
+    end
+    # symmetric flight: the half equals the full span
+    CF_half, _ = body_forces(run1(; mirror=false, symmetric=true); frame=Stability())
+    CF_full, _ = body_forces(run1(; mirror=true, symmetric=false); frame=Stability())
+    @test isapprox(CF_half, CF_full; atol=1e-12)
+    # asymmetric flight or lateral derivatives on a half: refused, not silently wrong
+    @test_throws ArgumentError run1(; mirror=false, symmetric=true, beta=5.0 * pi / 180)
+    @test_throws ArgumentError run1(; mirror=false, symmetric=true, Omega=[0.05, 0.0, 0.0])
+    @test_throws ArgumentError run1(; mirror=false, symmetric=true, Omega=[0.0, 0.0, 0.05])
+    @test_throws ArgumentError stability_derivatives(run1(; mirror=false, symmetric=true))
 end
 
 include("fmm_test.jl")

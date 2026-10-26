@@ -1,6 +1,6 @@
 #=
 The frame tree is SixDOF's (`ReferenceFrame`, `add_frame!`, `propagate_kinematics!`). Each
-surface of a `System` is one geometry of the tree: `SixDOF.move` rotates and translates its
+surface of a `VortexLatticeSystem` is one geometry of the tree: `SixDOF.move` rotates and translates its
 grid in place.
 =#
 
@@ -18,7 +18,7 @@ struct ForwardRightDown end
 
 struct BackRightUp end
 
-function propagate_kinematics!(system::System, frames::Vector{<:ReferenceFrame}, dt::Real)
+function propagate_kinematics!(system::VortexLatticeSystem, frames::Vector{<:ReferenceFrame}, dt::Real)
     propagate_kinematics!([SurfaceGrid(system, i) for i in eachindex(system.grids)], frames, dt)
 
     # update panels
@@ -27,7 +27,7 @@ function propagate_kinematics!(system::System, frames::Vector{<:ReferenceFrame},
     end
 end
 
-function rotate_translate!(system::System, i, origin, Rω, dx)
+function rotate_translate!(system::VortexLatticeSystem, i, origin, Rω, dx)
     # get grid
     grid = system.grids[i]
 
@@ -53,7 +53,7 @@ function rotate_translate!(system::System, i, origin, Rω, dx)
     end
 end
 
-function rotate_translate!(system::System{TF}, i, origin::SVector{3}, Rω::SMatrix{3,3}, dx::SVector{3}) where TF
+function rotate_translate!(system::VortexLatticeSystem{TF}, i, origin::SVector{3}, Rω::SMatrix{3,3}, dx::SVector{3}) where TF
     # get grid
     grid::Array{TF,3} = system.grids[i]
 
@@ -79,7 +79,7 @@ function rotate_translate!(system::System{TF}, i, origin::SVector{3}, Rω::SMatr
     end
 end
 
-function ReferenceFrame(system::System{TF};
+function ReferenceFrame(system::VortexLatticeSystem{TF};
         # vvv all in global frame vvv
         origin = system.reference.rref,
         v = zero(SVector{3,TF}),

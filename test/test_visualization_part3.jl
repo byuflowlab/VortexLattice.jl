@@ -5,7 +5,7 @@ using VortexLattice
 using FLOWVPM
 const VL = VortexLattice
 
-@testset "Part 3: write_vtk(System) and write_vtk(PanelParticleWake)" begin
+@testset "Part 3: write_vtk(VortexLatticeSystem) and write_vtk(PanelParticleWake)" begin
 
     # --- minimal rectangular wing ---
     c  = 1.0
@@ -24,7 +24,7 @@ const VL = VortexLattice
         mirror=false, fc=fc, spacing_s=VL.Uniform(), spacing_c=VL.Uniform())
 
     nwakerows = 3
-    system = VL.System([grid]; nw=[nwakerows], ratios=[ratios])
+    system = VL.VortexLatticeSystem([grid]; nw=[nwakerows], ratios=[ratios])
 
     # reference + freestream so steady_analysis! populates properties / Γ
     Vinf_mag = 10.0

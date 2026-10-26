@@ -21,7 +21,7 @@ grid, ratios = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
     mirror=false, fc=fc, spacing_s=Uniform(), spacing_c=Uniform())
 
 nwakerows = 3
-system = System([grid]; nw=[nwakerows], ratios=[ratios])
+system = VortexLatticeSystem([grid]; nw=[nwakerows], ratios=[ratios])
 
 # reference / initial freestream
 Vinf_mag = 10.0
@@ -80,7 +80,7 @@ function build_restart_case()
     grid, ratios = wing_to_grid(xle, yle, zle, chord, theta, phi, 2, 2;
         mirror=false, fc=fc, spacing_s=Uniform(), spacing_c=Uniform())
 
-    system = System([grid]; nw=[2], ratios=[ratios])
+    system = VortexLatticeSystem([grid]; nw=[2], ratios=[ratios])
     ref = Reference(b*c, c, b, [0.0, 0.0, 0.0], 10.0)
     system.reference[] = ref
     system.freestream[] = Freestream(10.0, 0.0, 0.0, [0.0, 0.0, 0.0])

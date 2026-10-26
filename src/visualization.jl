@@ -6,7 +6,7 @@ Write geometry from surfaces and/or wakes to Paraview files for visualization.
 
 # Arguments
  - `name`: Base name for the generated files
- - `system`: System object containing surfaces and/or wakes
+ - `system`: VortexLatticeSystem object containing surfaces and/or wakes
 
 # Keyword Arguments:
     - `write_surfaces = true`: Flag indicating whether to write surface geometry
@@ -78,7 +78,7 @@ function _trailing_line_cells(ns::Int; trailing_vortices::Bool)
     end
 end
 
-function write_vtk(name::String, system::System; write_surfaces = true, write_wakes = false, xhat = system.xhat[], 
+function write_vtk(name::String, system::VortexLatticeSystem; write_surfaces = true, write_wakes = false, xhat = system.xhat[], 
     trailing_edge_list=nothing, kwargs...)
 
     trailing_edge_list = isnothing(trailing_edge_list) ? fill(true, length(system.surfaces)) : trailing_edge_list
@@ -287,7 +287,7 @@ function write_vtk(name, surface_history::AbstractVector{<:AbstractVector{<:Abst
 end
 
 """
-    write_vtk(name, system::System, idx, t; overwrite=false)
+    write_vtk(name, system::VortexLatticeSystem, idx, t; overwrite=false)
 
 Append one time step of `system`'s body geometry to a ParaView PVD collection.
 The `.pvd` file is written at `name.pvd` and per-step multiblock files are
@@ -520,7 +520,7 @@ function _flatten_grids(grids, TF)
 end
 
 function _append_restart_checkpoint!(writer::_RestartCheckpointWriterState, idx::Int, t::Real,
-        system::System, wake::PanelParticleWake, frames::AbstractVector)
+        system::VortexLatticeSystem, wake::PanelParticleWake, frames::AbstractVector)
     TF = eltype(system.Γ)
     fname = "restart_" * lpad(string(idx), 8, '0') * ".vtp"
     fpath = joinpath(writer.dir, fname)
@@ -589,7 +589,7 @@ Write a full VTK restart checkpoint that can be resumed later with
 [`restore_restart!`](@ref).
 """
 function write_restart_checkpoint(name::String, idx::Int, t::Real,
-        system::System, wake::PanelParticleWake, frames::AbstractVector;
+        system::VortexLatticeSystem, wake::PanelParticleWake, frames::AbstractVector;
         overwrite::Bool=false)
     writer = _init_restart_checkpoint_writer(name; overwrite)
     _append_restart_checkpoint!(writer, idx, t, system, wake, frames)
@@ -671,7 +671,7 @@ end
 Load a VTK restart checkpoint and apply it in one call. Returns `(idx, t)` for
 the resolved restart step.
 """
-function restore_restart!(system::System{TF}, wake::PanelParticleWake{TF},
+function restore_restart!(system::VortexLatticeSystem{TF}, wake::PanelParticleWake{TF},
         frames::AbstractVector{<:ReferenceFrame{TF}}, name::String;
         idx::Union{Nothing,Int}=nothing) where TF
     info = read_restart_checkpoint_info(name; idx)
@@ -817,7 +817,7 @@ function restore_restart!(system::System{TF}, wake::PanelParticleWake{TF},
     return (idx=info.idx, t=info.t)
 end
 
-function _init_system_vtk_writer(name::String, system::System; overwrite::Bool=false)
+function _init_system_vtk_writer(name::String, system::VortexLatticeSystem; overwrite::Bool=false)
     _parent, _base = splitdir(name)
     subdir = joinpath(_parent, _base)
     mkpath(subdir)
@@ -836,7 +836,7 @@ function _init_system_vtk_writer(name::String, system::System; overwrite::Bool=f
     return _SystemVTKWriterState(pvd, block_name, scratch, log_io)
 end
 
-function _append_system_vtk!(writer::_SystemVTKWriterState, system::System, idx::Int, t::Real)
+function _append_system_vtk!(writer::_SystemVTKWriterState, system::VortexLatticeSystem, idx::Int, t::Real)
     vtm = vtk_multiblock(writer.block_name * "_$idx.vtm")
     for i = 1:length(system.surfaces)
         write_vtk!(vtm, system.surfaces[i], system.properties[i];
@@ -850,7 +850,7 @@ function _append_system_vtk!(writer::_SystemVTKWriterState, system::System, idx:
     return nothing
 end
 
-function _append_step_log!(writer::_SystemVTKWriterState, system::System, wake::PanelParticleWake, i_step::Int, t::Real)
+function _append_step_log!(writer::_SystemVTKWriterState, system::VortexLatticeSystem, wake::PanelParticleWake, i_step::Int, t::Real)
     fs = system.freestream[]
     Ω = fs.Omega
     overflowed = wake.overflowed[] ? 1 : 0
@@ -866,7 +866,7 @@ function _save_system_vtk_writer!(writer::_SystemVTKWriterState)
     return nothing
 end
 
-function write_vtk(name::String, system::System, idx::Int, t::Real; overwrite::Bool=false)
+function write_vtk(name::String, system::VortexLatticeSystem, idx::Int, t::Real; overwrite::Bool=false)
     writer = _init_system_vtk_writer(name, system; overwrite)
     _append_system_vtk!(writer, system, idx, t)
     _save_system_vtk_writer!(writer)

@@ -31,7 +31,7 @@ w1grid, w1ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc; fc = fc
 grids = [w1grid]
 ratios = [w1ratio]
 surface_id = [1]
-system = System(grids; ratios)
+system = VortexLatticeSystem(grids; ratios)
 system.reference[] = ref
 symmetric = [false for _ in grids]  # no implied symmetry
 

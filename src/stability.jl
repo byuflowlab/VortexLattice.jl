@@ -11,7 +11,7 @@ Note that the derivatives with respect to the freestream variables of the panel
 forces must have been previously computed and stored in `system`
 
 # Arguments:
- - `system`: Object of type `System` which holds system properties
+ - `system`: Object of type `VortexLatticeSystem` which holds system properties
 """
 function body_derivatives(system)
 
@@ -61,9 +61,13 @@ Note that the derivatives with respect to the freestream variables of the panel
 forces must have been previously computed and stored in `system`
 
 # Arguments:
- - `system`: Object of type `System` which holds system properties
+ - `system`: Object of type `VortexLatticeSystem` which holds system properties
 """
 function stability_derivatives(system)
+
+    # a mirrored half has no lateral response, so its beta, p and r derivatives are wrong
+    any(system.symmetric) && throw(ArgumentError(
+        "stability derivatives need the full surface: run steady_analysis! with symmetric = false (and mirror = true in wing_to_grid)"))
 
     CFb, CMb, dCFb, dCMb = body_forces_derivatives(system)
 

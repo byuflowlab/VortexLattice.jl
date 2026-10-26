@@ -516,13 +516,13 @@ Note that this function assumes that a near-field analysis has already been
 performed to obtain the panel forces.
 
 # Arguments
- - `system`: Object of type [`System`](@ref) which holds system properties
+ - `system`: Object of type [`VortexLatticeSystem`](@ref) which holds system properties
 
 # Keyword Arguments
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
    [`Stability()`](@ref), and [`Wind()`](@ref)`
 """
-function body_forces(system::System{TF}; frame = Body()) where TF
+function body_forces(system::VortexLatticeSystem{TF}; frame = Body()) where TF
 
     @assert system.near_field_analysis[] "Near field analysis required"
 
@@ -636,9 +636,9 @@ Note that this function assumes that a near-field analysis has already been
 performed to obtain the panel forces.
 
 # Arguments:
- - `system`: Object of type `System` which holds system properties
+ - `system`: Object of type `VortexLatticeSystem` which holds system properties
 """
-function body_forces_derivatives(system::System)
+function body_forces_derivatives(system::VortexLatticeSystem)
 
     # float number type
     TF = eltype(system)
@@ -840,7 +840,7 @@ end
 Return the body force coefficients `CF`, `CM` at each time step in `property_history`.
 
 # Arguments:
- - `system`: Object of type [`System`](@ref) which holds system properties
+ - `system`: Object of type [`VortexLatticeSystem`](@ref) which holds system properties
  - `surface_history`: Vector of surfaces at each time step, where each surface is
     represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
     (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
@@ -896,7 +896,7 @@ This function requires that a near-field analysis has been performed on `system`
 to obtain panel forces.
 
 # Arguments
- - `system`: Object of type [`System`](@ref) that holds precalculated
+ - `system`: Object of type [`VortexLatticeSystem`](@ref) that holds precalculated
     system properties.
  - `r`: Vector with length equal to the number of surfaces, with each element
     being a matrix with size (3, ns+1) which contains the x, y, and z coordinates
