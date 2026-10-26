@@ -1561,4 +1561,55 @@ end
     @test isapprox(monitor_fd.velocity[1, 2, 2][1], Vinf_ref; rtol=0.15)
 end
 
+# A polar through the sectional_coefficients interface: cl = scale * 2πα, constant cd
+struct ViscousTestPolar
+    scale::Float64
+    cd::Float64
+end
+VortexLattice.sectional_coefficients(p::ViscousTestPolar, alpha, Re, Mach) = (p.scale * 2pi * alpha, p.cd)
+
+function _viscous_wing_CF(polar; ns=6, nt=6, aoa=4.2, Vinf=50.0)
+    grid, ratios = wing_to_grid([0.0, 0.5], [0.0, 1.25], zeros(2), [0.5, 0.5], zeros(2), zeros(2), ns, 1;
+        spacing_s=Uniform(), spacing_c=Uniform(), mirror=true)
+    system = System([grid]; ratios=[ratios], nw=[1])
+    system.reference[] = Reference(2.5 * 0.5, 0.5, 2.5, [0.0, 0.0, 0.0], Vinf)
+    system.freestream[] = Freestream(Vinf, deg2rad(aoa), 0.0, [0.0, 0.0, 0.0])
+    for isurf in eachindex(system.surfaces)
+        VortexLattice.update_surface_panels!(system.surfaces[isurf], system.grids[isurf];
+            ratios=system.ratios[isurf], fcore=(c, Δs) -> system.core_size)
+    end
+    # body frame flipped in x and z relative to global, as in test/weber_wing.jl
+    frames = ReferenceFrame(system; origin=SVector(0.0, 0.0, -10.0), v=SVector(0.0, 0.0, 0.0),
+        ω_axis=SVector(0.0, 1.0, 0.0), ω=0.0, R=SMatrix{3,3}(-1.0, 0, 0, 0, 1.0, 0, 0, 0, -1.0),
+        name="vehicle", child_index=Int[], dependent_index=[1])
+    a = deg2rad(aoa)
+    Uinf(t) = SVector(Vinf * cos(a), 0.0, Vinf * sin(a))
+    Ωinf(t) = SVector(0.0, 0.0, 0.0)
+    monitors = (VortexLattice.ForcesMonitor(nt),)
+    simulate!(system, frames, (frames, system, wake, t) -> nothing, Uinf, range(0.0, 0.05; length=nt), Ωinf;
+        wake_type=PanelParticleWake, nwakerows=1, max_particles=2000,
+        method_trailing=OverlapPPS(1.3, 1), method_unsteady=NoShed(),
+        monitors, derivatives=false, path=nothing, verbose=false,
+        polars=isnothing(polar) ? nothing : [fill(polar, 2ns)], frames_index=[1])
+    freestream_body = SVector(-cos(a), 0.0, -sin(a))
+    return monitors[1].CF[end], freestream_body
+end
+
+@testset "Viscous correction (viscous!)" begin
+    CF0, freestream_body = _viscous_wing_CF(nothing)
+
+    # a thin-airfoil polar agrees with the vortex lattice: no correction
+    CF, _ = _viscous_wing_CF(ViscousTestPolar(1.0, 0.0))
+    @test isapprox(CF, CF0; atol=1e-12)
+
+    # 10% less section lift lowers the wing lift, by less than 10% once the
+    # circulation responds
+    CF, _ = _viscous_wing_CF(ViscousTestPolar(0.9, 0.0))
+    @test 0.85 < CF[3] / CF0[3] < 0.95
+
+    # a constant section cd adds that drag along the freestream
+    CF, _ = _viscous_wing_CF(ViscousTestPolar(1.0, 0.01))
+    @test isapprox(dot(CF - CF0, freestream_body), 0.01; rtol=0.02)
+end
+
 include("fmm_test.jl")
