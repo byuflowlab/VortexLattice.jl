@@ -83,7 +83,6 @@ different reference frames; all of them are solved in one linear system.
  - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
- - `probes`: FastMultipole probe system for FMM interactions
 """
 struct VortexLatticeSystem{TF}
     AIC::Matrix{TF}
@@ -118,7 +117,6 @@ struct VortexLatticeSystem{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
-    probes::ProbeSystem{TF}
     core_size::TF
 end
 
@@ -180,28 +178,6 @@ function VortexLatticeSystem(TF::Type, surfaces::AbstractVector{<:AbstractMatrix
     ns = size.(surfaces, 2)
 
     return VortexLatticeSystem(TF, nc, ns; kwargs...)
-end
-
-"""
-Get the number of probes for the given surfaces.
-
-# Arguments
-- `surfaces`: Vector of matrices of surface panels (see [`SurfacePanel`](@ref))
-
-# Returns
-- Number of probes
-"""
-function get_n_probes(surfaces::Vector{<:AbstractMatrix{<:SurfacePanel}}, nw=zeros(Int, length(surfaces)))
-    n = 0
-    for (i, surface) in enumerate(surfaces)
-        nc, ns = size(surface)
-        n += nc * ns              # Vcp
-        n += (nc + 1) * ns       # Vh
-        n += nc * (ns + 1)       # Vv
-        n += ns + 1              # Vte
-        n += (nw[i] + 1) * (ns + 1)  # V (all allocated wake node rows)
-    end
-    return n
 end
 
 """
@@ -273,198 +249,11 @@ function VortexLatticeSystem(TF::Type, nc, ns; nw = zero(nc), grids = nothing, r
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
 
-    # get number of probes
-    n_probes = get_n_probes(surfaces, nw)
-    probes = ProbeSystem(n_probes, TF)
-
     return VortexLatticeSystem{TF}(AIC, fAIC, w, Γ, V, grids, ratios, surfaces,
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id,
         wake_finite_core, surface_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt, probes, core_size)
-end
-
-function update_probes!(system::VortexLatticeSystem{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
-    i_probe = 1
-
-    # Vcp
-    for surface in system.surfaces
-        nc, ns = size(surface)
-        for j in 1:ns
-            for k in 1:nc
-                system.probes.position[i_probe] = surface[k, j].rcp
-                i_probe += 1
-            end
-        end
-    end
-
-    # Vh
-    for surface in system.surfaces
-        nc, ns = size(surface)
-        for j in 1:ns
-            for k in 1:nc
-                system.probes.position[i_probe] = surface[k, j].rtc
-                i_probe += 1
-            end
-            system.probes.position[i_probe] = surface[nc, j].rbc
-            i_probe += 1
-        end
-    end
-
-    # Vv
-    for surface in system.surfaces
-        nc, ns = size(surface)
-        for j in 1:ns
-            for k in 1:nc
-                panel = surface[k,j]
-                system.probes.position[i_probe] = (panel.rtl + panel.rbl) * 0.5
-                i_probe += 1
-            end
-        end
-        for k in 1:nc
-            panel = surface[k, ns]
-            system.probes.position[i_probe] = (panel.rtr + panel.rbr) * 0.5
-            i_probe += 1
-        end
-    end
-
-    # Vte
-    for surface in system.surfaces
-        nc, ns = size(surface)
-        for j in 1:ns
-            panel = surface[nc, j]
-            system.probes.position[i_probe] = panel.rtl
-            i_probe += 1
-        end
-        system.probes.position[i_probe] = surface[nc, ns].rtr
-        i_probe += 1
-    end
-
-    # V (only active wake node rows when nwake_active is provided; otherwise all allocated rows)
-    nwake_use = isnothing(nwake_active) ? system.nwake : nwake_active
-    for (k, wake) in enumerate(system.wakes)
-        ns_k = size(wake, 2)
-        max_nw = isnothing(nwake_active) ? size(wake, 1) : nwake_use[k]  # only iterate active rows if provided
-        nwk = nwake_use[k]
-        wsl = system.wake_shedding_locations[k]
-        for i in 1:max_nw+1
-            for j in 1:ns_k
-                if nwk > 0 && i <= nwk
-                    system.probes.position[i_probe] = wake[i, j].rtl
-                elseif nwk > 0 && i == nwk + 1
-                    system.probes.position[i_probe] = wake[nwk, j].rbl
-                else
-                    system.probes.position[i_probe] = wsl[j]
-                end
-                i_probe += 1
-            end
-            if nwk > 0 && i <= nwk
-                system.probes.position[i_probe] = wake[i, end].rtr
-            elseif nwk > 0 && i == nwk + 1
-                system.probes.position[i_probe] = wake[nwk, end].rbr
-            else
-                system.probes.position[i_probe] = wsl[ns_k + 1]
-            end
-            i_probe += 1
-        end
-    end
-
-    return i_probe - 1  # return number of active probes
-end    
-
-function probes_to_surfaces!(system::VortexLatticeSystem{TF}; nwake_active::Union{Nothing, Vector{Int}}=nothing) where TF
-    i_probe = 1
-    
-    # Vcp
-    for i_surf in 1:length(system.surfaces)
-        surface = system.surfaces[i_surf]
-        vcp = system.Vcp[i_surf]
-        nc, ns = size(surface)
-
-        for j in 1:ns
-            for k in 1:nc
-                v = system.probes.gradient[i_probe]
-                vcp[k, j] += v
-                i_probe += 1
-            end
-        end
-    end
-
-    # Vh
-    for i_surf in 1:length(system.surfaces)
-        surface = system.surfaces[i_surf]
-        vh = system.Vh[i_surf]
-        nc, ns = size(surface)
-        for j in 1:ns
-            for k in 1:nc
-                v = system.probes.gradient[i_probe]
-                vh[k, j] += v
-                i_probe += 1
-            end
-            v = system.probes.gradient[i_probe]
-            vh[nc+1, j] += v
-            i_probe += 1
-        end
-    end
-
-    # Vv
-    for i_surf in 1:length(system.surfaces)
-        surface = system.surfaces[i_surf]
-        vv = system.Vv[i_surf]
-        nc, ns = size(surface)
-        for j in 1:ns
-            for k in 1:nc
-                v = system.probes.gradient[i_probe]
-                vv[k, j] += v
-                i_probe += 1
-            end
-        end
-        for k in 1:nc
-            v = system.probes.gradient[i_probe]
-            vv[k, ns+1] += v
-            i_probe += 1
-        end
-    end
-
-    # Vte
-    for i_surf in 1:length(system.surfaces)
-        surface = system.surfaces[i_surf]
-        vte = system.Vte[i_surf]
-        nc, ns = size(surface)
-        for j in 1:ns
-            v = system.probes.gradient[i_probe]
-            vte[j] += v
-            i_probe += 1
-        end
-        v = system.probes.gradient[i_probe]
-        vte[ns+1] += v
-        i_probe += 1
-    end
-
-    # V (only active wake node rows when nwake_active is provided; otherwise all allocated rows)
-    nwake_use = isnothing(nwake_active) ? system.nwake : nwake_active
-    for i_surf in eachindex(system.wakes)
-        wake = system.wakes[i_surf]
-        V = system.V[i_surf]
-        max_nw = isnothing(nwake_active) ? size(wake, 1) : nwake_use[i_surf]  # only iterate active rows if provided
-        nwk = nwake_use[i_surf]
-        for i in 1:max_nw+1
-            for j in 1:size(wake, 2)
-                v = system.probes.gradient[i_probe]
-                if i <= nwk + 1
-                    V[i, j] += v
-                end
-                i_probe += 1
-            end
-            v = system.probes.gradient[i_probe]
-            if i <= nwk + 1
-                V[i, end] += v
-            end
-            i_probe += 1
-        end
-    end
-
-    return nothing
+        Vv, Vte, dΓdt, core_size)
 end
 
 """

@@ -8,9 +8,6 @@ using VSPGeom
 using CCBlade
 import SixDOF
 import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!, Rodrigues, inverse_Rodrigues
-using FastMultipole
-using FLOWVPM
-using ReadVTK
 
 # value for dimensionalizing, included just for clarity in the algorithms
 const RHO = 1.0
@@ -19,15 +16,6 @@ include("panel.jl")
 export SurfacePanel, WakePanel, TrefftzPanel
 export reflect, set_normal
 
-include("probes.jl")
-
-include("wake.jl")
-export Wake
-export PanelParticleWake
-export WakeSheddingMethod, NoShed, SigmaPPS, OverlapPPS, SigmaOverlap
-export IntegrationScheme, EulerScheme, RK3Scheme
-
-include("panel_particle_wake.jl")
 
 include("geometry.jl")
 export AbstractSpacing, Uniform, Sine, Cosine
@@ -55,7 +43,6 @@ export PanelProperties, get_surface_properties
 
 include("analyses.jl")
 export steady_analysis, steady_analysis!
-export unsteady_analysis, unsteady_analysis!
 export spanwise_force_coefficients
 
 include("nearfield.jl")
@@ -74,18 +61,7 @@ export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, F
 
 include("visualization.jl")
 export write_vtk
-export write_restart_checkpoint, read_restart_checkpoint_info, restore_restart!
-
-include("fmm.jl")
-export fmm
-
-include("fluid_domain.jl")
-export FluidDomainMonitor
-export evaluate_fluid_domain!, evaluate_fluid_domain_from_restarts!
 
 include("viscous.jl")
-
-include("unsteady.jl")
-export simulate!
 
 end # module
