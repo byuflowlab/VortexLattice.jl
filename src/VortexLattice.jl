@@ -7,7 +7,7 @@ using WriteVTK
 using VSPGeom
 using CCBlade
 import SixDOF
-import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!
+import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!, Rodrigues, inverse_Rodrigues
 using FastMultipole
 using FLOWVPM
 using ReadVTK

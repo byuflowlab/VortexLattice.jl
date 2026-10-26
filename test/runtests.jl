@@ -1590,7 +1590,11 @@ function _viscous_wing_CF(polar; ns=6, nt=6, aoa=4.2, Vinf=50.0)
         wake_type=PanelParticleWake, nwakerows=1, max_particles=2000,
         method_trailing=OverlapPPS(1.3, 1), method_unsteady=NoShed(),
         monitors, derivatives=false, path=nothing, verbose=false,
-        polars=isnothing(polar) ? nothing : [fill(polar, 2ns)], frames_index=[1])
+        polars=isnothing(polar) ? nothing : [fill(polar, 2ns)], frames_index=[1],
+        # fixed FMM settings: the timing-based autotune varies with machine load, and
+        # these runs are compared with each other
+        fmm_wake=VortexLattice.FLOWVPM.FMM(; autotune_p=false, autotune_ncrit=false),
+        fmm_vehicle=VortexLattice.FLOWVPM.FMM(; autotune_p=false, autotune_ncrit=false))
     freestream_body = SVector(-cos(a), 0.0, -sin(a))
     return monitors[1].CF[end], freestream_body
 end
@@ -1632,6 +1636,26 @@ end
     @test_throws ArgumentError run1(; mirror=false, symmetric=true, Omega=[0.05, 0.0, 0.0])
     @test_throws ArgumentError run1(; mirror=false, symmetric=true, Omega=[0.0, 0.0, 0.05])
     @test_throws ArgumentError stability_derivatives(run1(; mirror=false, symmetric=true))
+end
+
+@testset "Unsteady forces scale with the speed" begin
+    # A heaving wing (as a time-varying inflow angle) at the same reduced frequency and
+    # two speeds: the force coefficients must not depend on the dimensional speed. The
+    # dΓ/dt force term once carried an extra velocity factor and failed this by 3.7x.
+    function heave_CL(U; k = 0.3, h0 = 0.02, periods = 2, npp = 20)
+        b = 0.5; ω = k * U / b
+        t = collect(range(0.0, periods * 2pi / ω; length = periods * npp + 1))
+        hdot(t) = -h0 * ω * sin(ω * t)
+        fs = [Freestream(hypot(U, hdot(ti)), atan(-hdot(ti), U), 0.0, [0.0, 0.0, 0.0]) for ti in t[2:end]]
+        grid, ratio = wing_to_grid([0.0, 0.0], [-3.0, 3.0], [0.0, 0.0], [1.0, 1.0], zeros(2), zeros(2), 6, 2;
+            mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+        _, _, surface = grid_to_surface_panels(grid; ratios=ratio)
+        system, sh, ph, wh = unsteady_analysis([surface], Reference(6.0, 1.0, 6.0, [0.0, 0.0, 0.0], U), fs, diff(t))
+        CF, _ = body_forces_history(system, sh, ph; frame=Body())
+        return [cf[3] for cf in CF]
+    end
+    CL1 = heave_CL(1.0); CL10 = heave_CL(10.0)
+    @test maximum(abs.(CL10 .- CL1)) < 1e-10 * maximum(abs, CL1)
 end
 
 include("fmm_test.jl")

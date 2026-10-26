@@ -110,14 +110,12 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             Fbi = RHO*Γi*tmp
 
             if !isnothing(dΓdt)
-                # unsteady part of Kutta-Joukowski theorem
-
-                #TODO: decide whether to divide by perpendicular velocity like
-                # Drela does in ASWING?
-
+                # unsteady part: rho * dΓ/dt * panel area along the panel normal (Katz &
+                # Plotkin's unsteady vortex lattice). Not times cross(V, Δs), which adds a
+                # velocity and so scaled with the dimensional speed (fixed 2026-10-26).
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += RHO*dΓdti*c*norm(Δs)*receiving[I].ncp
 
             end
 
@@ -365,14 +363,12 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             Fbi_r = RHO*(Γi_r*tmp + Γi*cross(Vi_r, Δs))
 
             if !isnothing(dΓdt)
-                # unsteady part of Kutta-Joukowski theorem
-
-                #TODO: decide whether to divide by perpindicular velocity like
-                # Drela does in ASWING?
-
+                # unsteady part: rho * dΓ/dt * panel area along the panel normal (Katz &
+                # Plotkin's unsteady vortex lattice). Not times cross(V, Δs), which adds a
+                # velocity and so scaled with the dimensional speed (fixed 2026-10-26).
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += RHO*dΓdti*c*norm(Δs)*receiving[I].ncp
 
             end
 

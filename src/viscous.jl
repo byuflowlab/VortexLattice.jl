@@ -197,7 +197,7 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # well-behaved through zero-circulation stations. Re-enabled 2026-08-12.
                 D_visc_strip = cd * q_local * c * Δs_y
                 # cfb (added to below) is a force COEFFICIENT, non-dimensionalized by q*ref.S
-                # (see the (RHO*γ_j_new)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
+                # (see the (RHO*Δγ_j)*cross_jl/(q*ref.S) term a few lines down) -- D_visc_strip
                 # is a dimensional force, so it must go through the same normalization before
                 # being added, or it inflates the reported force by a factor of q*ref.S (~1e5-1e6
                 # for this rotor). Missing normalization caused CT~1770 instead of ~0.9 when this
@@ -207,20 +207,21 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                 # ---- per-segment additive correction ------------------------
                 # The strip's prescribed dimensional lift increment Δl_strip is
                 # distributed equally across the nc chordwise bound segments.
-                # For each segment we solve the local Kutta-Joukowski relation
+                # Each segment's bound circulation changes by the Kutta-Joukowski
+                # amount
                 #
-                #     l_j_new = ρ ((V_j × Δs_j) · l̂) γ_j_new
+                #     Δγ_j = (Δl_strip / nc) / (ρ (V_j × Δs_j) · l̂)
                 #
-                # for the new bound-vortex circulation γ_j_new, using the local
-                # effective velocity V_j and bound-vortex segment Δs_j that
-                # nearfield.jl uses to compute panel forces. This guarantees
-                # that the downstream cfb is exactly consistent with γ_j_new.
+                # using the local effective velocity V_j and bound-vortex segment
+                # Δs_j that nearfield.jl uses, and its force by ρ Δγ_j (V_j × Δs_j).
+                # Additive, so the unsteady dΓ/dt force in cfb stays force and is
+                # not converted into circulation (rebuilding γ from the total
+                # segment force did that, 2026-10-26); in steady flow it equals
+                # solving l_j + Δl/nc = ρ proj_j γ_j_new.
                 #
-                # γ_j here is the *segment* (bound-vortex) circulation
-                # Γ_b,i = Γ[i] - Γ[i-1] (with Γ_b,1 = Γ[1]). After solving for
-                # all γ_j_new, panel circulations are recovered by cumulative
-                # sum and written back into Γ.
-                Γ_b_new_accum = zero(TF)
+                # Δγ_j changes the *segment* circulation Γ_b,i = Γ[i] - Γ[i-1], so
+                # panel i's circulation changes by the cumulative sum Σ_{k≤i} Δγ_k.
+                Δγ_accum = zero(TF)
                 for i in axes(surface, 1)
                     # unpack props
                     (; gamma, velocity, cfb, cfl, cfr) = props[i,j]
@@ -236,17 +237,12 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                     cross_jl = cross(Vj, Δsj)
                     proj_j = dot(cross_jl, lhat)
 
-                    # existing inviscid lift on this segment (dimensional)
-                    l_j = dot(cfb, lhat) * q * ref.S
+                    # change of this segment's circulation from local KJ
+                    Δγ_j = (Δl_strip / nc) / (RHO * proj_j)
 
-                    # new segment circulation from local KJ
-                    γ_j_new = (l_j + Δl_strip / nc) / (RHO * proj_j)
-
-                    # recompute the bound-vortex contribution to cfb directly
-                    # from γ_j_new so cfb stays exactly consistent with the
-                    # corrected circulation (matches nearfield.jl form
-                    # F_b = ρ Γ_b (V × Δs)). preserves cfl/cfr untouched.
-                    cfb_new = (RHO * γ_j_new) * cross_jl / (q * ref.S) + d_viscous
+                    # its bound-vortex force (nearfield.jl's F_b = ρ Γ_b (V × Δs));
+                    # cfl/cfr untouched
+                    cfb_new = cfb + (RHO * Δγ_j) * cross_jl / (q * ref.S) + d_viscous
 
                     props[i,j] = PanelProperties(
                         gamma,
@@ -256,10 +252,9 @@ function viscous!(properties::Vector{Matrix{PanelProperties{TF}}}, Γ, surfaces:
                         cfr, # * f_cl,  # apply lift correction factor to right edge contribution
                     )
 
-                    # reconstruct panel circulation by cumulative sum of
-                    # segment circulations: Γ[i] = Σ_{k≤i} γ_k_new
-                    Γ_b_new_accum += γ_j_new
-                    Γ[iΓ - nc + (i - 1)] = Γ_b_new_accum
+                    # panel circulation: Γ[i] += Σ_{k≤i} Δγ_k
+                    Δγ_accum += Δγ_j
+                    Γ[iΓ - nc + (i - 1)] += Δγ_accum
                 end
             end
         else
