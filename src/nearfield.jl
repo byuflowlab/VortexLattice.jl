@@ -550,7 +550,7 @@ performed to obtain the panel forces.
     (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc` is the number
     of chordwise panels and `ns` is the number of spanwise panels
  - `reference`: Reference parameters (see [`Reference`](@ref))
- - `freestream`: Freestream parameters (see [`Freestream`]@ref)
+ - `freestream`: BodyFreestream parameters (see [`BodyFreestream`]@ref)
  - `symmetric`: (required) Flag for each surface indicating whether a mirror image
    (across the X-Z plane) was used when calculating induced velocities
  - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
@@ -828,58 +828,6 @@ function body_forces_derivatives(system::VortexLatticeSystem)
     dCM = (CM_a, CM_b, CM_p, CM_q, CM_r)
 
     return CF, CM, dCF, dCM
-end
-
-"""
-    body_forces_history(system, surface_history, property_history; frame=Body())
-
-Return the body force coefficients `CF`, `CM` at each time step in `property_history`.
-
-# Arguments:
- - `system`: Object of type [`VortexLatticeSystem`](@ref) which holds system properties
- - `surface_history`: Vector of surfaces at each time step, where each surface is
-    represented by a matrix of surface panels (see [`SurfacePanel`](@ref)) of shape
-    (nc, ns) where `nc` is the number of chordwise panels and `ns` is the number
-    of spanwise panels
- - `property_history`: Vector of surface properties for each surface at each
-    time step, where surface properties are represented by a matrix of panel
-    properties (see [`PanelProperties`](@ref)) of shape (nc, ns) where `nc` is
-    the number of chordwise panels and `ns` is the number of spanwise panels
-
-# Keyword Arguments
- - `frame`: frame in which to return `CF` and `CM`, options are [`Body()`](@ref) (default),
-   [`Stability()`](@ref), and [`Wind()`](@ref)`
-"""
-function body_forces_history(system, surface_history::AbstractVector{<:AbstractVector{<:AbstractMatrix}},
-    property_history; frame=Body())
-
-    # unpack system parameters
-    symmetric = system.symmetric
-    ref = system.reference[]
-    fs = system.freestream[]
-
-    # float type
-    TF = eltype(system)
-
-    # number of time steps
-    nt = length(property_history)
-
-    # convert single freestream input to vector
-    if isa(fs, Freestream)
-        fs = fill(fs, nt)
-    end
-
-    # initialize time history coefficients
-    CF = Vector{SVector{3, TF}}(undef, nt)
-    CM = Vector{SVector{3, TF}}(undef, nt)
-
-    # populate time history coefficients
-    for it = 1:nt
-        CF[it], CM[it] = body_forces(surface_history[it], property_history[it],
-            ref, fs[it], symmetric, frame)
-    end
-
-    return CF, CM
 end
 
 """

@@ -7,6 +7,8 @@ using WriteVTK
 using VSPGeom
 using CCBlade
 import SixDOF
+import FLOWUnsteadyCore
+using FLOWUnsteadyCore: Freestream
 import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!, Rodrigues, inverse_Rodrigues
 
 # value for dimensionalizing, included just for clarity in the algorithms
@@ -31,7 +33,7 @@ export Reference
 export AbstractFrame, Body, Stability, Wind
 
 include("freestream.jl")
-export Freestream, trajectory_to_freestream
+export Freestream   # the core's, re-exported
 
 include("induced.jl")
 
@@ -47,7 +49,6 @@ export spanwise_force_coefficients
 
 include("nearfield.jl")
 export body_forces
-export body_forces_history
 export lifting_line_coefficients, lifting_line_coefficients!
 
 include("farfield.jl")
@@ -58,6 +59,7 @@ export body_derivatives, stability_derivatives
 
 include("frames.jl")
 export ReferenceFrame, propagate_kinematics!, change_convention!, BackRightUp, ForwardRightDown
+export flight_condition
 
 include("visualization.jl")
 export write_vtk

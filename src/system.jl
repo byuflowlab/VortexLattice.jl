@@ -55,7 +55,7 @@ different reference frames; all of them are solved in one linear system.
  - `wakes`: Wake panel properties for each surface
  - `trefftz`: Trefftz panels associated with each surface
  - `reference`: Pointer to reference parameters associated with the system (see [`Reference`](@ref))
- - `freestream`: Pointer to current freestream parameters associated with the system (see [`Freestream`](@ref))
+ - `freestream`: Pointer to current freestream parameters associated with the system (see [`BodyFreestream`](@ref))
  - `symmetric`: Flags indicating whether each surface is symmetric across the X-Z plane
  - `nwake`: Number of chordwise wake panels to use from each wake in `wakes`,
  - `surface_id`: Surface ID for each surface.  The finite core model is disabled
@@ -97,7 +97,7 @@ struct VortexLatticeSystem{TF}
     wakes::Vector{Matrix{WakePanel{TF}}}
     trefftz::Vector{Vector{TrefftzPanel{TF}}}
     reference::Array{Reference{TF}, 0}
-    freestream::Array{Freestream{TF}, 0}
+    freestream::Array{BodyFreestream{TF}, 0}
     symmetric::Vector{Bool}
     nwake::Vector{Int}
     surface_id::Vector{Int}
@@ -228,7 +228,7 @@ function VortexLatticeSystem(TF::Type, nc, ns; nw = zero(nc), grids = nothing, r
     wakes = [Matrix{WakePanel{TF}}(undef, nw[i], ns[i]) for i = 1:nsurf]
     trefftz = [Vector{TrefftzPanel{TF}}(undef, ns[i]) for i = 1:nsurf]
     reference = Array{Reference{TF}}(undef)
-    freestream = Array{Freestream{TF}}(undef)
+    freestream = Array{BodyFreestream{TF}}(undef)
     symmetric = [false for i = 1:nsurf]
     nwake = [0 for i = 1:nsurf]
     surface_id = [i for i = 1:nsurf]

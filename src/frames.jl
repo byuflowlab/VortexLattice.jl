@@ -96,17 +96,45 @@ function ReferenceFrame(system::VortexLatticeSystem{TF};
                           name, child_index, dependent_index)
 end
 
-function Freestream(frame::ReferenceFrame{TF}, ref::Reference, vinf_ext) where TF
-    # equivalent freestream about ref.r
-    dx = ref.r - frame.x  # vector from frame origin to reference point
-    ω = frame.omega_axis * frame.omega
-    V = vinf_ext - frame.v - ω × dx  # freestream velocity in South-East-Up convention
+"""
+    body_freestream(freestream, frames, ref, nsurf) -> BodyFreestream
 
-    # create freestream object
-    Omega = frame.omega_axis * frame.omega
-    fs = velocity_to_freestream(V, -Omega)
+The relative wind and rotation rates that the surfaces see in a steady analysis.
+Every surface moves with one rigid motion (`SixDOF.frame_motion`). The wind is
+taken at the reference point `ref.r`. The rates are the body's angular velocity
+in the surface axes (back-right-up) in VortexLattice's sign convention, where
+positive p rolls the right wing down, positive q pitches nose up and positive r
+yaws nose right: p = -omega_x, q = omega_y, r = -omega_z.
+"""
+function body_freestream(freestream::Freestream, frames, ref, nsurf)
+    origin, v, omega = SixDOF.frame_motion(frames, 1)
+    vref = v + cross(omega, ref.r - origin)
+    for i in 2:nsurf
+        o, vi, wi = SixDOF.frame_motion(frames, i)
+        scale = max(norm(vref), norm(omega) * norm(ref.r - origin), one(eltype(vref)))
+        (isapprox(vi + cross(wi, ref.r - o), vref; atol = sqrt(eps(scale)) * scale) &&
+         isapprox(wi, omega; atol = sqrt(eps(scale)) * scale)) || throw(ArgumentError(
+            "a steady analysis needs every surface on one rigid motion; surface $i moves relative to surface 1"))
+    end
+    return velocity_to_freestream(freestream.velocity - vref, SVector(-omega[1], omega[2], -omega[3]))
+end
 
-    return fs
+"""
+    flight_condition(system, ref, Vinf; alpha=0, beta=0, rates=zeros(3), rho=1.225, mu=1.81e-5, speed_of_sound=343.0) -> (freestream, frames)
+
+The core's `Freestream` and a one-frame tree for a vehicle flying at speed `Vinf`
+with angle of attack `alpha`, sideslip `beta` (radians) and body rates
+`rates = (p, q, r)` about `ref.r`, for users who think in angles. Pass both to
+[`steady_analysis!`](@ref).
+"""
+function flight_condition(system::VortexLatticeSystem{TF}, ref::Reference, Vinf; alpha = zero(TF), beta = zero(TF),
+        rates = zero(SVector{3,TF}), rho = 1.225, mu = 1.81e-5, speed_of_sound = 343.0) where TF
+    fs = BodyFreestream(Vinf, alpha, beta, SVector{3}(rates))
+    omega = SVector(-rates[1], rates[2], -rates[3])
+    w = norm(omega)
+    frames = ReferenceFrame(system; origin = SVector{3,TF}(ref.r),
+        omega_axis = iszero(w) ? SVector{3,TF}(0, 0, 1) : omega / w, omega = w)
+    return Freestream(freestream_velocity(fs); rho, mu, speed_of_sound), frames
 end
 
 function change_convention!(system, origin, to::ForwardRightDown, from::BackRightUp)

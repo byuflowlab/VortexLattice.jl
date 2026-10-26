@@ -43,7 +43,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -60,7 +59,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -89,7 +88,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -134,7 +133,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -148,7 +146,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -193,7 +191,6 @@ end
     alpha = 8.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -207,7 +204,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -257,7 +254,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -283,7 +279,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -338,7 +334,6 @@ end
     alpha = 20.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -360,7 +355,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -443,7 +438,6 @@ end
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -476,7 +470,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric, surface_id=surface_id)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -557,7 +551,6 @@ end
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -590,7 +583,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id, derivatives=false)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric, surface_id=surface_id, derivatives=false)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -637,7 +630,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -650,7 +642,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -697,7 +689,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = true
 
@@ -710,7 +701,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -756,7 +747,6 @@ end
     alpha = 1.0*pi/180
     beta = 15.0*pi/180
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     ncp = avl_normal_vector([xle[2]-xle[1], yle[2]-yle[1], zle[2]-zle[1]], 2.0*pi/180)
 
@@ -772,7 +762,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -817,7 +807,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # vortex rings
     grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -828,7 +817,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     dCF, dCM = stability_derivatives(system)
 
@@ -889,7 +878,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [2*Vinf*0.05/bref; 0.0; 0.0]  # nondimensional pbar = 0.05
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # vortex rings
     grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -900,7 +888,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     CF, CM = body_forces(system; frame=Stability())
 
@@ -940,7 +928,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # adjust chord length so x-chord length matches AVL
     chord = @. chord/cos(theta)
@@ -957,7 +944,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
 
     r_ll, c_ll, w_ll = lifting_line_geometry(grids)
 
@@ -1124,7 +1111,6 @@ end
     alpha = 5.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     symmetric = [true, true, false]
 
@@ -1280,7 +1266,6 @@ end
     alpha = 1.0*pi/180
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     comp = read_degengeom("samplewing.csv")
     grid, ratios, surface = import_vsp(comp[1]; mirror=true)
@@ -1292,7 +1277,7 @@ end
 
     system = VortexLatticeSystem(grids; ratios)
 
-    steady_analysis!(system, ref, fs; symmetric=symmetric)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates=Omega)...; symmetric=symmetric)
     CF, CM = body_forces(system; frame=Wind())
 
     CF_true = [2.41223539e-3, 0.0, 2.37009019e-1]
@@ -1310,8 +1295,8 @@ end
         grid, ratio = wing_to_grid([0.0, 0.4], [0.0, 7.5], [0.0, 0.0], [2.2, 1.8] ./ cos.(theta), theta, [0.0, 0.0], 12, 1;
             mirror, spacing_s=Uniform(), spacing_c=Uniform())
         system = VortexLatticeSystem([grid]; ratios=[ratio])
-        steady_analysis!(system, Reference(30.0, 2.0, 15.0, [0.50, 0.0, 0.0], 1.0),
-            Freestream(1.0, 2.0 * pi / 180, beta, Omega); symmetric)
+        ref = Reference(30.0, 2.0, 15.0, [0.50, 0.0, 0.0], 1.0)
+        steady_analysis!(system, ref, flight_condition(system, ref, 1.0; alpha=2.0 * pi / 180, beta, rates=Omega)...; symmetric)
         return system
     end
     # symmetric flight: the half equals the full span

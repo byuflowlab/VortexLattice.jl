@@ -1,5 +1,5 @@
 """
-    steady_analysis(surfaces, reference, freestream; kwargs...)
+    steady_analysis(surfaces, reference, freestream, frames; kwargs...)
 
 Perform a steady vortex lattice method analysis.  Return an object of type
 [`VortexLatticeSystem`](@ref) containing the system state.
@@ -13,7 +13,10 @@ Perform a steady vortex lattice method analysis.  Return an object of type
    where `nc` is the number of chordwise panels and `ns` is the number of
    spanwise panels
  - `reference`: Reference parameters (see [`Reference`](@ref))
- - `freestream`: Freestream parameters (see [`Freestream`](@ref))
+ - `freestream`: the core's `Freestream` (the air velocity in the surfaces' axes)
+ - `frames`: the SixDOF frame tree that moves the surfaces; every surface must share one
+   rigid motion, which sets the relative wind and the body rates (see [`flight_condition`](@ref)
+   to build both from angles)
 
 # Keyword Arguments
  - `symmetric`: Flag for each surface indicating whether a mirror image across
@@ -49,20 +52,23 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `derivatives`: Flag indicating whether the derivatives with respect
     to the freestream variables should be calculated. Defaults to `true`.
 """
-function steady_analysis(grids, reference, freestream; kwargs...)
+function steady_analysis(grids, reference, freestream::Freestream, frames; kwargs...)
 
     # pre-allocate system storage
     system = VortexLatticeSystem(grids)
 
-    return steady_analysis!(system, reference, freestream; kwargs...,
+    return steady_analysis!(system, reference, freestream, frames; kwargs...,
         calculate_influence_matrix = true)
 end
 
 """
-    steady_analysis!(system, surfaces, reference, freestream; kwargs...)
+    steady_analysis!(system, reference, freestream, frames; kwargs...)
 
 Pre-allocated version of `steady_analysis`.
 """
+steady_analysis!(system, ref, freestream::Freestream, frames; kwargs...) =
+    steady_analysis!(system, ref, body_freestream(freestream, frames, ref, length(system.surfaces)); kwargs...)
+
 # A mirrored half (symmetric = true) is exact only in symmetric flight: sideslip or a roll
 # or yaw rate is mirrored too, which silently zeroes the lateral loads (CL 3.4x off at a
 # roll rate of 0.05, checked 2026-10-26 against the full mirrored wing).
@@ -72,7 +78,7 @@ function _check_symmetric_flight(fs)
     return nothing
 end
 
-function steady_analysis!(system, ref, fs;
+function steady_analysis!(system, ref, fs::BodyFreestream;
     symmetric = fill(false, length(system.surfaces)),
     wakes = [Matrix{WakePanel{Float64}}(undef, 0, size(system.surfaces[i],2)) for i = 1:length(system.surfaces)],
     nwake = size.(wakes, 1),
