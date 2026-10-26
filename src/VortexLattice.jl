@@ -8,7 +8,7 @@ using VSPGeom
 using CCBlade
 import SixDOF
 import FLOWUnsteadyCore
-using FLOWUnsteadyCore: Freestream
+using FLOWUnsteadyCore: Freestream, AbstractBody, AbstractBodyState, FilamentSource, DirectBackend, evaluation_points!
 import SixDOF: ReferenceFrame, propagate_kinematics!, add_frame!, Rodrigues, inverse_Rodrigues
 
 # value for dimensionalizing, included just for clarity in the algorithms
@@ -65,5 +65,8 @@ include("visualization.jl")
 export write_vtk
 
 include("viscous.jl")
+
+include("core_bodies.jl")
+export SurfaceBody, SurfaceState, surface_bodies
 
 end # module
