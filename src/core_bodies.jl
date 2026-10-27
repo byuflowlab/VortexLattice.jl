@@ -161,6 +161,18 @@ end
 # --- shedding ---
 
 FLOWUnsteadyCore.n_shedding_elements(b::SurfaceBody) = size(b.system.surfaces[b.index], 2)
+
+# A surface sheds SigmaOverlap(chord / 10, 1.3), chord its mean (area / span):
+# span / 100 on an aspect-ratio-10 wing (FLOWUnsteady's blown-wing core), and a
+# core that stays chord-sized at any aspect ratio. `PanelParticleWake(...;
+# method_trailing, method_unsteady)` overrides it.
+function FLOWUnsteadyCore.shedding(b::SurfaceBody)
+    surface = b.system.surfaces[b.index]
+    width(j) = norm(surface[1, j].rtr - surface[1, j].rtl)
+    chord(j) = norm((surface[end, j].rbl + surface[end, j].rbr) / 2 - (surface[1, j].rtl + surface[1, j].rtr) / 2)
+    js = axes(surface, 2)
+    return FLOWUnsteadyCore.Shedding(; sigma = sum(j -> chord(j) * width(j), js) / sum(width, js) / 10)
+end
 FLOWUnsteadyCore.shedding_locations(s::SurfaceState, ::SurfaceBody) = (s.shed_left, s.shed_right)
 FLOWUnsteadyCore.previous_shedding_locations(s::SurfaceState, ::SurfaceBody) = (s.te_left_prev, s.te_right_prev)
 

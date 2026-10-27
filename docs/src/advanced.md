@@ -29,11 +29,11 @@ The wake is a buffer of `nwakerows` rows of vortex rings behind each trailing ed
 
 ```julia
 wake = PanelParticleWake(Float64, bodies; nwakerows = 2, max_particles = 50_000,
-    method_trailing = OverlapPPS(1.3, 2), method_unsteady = OverlapPPS(1.3, 2), shed_eta = 0.25)
+    method_trailing = SigmaOverlap(0.1, 1.3), method_unsteady = SigmaOverlap(0.1, 1.3), shed_eta = 0.25)
 ```
 
-- `method_trailing`, `method_unsteady`: how the spanwise and the temporal circulation differences of a converted row become particles (`NoShed`, `SigmaPPS`, `OverlapPPS`, `SigmaOverlap`).
-- `OverlapPPS(overlap, n)` sizes each particle's core from the length of the edge it comes from. On a long spanwise edge (a wide strip) the cores of the shed vortex become large and smear it, which makes the lift respond too quickly to a change; cap them with `OverlapPPS(1.3, 2; max_sigma = Vinf*dt)` or keep more rows as rings.
+- `method_trailing`, `method_unsteady`: how the spanwise and the temporal circulation differences of a converted row become particles (`NoShed`, `SigmaPPS`, `OverlapPPS`, `SigmaOverlap`). Without them each surface sheds `SigmaOverlap(chord / 10, 1.3)`, `chord` the surface's mean chord: a fixed core (span / 100 on an aspect-ratio-10 wing), the particle count following each edge's length. The buffered rings take the same core.
+- `OverlapPPS(overlap, n)` sizes each particle's core from the length of the edge it comes from, with no floor: a short edge sheds a near-singular core (a wing's trailing edge in a rotor's slipstream does, and the wake blows up), and a long one a wide core that smears the shed vortex. Prefer a fixed core (`SigmaOverlap`, `SigmaPPS`).
 - `shed_eta`: the fraction of one convection step behind the trailing edge at which the wake starts.
 
 ## Viscous correction with sectional polars
