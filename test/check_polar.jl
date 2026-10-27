@@ -10,10 +10,10 @@ function get_CL(system, ref, alpha; symmetric = false) # radians
     beta = 0.0
     Omega = [0.0; 0.0; 0.0]
     Vinf = ref.V
-    fs = Freestream(Vinf, alpha, beta, Omega)
 
     # perform steady state analysis
-    steady_analysis!(system, ref, fs; symmetric=symmetric, derivatives=false)
+    steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...;
+        symmetric=symmetric, derivatives=false)
 
     # retrieve near-field forces
     CF, CM = body_forces(system; frame=Wind())

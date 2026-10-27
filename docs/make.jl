@@ -2,6 +2,7 @@ using Documenter, VortexLattice
 
 makedocs(;
     modules = [VortexLattice],
+    format = Documenter.HTML(size_threshold_warn = 200 * 2^10),  # library.md is ~135 KiB
     pages = [
         "Home" => "index.md",
         "Getting Started" => "guide.md",

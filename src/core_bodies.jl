@@ -390,24 +390,42 @@ end
 # --- monitor ---
 
 """
-    ForcesMonitor(system, nsteps; frame = Body())
+    ForcesMonitor(system, nsteps; frame = Body(), freestream = nothing)
 
 A FLOWUnsteadyCore `simulate!` monitor that records `system`'s force and moment
 coefficients ([`body_forces`](@ref) in `frame`) after each step's solve, in
-`CF[step]` and `CM[step]`.
+`CF[step]` and `CM[step]`. The stability and wind axes follow the relative wind
+at the reference point: the freestream (the run's `freestream` at the step's
+time when it is given, else its reference velocity) minus the system's frame
+motion there, which also sets the body rates.
 """
-struct ForcesMonitor{TF,F}
+struct ForcesMonitor{TF,F,FS}
     system::VortexLatticeSystem{TF}
     CF::Vector{SVector{3,TF}}
     CM::Vector{SVector{3,TF}}
     frame::F
+    freestream::FS
 end
 
-ForcesMonitor(system::VortexLatticeSystem{TF}, nsteps::Integer; frame = Body()) where TF =
-    ForcesMonitor(system, zeros(SVector{3,TF}, nsteps), zeros(SVector{3,TF}, nsteps), frame)
+ForcesMonitor(system::VortexLatticeSystem{TF}, nsteps::Integer; frame = Body(), freestream = nothing) where TF =
+    ForcesMonitor(system, zeros(SVector{3,TF}, nsteps), zeros(SVector{3,TF}, nsteps), frame, freestream)
 
 function (m::ForcesMonitor)(step, t, systems, geometries, wake, frames)
-    m.CF[step], m.CM[step] = body_forces(m.system; frame = m.frame)
+    s = m.system
+    TF = eltype(s)
+    ref = s.reference[]
+    rref = SVector{3,TF}(ref.r)
+    u = isnothing(m.freestream) ? freestream_velocity(s.freestream[]) :
+        SVector{3,TF}(FLOWUnsteadyCore.freestream_velocity(m.freestream, rref, t))
+    i = findfirst(g -> g isa SurfaceBody && g.system === s, geometries)
+    if isnothing(i) || !SixDOF.owns(frames, i)
+        vref = zero(SVector{3,TF}); omega = zero(SVector{3,TF})
+    else
+        origin, v, omega = SixDOF.frame_motion(frames, i)
+        vref = v + cross(omega, rref - origin)
+    end
+    s.freestream[] = velocity_to_freestream(SVector{3,TF}(u - vref), SVector{3,TF}(-omega[1], omega[2], -omega[3]))
+    m.CF[step], m.CM[step] = body_forces(s; frame = m.frame)
     return nothing
 end
 

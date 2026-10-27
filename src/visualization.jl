@@ -202,14 +202,6 @@ function write_vtk(name, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePane
     return nothing
 end
 
-"""
-    write_vtk(name, system::VortexLatticeSystem, idx, t; overwrite=false)
-
-Append one time step of `system`'s body geometry to a ParaView PVD collection.
-The `.pvd` file is written at `name.pvd` and per-step multiblock files are
-routed to a `name/` subdirectory as `name.{idx}.vtm`, with one block per
-surface.
-"""
 struct _SurfaceVTKScratch{TF}
     xyz::Array{TF,4}        # 3×(nc+1)×(ns+1)×1
     gamma_h::Matrix{TF}     # nc×ns
@@ -312,6 +304,14 @@ function _save_system_vtk_writer!(writer::_SystemVTKWriterState)
     return nothing
 end
 
+"""
+    write_vtk(name, system::VortexLatticeSystem, idx, t; overwrite=false)
+
+Append one time step of `system`'s body geometry to a ParaView PVD collection.
+The `.pvd` file is written at `name.pvd` and per-step multiblock files are
+routed to a `name/` subdirectory as `name.{idx}.vtm`, with one block per
+surface.
+"""
 function write_vtk(name::String, system::VortexLatticeSystem, idx::Int, t::Real; overwrite::Bool=false)
     writer = _init_system_vtk_writer(name, system; overwrite)
     _append_system_vtk!(writer, system, idx, t)

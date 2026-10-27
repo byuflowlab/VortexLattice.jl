@@ -67,12 +67,12 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 nothing #hide
 ```
 
-We use the following freestream properties.
+We use the following flight condition. The analysis takes the flow as a `Freestream` (the air velocity, shared with the rest of FLOWUnsteady) and the motion of the surfaces as a frame tree; `flight_condition` builds both from the angles and body rates we are used to.
 ```@example guide
 alpha = 1.0*pi/180 # angle of attack
 beta = 0.0 # sideslip angle
-Omega = [0.0, 0.0, 0.0] # rotational velocity around the reference location
-fs = Freestream(Vinf, alpha, beta, Omega)
+Omega = [0.0, 0.0, 0.0] # body rates (p, q, r) about the reference location
+freestream, frames = flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)
 nothing #hide
 ```
 
@@ -92,7 +92,7 @@ We are now ready to perform a steady state analysis. We do so by calling the `st
    argument `derivatives`
 
 ```@example guide
-steady_analysis!(system, ref, fs; symmetric)
+steady_analysis!(system, ref, freestream, frames; symmetric)
 nothing #hide
 ```
 

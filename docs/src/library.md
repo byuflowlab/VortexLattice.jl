@@ -30,8 +30,6 @@ translate!
 rotate
 rotate!
 reflect(surface::AbstractMatrix)
-SectionProperties
-grid_to_sections
 ```
 
 ### Reference Parameters and Frames
@@ -43,10 +41,10 @@ Stability
 Wind
 ```
 
-### Freestream Parameters
+### Flight Condition
+The flow is FLOWUnsteadyCore's `Freestream` (re-exported) and the motion of the surfaces a SixDOF frame tree.
 ```@docs
-Freestream
-trajectory_to_freestream
+flight_condition
 ```
 
 ### Performing an Analysis
@@ -55,9 +53,6 @@ VortexLatticeSystem
 VortexLatticeSystem()
 steady_analysis
 steady_analysis!
-unsteady_analysis
-unsteady_analysis!
-nonlinear_analysis!
 ```
 
 ### Near Field Forces and Moments
@@ -65,7 +60,6 @@ nonlinear_analysis!
 PanelProperties
 get_surface_properties
 body_forces(system::VortexLatticeSystem{TF}; frame = Body()) where TF
-body_forces_history
 lifting_line_coefficients
 lifting_line_coefficients!
 ```
@@ -84,29 +78,15 @@ stability_derivatives
 ### Visualization
 ```@docs
 write_vtk
-write_restart_checkpoint
-read_restart_checkpoint_info
-restore_restart!
-FluidDomainMonitor
-evaluate_fluid_domain!
-evaluate_fluid_domain_from_restarts!
 ```
 
-### Unsteady Simulation
+### Time Domain (FLOWUnsteadyCore)
+The time loop, the wake (`PanelParticleWake` and its shedding methods) and `simulate!` are FLOWUnsteadyCore's, re-exported; see its documentation. VortexLattice provides its surfaces as the core's bodies:
 ```@docs
-simulate!
-PanelParticleWake
-WakeSheddingMethod
-NoShed
-SigmaPPS
-OverlapPPS
-EulerScheme
-ReferenceFrame
-propagate_kinematics!
-fmm
+surface_bodies
+SurfaceBody
+SurfaceState
 ForcesMonitor
-PanelForcesMonitor
-LiftingLineCoefficientsMonitor
 ```
 
 ## Private API
@@ -147,14 +127,8 @@ VortexLattice.bottom_vector
 
 ### Wake Panels
 ```@docs
-VortexLattice.update_wake_shedding_locations!
 VortexLattice.set_circulation_strength
 VortexLattice.circulation_strength
-VortexLattice.get_wake_velocities!
-VortexLattice.translate_wake
-VortexLattice.translate_wake!
-VortexLattice.shed_wake!
-VortexLattice.rowshift!
 ```
 
 ### Induced Velocity
@@ -170,6 +144,9 @@ VortexLattice.induced_velocity_derivatives
 
 ### Freestream
 ```@docs
+VortexLattice.BodyFreestream
+VortexLattice.body_freestream
+VortexLattice.velocity_to_freestream
 VortexLattice.body_to_stability
 VortexLattice.body_to_wind
 VortexLattice.stability_to_body
@@ -201,7 +178,9 @@ VortexLattice.circulation_derivatives!
 
 ### Time-Domain Analysis
 ```@docs
-VortexLattice.propagate_system!
+VortexLattice.VortexLatticeGroup
+VortexLattice.viscous!
+VortexLattice.sectional_coefficients
 ```
 
 ### Near-Field Analysis

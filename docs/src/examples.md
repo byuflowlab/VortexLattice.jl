@@ -7,12 +7,6 @@ Pages = ["examples.md"]
 Depth = 3
 ```
 
-```@setup examples
-# this is placed here to pre-install matplotlib so the documentation doesn't get cluttered with the installation print statements.
-using Plots
-pyplot()
-```
-
 ## Steady State Analysis of a Wing
 
 This example shows how to calculate aerodynamic coefficients and stability derivatives for a symmetric planar wing.
@@ -47,7 +41,6 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
 
 # construct grid
 grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
@@ -64,7 +57,7 @@ system = VortexLatticeSystem(grids; ratios)
 symmetric = true
 
 # perform steady state analysis
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -134,7 +127,7 @@ ratios=[ratio]
 system = VortexLatticeSystem(grids; ratios)
 
 # perform steady state analysis
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -306,7 +299,6 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
 
 # declare symmetry
 symmetric = true
@@ -323,7 +315,7 @@ ratios = [ratio]
 system = VortexLatticeSystem(grids; ratios)
 
 # perform steady state analysis
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -403,7 +395,7 @@ for i = 1:length(system.surfaces[1])
 end
 
 # perform steady state analysis
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -509,7 +501,6 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -533,7 +524,7 @@ surface_id = [1, 2, 3]
 
 system = VortexLatticeSystem(grids; ratios)
 
-steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric, surface_id=surface_id)
 
 CF, CM = body_forces(system; frame=Wind())
 
@@ -611,7 +602,7 @@ for i = 1:length(system.surfaces[1])
 end
 
 # perform steady state analysis
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 
 # retrieve near-field forces
 CF, CM = body_forces(system; frame=Wind())
@@ -709,7 +700,6 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 alpha = 5.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
 
 symmetric = [true, true, false]
 
@@ -741,7 +731,7 @@ for i = 1:length(system.surfaces[1])
     system.surfaces[1][i] = set_normal(system.surfaces[1][i], ncp)
 end
 
-steady_analysis!(system, ref, fs; symmetric=symmetric, surface_id=surface_id)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric, surface_id=surface_id)
 
 CF, CM = body_forces(system; frame=Stability())
 
@@ -794,97 +784,60 @@ write_vtk("wing-tail", system)
 
 This example shows how to predict the transient forces and moments on a rectangular wing when suddenly accelerated into forward flight at a five degree angle.
 
+The time domain runs on [FLOWUnsteadyCore](https://github.com/byuflowlab/FLOWUnsteadyCore.jl): `surface_bodies` turns the surfaces of a `VortexLatticeSystem` into the core's bodies, and the core's `simulate!` (re-exported by VortexLattice) steps them with a wake. Keeping every shed row as a vortex ring (`nwakerows` at least the number of steps) is the classical unsteady vortex lattice method; with fewer rows the older wake becomes vortex particles. A `ForcesMonitor` records the force and moment coefficients after every step.
+
 ```@example rectangular-wing-sudden-acceleration
 # Katz and Plotkin: Figures 13.34 and 13.35
 # AR = [4, 8, 12, 20, ∞]
 # Vinf*Δt/c = 1/16
 # α = 5°
 
-using VortexLattice
+using VortexLattice, StaticArrays
 
 AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
 
-system = Vector{Any}(undef, length(AR))
-surface_history = Vector{Any}(undef, length(AR))
-property_history = Vector{Any}(undef, length(AR))
-wake_history = Vector{Any}(undef, length(AR))
-CF = Vector{Vector{Vector{Float64}}}(undef, length(AR))
-CM = Vector{Vector{Vector{Float64}}}(undef, length(AR))
+c = 1.0              # chord length
+Vinf = 1.0           # forward speed
+alpha = 5.0*pi/180   # angle of attack
+dt = 1/16            # time step (Vinf*dt/c)
+nsteps = 160         # Vinf*t/c from 0 to 10
 
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 10.0, step=1/16)
-
-# chord length
-c = 1
-
-# time step
-dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+CF = Vector{Vector{SVector{3,Float64}}}(undef, length(AR))
 
 for i = 1:length(AR)
 
     # span length
     b = AR[i]*c
 
-    # planform area
-    S = b*c
+    # flat rectangular wing: 13 spanwise and 4 chordwise panels
+    grid, ratio = wing_to_grid([0.0, 0.0], [-b/2, b/2], [0.0, 0.0], [c, c], [0.0, 0.0], [0.0, 0.0], 13, 4;
+        mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+    system = VortexLatticeSystem([grid]; ratios=[ratio])
+    system.reference[] = Reference(b*c, c, b, [0.0, 0.0, 0.0], Vinf)
 
-    # geometry
-    xle = [0.0, 0.0]
-    yle = [-b/2, b/2]
-    zle = [0.0, 0.0]
-    chord = [c, c]
-    theta = [0.0, 0.0]
-    phi = [0.0, 0.0]
-    fc = fill((xc) -> 0, 2) # camberline function for each section
-    ns = 13
-    nc = 4
-    spacing_s = Uniform()
-    spacing_c = Uniform()
-    mirror = false
-    symmetric = false
+    # the surfaces as the core's bodies, a fixed frame and the freestream
+    bodies, states = surface_bodies(system)
+    frames = ReferenceFrame(system; origin = SVector(0.0, 0.0, 0.0))
+    freestream = Freestream(SVector(Vinf*cos(alpha), 0.0, Vinf*sin(alpha)))
 
-    # reference parameters
-    cref = c
-    bref = b
-    Sref = S
-    rref = [0.0, 0.0, 0.0]
-    Vinf = 1.0
-    ref = Reference(Sref, cref, bref, rref, Vinf)
+    # every shed row kept as a vortex ring
+    wake = PanelParticleWake(Float64, bodies; nwakerows = nsteps)
 
-    # freestream parameters
-    alpha = 5.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
+    monitor = ForcesMonitor(system, nsteps; frame=Wind())
+    simulate!(states, bodies, frames, wake, freestream; nsteps, dt, monitor, backend = DirectBackend())
 
-    # create vortex rings
-    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-
-    # create vector containing grids
-    grids = [grid]
-    ratios = [ratio]
-
-    grid, ratio, surface = grid_to_surface_panels(grid; ratios=ratio)
-    surfaces = [surface]
-
-    # run analysis
-    system[i], surface_history[i], property_history[i], wake_history[i] =
-        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
-
-    # extract forces at each time step
-    CF[i], CM[i] = body_forces_history(system[i], surface_history[i],
-        property_history[i]; frame=Wind())
-
+    CF[i] = monitor.CF
 end
+
+# the time each step's forces are reported at
+t = dt .* (1:nsteps)
 
 nothing # hide
 ```
 
-We can visualize the solution using the `write_vtk` function.
+Passing `path` and `name` to `simulate!` writes the surfaces and the wake to ParaView files at every step (`vtk_interval` sets the cadence).
 ```julia
-write_vtk("acceleration-AR4", surface_history[1], property_history[1],
-    wake_history[1], dt; symmetric=false)
+simulate!(states, bodies, frames, wake, freestream; nsteps, dt, monitor, path = "acceleration-AR4", name = "wing")
 ```
 
 ![](acceleration-AR4.gif)
@@ -893,7 +846,6 @@ The transient lift and drag coefficients are similar to those shown in Figures 1
 
 ```@example rectangular-wing-sudden-acceleration
 using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -904,15 +856,11 @@ plot(
     yticks = 0.0:0.1:0.5,
     ylabel = "\$ C_{L} \$",
     grid = false,
-    overwrite_figure=false
     )
 
 for i = 1:length(AR)
-    CL = [CF[i][j][3] for j = 1:length(CF[i])]
-    plot!(t[2:end], CL, label="AR = $(AR[i])")
+    plot!(t, getindex.(CF[i], 3), label="AR = $(AR[i])")
 end
-
-plot!(show=true)
 
 savefig("rectangular-wing-sudden-acceleration-cl.svg") # hide
 
@@ -931,15 +879,11 @@ plot(
     yticks = 0.0:0.005:0.03,
     ylabel = "\$ C_{D} \$",
     grid = false,
-    overwrite_figure=false
     )
 
 for i = 1:length(AR)
-    CD = [CF[i][j][1] for j = 1:length(CF[i])]
-    plot!(t[2:end], CD, label="AR = $(AR[i])")
+    plot!(t, getindex.(CF[i], 1), label="AR = $(AR[i])")
 end
-
-plot!(show=true)
 
 savefig("rectangular-wing-sudden-acceleration-cd.svg") # hide
 
@@ -948,238 +892,72 @@ nothing # hide
 
 ![](rectangular-wing-sudden-acceleration-cd.svg)
 
-We modeled the problem in the body-fixed reference frame (which for this problem is more straightforward), but we could have also modeled the problem in the global reference frame.
+We modeled the problem with the wing fixed and the air moving past it, but we could equally have moved the wing through still air: a frame translating at the flight velocity and no freestream. The monitor reads the relative wind from the frame's motion.
 
 ```@example rectangular-wing-sudden-acceleration
-# Katz and Plotkin: Figures 13.34 and 13.35
-# AR = [4, 8, 12, 20, ∞]
-# Vinf*Δt/c = 1/16
-# α = 5°
-
-using VortexLattice
-
-AR = [4, 8, 12, 20, 1e3] # last aspect ratio is essentially infinite
-
-system_t = Vector{Any}(undef, length(AR))
-surface_history_t = Vector{Any}(undef, length(AR))
-property_history_t = Vector{Any}(undef, length(AR))
-wake_history_t = Vector{Any}(undef, length(AR))
-CF_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
-CM_t = Vector{Vector{Vector{Float64}}}(undef, length(AR))
-
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 10.0, step=1/16)
-
-# chord length
-c = 1
-
-# time step
-dt = [t[i+1]-t[i] for i = 1:length(t)-1]
+CF_t = Vector{Vector{SVector{3,Float64}}}(undef, length(AR))
 
 for i = 1:length(AR)
 
-    # span length
     b = AR[i]*c
 
-    # planform area
-    S = b*c
+    grid, ratio = wing_to_grid([0.0, 0.0], [-b/2, b/2], [0.0, 0.0], [c, c], [0.0, 0.0], [0.0, 0.0], 13, 4;
+        mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+    system = VortexLatticeSystem([grid]; ratios=[ratio])
+    system.reference[] = Reference(b*c, c, b, [0.0, 0.0, 0.0], Vinf)
 
-    # geometry
-    xle = [0.0, 0.0]
-    yle = [-b/2, b/2]
-    zle = [0.0, 0.0]
-    chord = [c, c]
-    theta = [0.0, 0.0]
-    phi = [0.0, 0.0]
-    fc = fill((xc) -> 0, 2) # camberline function for each section
-    ns = 13
-    nc = 4
-    spacing_s = Uniform()
-    spacing_c = Uniform()
-    mirror = false
-    symmetric = false
+    bodies, states = surface_bodies(system)
 
-    # reference parameters
-    cref = c
-    bref = b
-    Sref = S
-    rref = [0.0, 0.0, 0.0]
-    Vinf = 1.0 # reference velocity is 1.0
-    ref = Reference(Sref, cref, bref, rref, Vinf)
+    # the wing flies forward (-x in the grid's axes) and climbs with the 5° flight path
+    frames = ReferenceFrame(system; origin = SVector(0.0, 0.0, 0.0),
+        v = SVector(-Vinf*cos(alpha), 0.0, -Vinf*sin(alpha)))
+    still_air = Freestream(SVector(0.0, 0.0, 0.0))
 
-    # freestream parameters
-    Vinf = 0.0 # freestream velocity is 0.0
-    alpha = 5.0*pi/180
-    beta = 0.0
-    Omega = [0.0; 0.0; 0.0]
-    fs = Freestream(Vinf, alpha, beta, Omega)
+    wake = PanelParticleWake(Float64, bodies; nwakerows = nsteps)
+    monitor = ForcesMonitor(system, nsteps; frame=Wind())
+    simulate!(states, bodies, frames, wake, still_air; nsteps, dt, monitor, backend = DirectBackend())
 
-    # create vortex rings
-    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-
-    # create vector containing surfaces at each time step
-    _, _, surface = grid_to_surface_panels(grid; ratios = ratio)
-    surfaces = [[VortexLattice.translate(surface,
-        -t[it]*[cos(alpha), 0, sin(alpha)])] for it = 1:length(t)]
-
-    # run analysis
-    system_t[i], surface_history_t[i], property_history_t[i], wake_history_t[i] =
-        unsteady_analysis(surfaces, ref, fs, dt; symmetric, wake_finite_core = false)
-
-    # extract forces at each time step
-    CF_t[i], CM_t[i] = body_forces_history(system_t[i], surface_history_t[i],
-        property_history_t[i]; frame=Wind())
-
+    CF_t[i] = monitor.CF
 end
 
-nothing # hide
+# largest difference between the two setups
+maximum(maximum(maximum(abs.(CF_t[i][k] - CF[i][k])) for k in 1:nsteps) for i in 1:length(AR))
 ```
 
-As can be seen, the transient lift and drag coefficients for the two setups are identical.
-
-```@example rectangular-wing-sudden-acceleration
-using Plots
-pyplot()
-
-# lift coefficient plot
-plot(
-    xlim = (0.0, 10.0),
-    xticks = 0.0:1.0:10.0,
-    xlabel = "\$ \\frac{U_\\infty t}{c} \$",
-    ylim = (0.0, 0.55),
-    yticks = 0.0:0.1:0.5,
-    ylabel = "\$ C_{L} \$",
-    grid = false,
-    overwrite_figure=false
-    )
-
-for i = 1:length(AR)
-    CL = [CF_t[i][j][3] for j = 1:length(CF_t[i])]
-    plot!(t[2:end], CL, label="AR = $(AR[i])")
-end
-
-plot!(show=true)
-
-savefig("moving-rectangular-wing-sudden-acceleration-cl.svg") # hide
-
-nothing # hide
-```
-
-![](moving-rectangular-wing-sudden-acceleration-cl.svg)
-
-```@example rectangular-wing-sudden-acceleration
-# drag coefficient plot
-plot(
-    xlim = (0.0, 10.0),
-    xticks = 0.0:1.0:10.0,
-    xlabel = "\$ \\frac{U_\\infty t}{c} \$",
-    ylim = (0.0, 0.030),
-    yticks = 0.0:0.005:0.03,
-    ylabel = "\$ C_{D} \$",
-    grid = false,
-    overwrite_figure=false
-    )
-
-for i = 1:length(AR)
-    CD = [CF_t[i][j][1] for j = 1:length(CF_t[i])]
-    plot!(t[2:end], CD, label="AR = $(AR[i])")
-end
-
-plot!(show=true)
-
-savefig("moving-rectangular-wing-sudden-acceleration-cd.svg") # hide
-
-nothing # hide
-```
-
-![](moving-rectangular-wing-sudden-acceleration-cd.svg)
-
-Visualizing the solution shows the movement of the body in the global reference frame.
-```julia
-write_vtk("acceleration-AR4-moving", surface_history_t[1], property_history_t[1],
-    wake_history_t[1], dt; symmetric=false)
-```
-
-![](acceleration-AR4-moving.gif)
+As the difference shows, the two setups give the same transient forces.
 
 For infinite aspect ratios, the problem degenerates into the analysis of the sudden acceleration of a 2D flat plate, for which we have an analytical solution through the work of Herbert Wagner.
 
 ```@example rectangular-wing-sudden-acceleration
 # See Katz and Plotkin: Figure 13.37
 # AR = ∞
-# Vinf*Δt/c = 1/16
+# Vinf*Δt/c = 1/8
 # α = 5°
 
-# essentially infinite aspect ratio
-AR = 1e3
+# essentially infinite aspect ratio, one spanwise and four chordwise panels
+b = 1e3*c
+grid, ratio = wing_to_grid([0.0, 0.0], [-b/2, b/2], [0.0, 0.0], [c, c], [0.0, 0.0], [0.0, 0.0], 1, 4;
+    mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+ref = Reference(b*c, c, b, [0.0, 0.0, 0.0], Vinf)
 
-# chord length
-c = 1
+# steady analysis
+steady = VortexLatticeSystem([grid]; ratios=[ratio])
+steady_analysis!(steady, ref, flight_condition(steady, ref, Vinf; alpha)...)
+CFs, CMs = body_forces(steady; frame=Wind())
 
-# span length
-b = AR*c
-
-# planform area
-S = b*c
-
-# geometry
-xle = [0.0, 0.0]
-yle = [-b/2, b/2]
-zle = [0.0, 0.0]
-chord = [c, c]
-theta = [0.0, 0.0]*pi/180
-phi = [0.0, 0.0]
-fc = fill((xc) -> 0, 2) # camberline function for each section
-ns = 1
-nc = 4
-spacing_s = Uniform()
-spacing_c = Uniform()
-mirror = false
-symmetric = false
-
-# reference parameters
-cref = c
-bref = b
-Sref = S
-rref = [0.0, 0.0, 0.0]
-Vinf = 1.0
-ref = Reference(Sref, cref, bref, rref, Vinf)
-
-# freestream parameters
-alpha = 5.0*pi/180
-beta = 0.0
-Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
-
-# non-dimensional time (t*Vinf/c)
-t = range(0.0, 7.0, step=1/8)
-
-# time step
-dt = [(t[i+1]-t[i]) for i = 1:length(t)-1]
-
-# create vortex rings
-grid, _ = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-    mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-
-_, _, surface = grid_to_surface_panels(grid) # Uniform spacing means ratios are not needed
-
-# create vector containing all surfaces and grids
-surfaces = [surface]
-grids = [grid]
-
-# run steady analysis
-system = steady_analysis(grids, ref, fs; symmetric)
-
-# extract steady forces
-CFs, CMs = body_forces(system; frame=Wind())
-
-# run transient analysis
-system, surface_history, property_history, wake_history = unsteady_analysis(
-    surfaces, ref, fs, dt; symmetric=symmetric)
-
-# extract transient forces
-CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
+# transient analysis
+dt_w = 1/8
+nsteps_w = 56   # Vinf*t/c from 0 to 7
+system = VortexLatticeSystem([copy(grid)]; ratios=[ratio])
+system.reference[] = ref
+bodies, states = surface_bodies(system)
+monitor = ForcesMonitor(system, nsteps_w; frame=Wind())
+simulate!(states, bodies, ReferenceFrame(system; origin = SVector(0.0, 0.0, 0.0)),
+    PanelParticleWake(Float64, bodies; nwakerows = nsteps_w),
+    Freestream(SVector(Vinf*cos(alpha), 0.0, Vinf*sin(alpha)));
+    nsteps = nsteps_w, dt = dt_w, monitor, backend = DirectBackend())
+CF_w = monitor.CF
+t_w = dt_w .* (1:nsteps_w)
 
 nothing # hide
 ```
@@ -1187,7 +965,6 @@ nothing # hide
 The results from VortexLattice compare very well with the analytical solution provided by Wagner.  As discussed in Low Speed Aerodynamics by Katz and Plotkin, the difference between the curves can be attributed to the finite acceleration rate during the first time step, which increases the lift sharply during the acceleration and then increases it moderately later.
 
 ```@example rectangular-wing-sudden-acceleration
-
 # lift coefficient plot
 plot(
     xlim = (0.0, 7.0),
@@ -1197,20 +974,14 @@ plot(
     yticks = 0.0:0.1:1.0,
     ylabel = "\$ C_{L} \$",
     grid = false,
-    overwrite_figure=false
     )
 
 # Computational Results
-CL = getindex.(CF, 3)
-CLs = getindex(CFs, 3)
-plot!(t[2:end], CL./CLs, label="VortexLattice")
+plot!(t_w, getindex.(CF_w, 3) ./ CFs[3], label="VortexLattice")
 
 # Wagner's Function (using approximation of R. T. Jones)
 Φ(t) = 1 - 0.165*exp(-0.045*t) - 0.335*exp(-0.3*t)
-
-plot!(t, Φ.(2*t), label = "Wagner's Function")
-
-plot!(show=true)
+plot!(t_w, Φ.(2*t_w), label = "Wagner's Function")
 
 savefig("rectangular-wing-sudden-acceleration-wagner.svg") # hide
 
@@ -1221,7 +992,7 @@ nothing # hide
 
 ## Heaving Oscillations of a Rectangular Wing
 
-This example shows how to predict the transient forces and moments for a heaving rectangular wing.
+This example shows how to predict the transient forces and moments for a heaving rectangular wing. The heave enters as a time-varying freestream; giving the same freestream to the `ForcesMonitor` puts the wind axes along the instantaneous relative wind.
 
 ```@example heaving-rectangular-wing
 # Katz and Plotkin: Figures 13.38a
@@ -1230,10 +1001,10 @@ This example shows how to predict the transient forces and moments for a heaving
 # c = [1.0, 0.6, 0.2]
 # α = -5°
 
-using VortexLattice
+using VortexLattice, StaticArrays
 
 # forward velocity
-Vinf = 1
+Vinf = 1.0
 
 # angle of attack
 alpha = -5*pi/180
@@ -1247,81 +1018,47 @@ c = [1.0, 0.6, 0.2]
 # reduced frequency
 k = [0.5, 0.3, 0.1]
 
+nsteps = 99
 t = Vector{Vector{Float64}}(undef, length(k))
-CF = Vector{Vector{Vector{Float64}}}(undef, length(k))
-CM = Vector{Vector{Vector{Float64}}}(undef, length(k))
+CF = Vector{Vector{SVector{3,Float64}}}(undef, length(k))
 
 for i = 1:length(k)
 
     # span length
     b = AR*c[i]
 
-    # geometry
-    xle = [0.0, 0.0]
-    yle = [0.0, b/2]
-    zle = [0.0, 0.0]
-    chord = [c[i], c[i]]
-    theta = [0.0, 0.0]
-    phi = [0.0, 0.0]
-    fc = fill((xc) -> 0, 2) # camberline function for each section
-    ns = 13
-    nc = 4
-    spacing_s = Uniform()
-    spacing_c = Uniform()
-    mirror = false
-    symmetric = true
+    # flat rectangular wing (the full span: the core path does not use symmetry)
+    grid, ratio = wing_to_grid([0.0, 0.0], [0.0, b/2], [0.0, 0.0], [c[i], c[i]], [0.0, 0.0], [0.0, 0.0], 13, 4;
+        mirror=true, spacing_s=Uniform(), spacing_c=Uniform())
+    system = VortexLatticeSystem([grid]; ratios=[ratio])
+    system.reference[] = Reference(b*c[i], c[i], b, [0.0, 0.0, 0.0], Vinf)
 
-    # reference parameters
-    cref = c[i]
-    bref = b
-    Sref = b*c[i]
-    rref = [0.0, 0.0, 0.0]
-    ref = Reference(Sref, cref, bref, rref, Vinf)
-
-    # angular frequency
+    # angular frequency, time step and heaving velocity amplitude
     ω = 2*Vinf*k[i]/c[i]
-
-    # time
-    t[i] = range(0.0, 9*pi/ω, length = 100)
-    dt = t[i][2:end] - t[i][1:end-1]
-    dt = Vinf*dt
-
-    # heaving amplitude
+    dt = 9*pi/ω/nsteps
     h = 0.1*c[i]
 
-    # use forward and vertical velocity at beginning of each time step
-    Xdot = Vinf*cos(alpha)
-    Zdot = Vinf*sin(alpha) .- h*cos.(ω*t[i][1:end-1])
+    # forward and vertical velocity of the air relative to the wing
+    freestream = Freestream(t -> SVector(Vinf*cos(alpha), 0.0, Vinf*sin(alpha) - h*cos(ω*t)))
 
-    # freestream parameters for each time step
-    fs = trajectory_to_freestream(dt; Xdot, Zdot)
+    bodies, states = surface_bodies(system)
+    monitor = ForcesMonitor(system, nsteps; frame=Wind(), freestream)
+    simulate!(states, bodies, ReferenceFrame(system; origin = SVector(0.0, 0.0, 0.0)),
+        PanelParticleWake(Float64, bodies; nwakerows = nsteps), freestream;
+        nsteps, dt, monitor, backend = DirectBackend())
 
-    # surface panels
-    grid, _ = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
-        mirror=mirror, fc=fc, spacing_s=spacing_s, spacing_c=spacing_c)
-
-    _, _, surface = grid_to_surface_panels(grid)
-
-    # create vector containing all surfaces
-    surfaces = [surface]
-
-    # run analysis
-    system, surface_history, property_history, wake_history = unsteady_analysis(
-        surfaces, ref, fs, dt; symmetric=symmetric, nwake = 50)
-
-    # extract forces at each time step (uses instantaneous velocity as reference)
-    CF[i], CM[i] = body_forces_history(system, surface_history, property_history; frame=Wind())
-
+    # each step's forces are solved at the start of the step
+    t[i] = dt .* (0:nsteps-1)
+    CF[i] = monitor.CF
 end
 
 nothing # hide
 ```
 
-Plotting the results reveals that the results are similar to the results in Figure 13.34 of Low-Speed Aerodynamic by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.
+Plotting the results reveals that the results are similar to the results in Figure 13.38a of Low-Speed Aerodynamics by Katz and Plotkin, which verifies the unsteady vortex lattice method implementation in VortexLattice.
 
 ```@example heaving-rectangular-wing
 using Plots
-pyplot()
 
 # lift coefficient plot
 plot(
@@ -1338,19 +1075,9 @@ plot(
     )
 
 for i = 1:length(k)
-    # extract ω
     ω = 2*Vinf*k[i]/c[i]
-
-    # extract ω*t (use time at the beginning of the time step)
-    ωt = ω*t[i][1:end-1]
-
-    # extract CL
-    CL = [CF[i][it][3] for it = 1:length(t[i])-1]
-
-    plot!(ωt, CL, label="\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$")
+    plot!(ω .* t[i], getindex.(CF[i], 3), label="\$ k = \\frac{\\omega c}{2 U_\\infty} = $(k[i]) \$")
 end
-
-plot!(show=true)
 
 savefig("heaving-rectangular-wing.svg") # hide
 
@@ -1358,10 +1085,6 @@ nothing # hide
 ```
 
 ![](heaving-rectangular-wing.svg)
-
-Visualizing the `k=0.5` case in ParaView yields the following animation.
-
-![](heaving-rectangular-wing.gif) -->
 
 ## OpenVSP Geometry Import
 This example shows how to import a wing geometry created using OpenVSP into VortexLattice for analysis. We'll make use of the default swept wing inside OpenVSP with a few minor changes.
@@ -1389,7 +1112,6 @@ ref = Reference(Sref, cref, bref, rref, Vinf)
 alpha = 1.0*pi/180
 beta = 0.0
 Omega = [0.0; 0.0; 0.0]
-fs = Freestream(Vinf, alpha, beta, Omega)
 
 # Import components inside Degengeom file into Julia
 comp = read_degengeom("samplewing.csv")
@@ -1403,7 +1125,7 @@ grids = [grid]
 
 system = VortexLatticeSystem(grids; ratios)
 
-steady_analysis!(system, ref, fs; symmetric=symmetric)
+steady_analysis!(system, ref, flight_condition(system, ref, Vinf; alpha, beta, rates = Omega)...; symmetric=symmetric)
 write_vtk("samplewing", system)
 ```
 

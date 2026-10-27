@@ -1,108 +1,87 @@
 # Advanced Use Cases
 
-## Nonlinear Vortex Lattice (Still under development)
-To incorporate airfoil polars a nonlinear vortex lattice method is used. In order to use this method system.sections must be correctly populated.
+The time domain runs on [FLOWUnsteadyCore](https://github.com/byuflowlab/FLOWUnsteadyCore.jl): the wake, the time loop, the coupling with other bodies, checkpoints and ParaView output are the core's, and VortexLattice provides its surfaces as the core's bodies. The examples below show the pieces a vortex-lattice user needs; the core's documentation covers every keyword of `simulate!`.
 
-```
-system = VortexLatticeSystem(grids; sections)
-```
+## The surfaces as the core's bodies
 
-sections is a vector of vector of SectionProperties objects. The length of grids and sections must be the same, for each grid there is a vector of SectionProperties. These vectors of section properties are created as follows:
-
-```
-section = grid_to_sections(grid, airfoils)
-```
-
-If grid is a 3 x n x m array, then airfoils is a vector of length m-1 with each object containing a CCBlade AlphaAF object that contains the polars for the airfoil. For more information see CCBlade.jl.
-
-```
-system = VortexLatticeSystem(grids; sections)
-nonlinear_analysis!(system)
-```
-
-**nonlinear_analysis!** populates the sections with angles of attack, and coefficient of lift and drag.
-
-## Unsteady Simulation with PanelParticleWake
-
-`PanelParticleWake` combines a small rolling buffer of panel rows (for the near wake) with a vortex particle field (for the far wake). Use it via the `simulate!` dispatcher:
+`surface_bodies(system)` returns one body and one state per surface of a `VortexLatticeSystem`. They are handles into the system: the geometry, the circulation and the panel forces stay in it, and moving a body moves the system's grid. All surfaces of one system are solved together by the system's own influence matrix, and the core never splits them. `system.reference[]` must be set before the run (its velocity nondimensionalizes the forces).
 
 ```julia
-Uinf(t) = SVector{3,Float64}(10.0, 0.0, 0.0)
-Ωinf(t) = SVector{3,Float64}(0.0, 0.0, 0.0)
-maneuver!(frames, system, wake, t) = nothing
-t_range = 0.0:0.05:1.0
+using VortexLattice, StaticArrays
 
-monitor = ForcesMonitor(length(t_range))
+system = VortexLatticeSystem(grids; ratios)
+system.reference[] = Reference(Sref, cref, bref, rref, Vinf)
+bodies, states = surface_bodies(system)
 
-wake = simulate!(system, frames, maneuver!, Uinf, t_range, Ωinf;
-    wake_type = PanelParticleWake,
-    nwakerows = 2,
-    max_particles = 10_000,
-    method_trailing = OverlapPPS(1.3, 2),
-    method_unsteady = OverlapPPS(1.3, 2),
-    eta = 0.3,
-    monitors = (monitor,),
-    name = "my_sim",
-    path = "output/",
-)
+frames = ReferenceFrame(system; origin = SVector(0.0, 0.0, 0.0))
+freestream = Freestream(SVector(Vinf*cos(alpha), 0.0, Vinf*sin(alpha)))
+wake = PanelParticleWake(Float64, bodies; nwakerows = 2, max_particles = 20_000)
+monitor = ForcesMonitor(system, nsteps; frame = Wind())
+
+simulate!(states, bodies, frames, wake, freestream; nsteps, dt, monitor)
 ```
 
-Key parameters:
-- `nwakerows`: number of panel rows to keep in the near-wake buffer before converting to particles.
-- `max_particles`: maximum particle field size.
-- `method_trailing`/`method_unsteady`: controls how panel rows are converted to particles (`NoShed`, `SigmaPPS`, or `OverlapPPS`).
-- `eta`: relaxation parameter for the particle time integration (0–1).
+The influence matrix depends only on the surfaces' relative geometry. It is built once and reused while the surfaces move together (the trailing-edge columns follow the wake's shedding line every step, and the factorization is redone only when they change), so a rigid vehicle in steady flight factors it once per run.
 
-The `VortexLatticeSystem` must be allocated with `nw=fill(nwakerows, length(grids))` so the panel buffer has the correct row count.
+## The wake: rings and particles
 
-## Restart / Checkpoints
-
-By default, `simulate!` writes a restart checkpoint at every step when `path` is provided. To restart from a previous run:
+The wake is a buffer of `nwakerows` rows of vortex rings behind each trailing edge; older rows become vortex particles. With `nwakerows` at least the number of steps nothing is converted and the method is the classical unsteady vortex lattice method (see the examples). With fewer rows the particles carry the far wake, which keeps long runs affordable.
 
 ```julia
-# First run — writes checkpoints to output/
-wake = simulate!(system, frames, maneuver!, Uinf, t_range, Ωinf;
-    wake_type = PanelParticleWake,
-    name = "my_sim", path = "output/", write_restart = true, ...)
-
-# Partial re-run — start fresh, stop at step 5
-simulate!(system, frames, maneuver!, Uinf, t_range[1:6], Ωinf;
-    wake_type = PanelParticleWake,
-    name = "my_sim", path = "output/", ...)
-
-# Resume from checkpoint 5
-wake = simulate!(system, frames, maneuver!, Uinf, t_range, Ωinf;
-    wake_type = PanelParticleWake,
-    name = "my_sim", path = "output/",
-    restart_from = "output/my_sim",
-    restart_idx = 5, ...)
+wake = PanelParticleWake(Float64, bodies; nwakerows = 2, max_particles = 50_000,
+    method_trailing = OverlapPPS(1.3, 2), method_unsteady = OverlapPPS(1.3, 2), shed_eta = 0.25)
 ```
 
-You can also restore a checkpoint manually for post-processing:
-```julia
-restore_restart!(system, wake, frames, "output/my_sim"; idx=5)
-```
+- `method_trailing`, `method_unsteady`: how the spanwise and the temporal circulation differences of a converted row become particles (`NoShed`, `SigmaPPS`, `OverlapPPS`, `SigmaOverlap`).
+- `OverlapPPS(overlap, n)` sizes each particle's core from the length of the edge it comes from. On a long spanwise edge (a wide strip) the cores of the shed vortex become large and smear it, which makes the lift respond too quickly to a change; cap them with `OverlapPPS(1.3, 2; max_sigma = Vinf*dt)` or keep more rows as rings.
+- `shed_eta`: the fraction of one convection step behind the trailing edge at which the wake starts.
 
-## Fluid Domain
+## Viscous correction with sectional polars
 
-`FluidDomainMonitor` evaluates total velocity and vorticity on a rectilinear grid. Pass it in `monitors` to sample at every step, or use `evaluate_fluid_domain_from_restarts!` to post-process saved checkpoints without re-running the simulation.
+Pass one polar per spanwise strip of each surface (anything with a [`VortexLattice.sectional_coefficients`](@ref) method, such as a `CCBlade.AlphaAF`). After each solve the strips' lift is moved to the polar's lift at the strip's effective angle and the polar's drag is added along the local flow. Reynolds and Mach numbers are not computed yet (they are passed as zero).
 
 ```julia
-fd = FluidDomainMonitor(
-    range(-10.0, 30.0, step=5.0),   # x
-    range(-10.0, 10.0, step=5.0),   # y
-    range(-10.0, 10.0, step=5.0);   # z
-    vtk_interval = 1,
-    name = "fluid_domain",
-    path = "output/fluid_domain",
-)
-
-# Option A: during simulation
-wake = simulate!(system, frames, maneuver!, Uinf, t_range, Ωinf;
-    wake_type = PanelParticleWake, monitors = (fd,), ...)
-
-# Option B: post-processing from saved checkpoints
-evaluate_fluid_domain_from_restarts!(fd, system, wake, frames, "output/my_sim")
+using CCBlade
+af = CCBlade.AlphaAF("rae101_12.dat"; radians = false)
+bodies, states = surface_bodies(system; polars = [fill(af, ns)])
 ```
 
-After each evaluation `fd.velocity` and `fd.vorticity` hold the field values as `Array{SVector{3}, 3}` indexed `[ix, iy, iz]`.
+`basis` gives each surface's chordwise, spanwise and normal axes in global coordinates (matrix columns); the default identity suits a wing laid out along y. The axes turn with the surface.
+
+## Checkpoints and restart
+
+```julia
+# write a checkpoint every 10 steps
+simulate!(states, bodies, frames, wake, freestream; nsteps = 100, dt, checkpoint = "output/run", checkpoint_every = 10)
+
+# later: build the same objects again and continue from step 50
+simulate!(states, bodies, frames, wake, freestream; nsteps = 100, dt, restart = "output/run_00000050.jls")
+```
+
+A restart reproduces the uninterrupted run.
+
+## Fluid domain
+
+The velocity and vorticity on a rectilinear grid, sampled during the run (and written to ParaView when `path` is given):
+
+```julia
+using VortexLattice.FLOWUnsteadyCore: FluidDomain
+fd = FluidDomain(range(-1.0, 5.0; step = 0.1), range(-2.0, 2.0; step = 0.1), [0.0]; every = 10, path = "output/fluid")
+simulate!(states, bodies, frames, wake, freestream; nsteps, dt, fluid_domain = fd)
+```
+
+## Surfaces together with other bodies
+
+Any body that implements the core's contract can share the simulation: for example a LiftingLines rotor ahead of a wing. The core solves each package's bodies with that package's solver and iterates between them until the circulation of every body converges.
+
+```julia
+using LiftingLines
+rotor = LiftingLines.Rotor(data; ns = 12, twist_sign = 1, clockwise = true)
+
+geometries = Any[rotor, wing_bodies...]
+states = VortexLattice.FLOWUnsteadyCore.AbstractBodyState[LiftingLines.LiftingLinesSystem(Float64, LiftingLines.n_sections(rotor)), wing_states...]
+frames = VortexLattice.FLOWUnsteadyCore.rotor_frames(geometries; omega = -omega)   # the rotor spins, the wing rides the root frame
+wake = PanelParticleWake(Float64, geometries; max_particles = 200_000)
+
+simulate!(states, geometries, frames, wake, freestream; nsteps, dt, monitor)
+```

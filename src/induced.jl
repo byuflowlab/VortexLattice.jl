@@ -1,12 +1,5 @@
 # --- Vortex Filament Induced Velocity Functions --- #
 
-"""
-    bound_induced_velocity(r1, r2, finite_core, core_size)
-
-Compute the induced velocity (per unit circulation) for a bound vortex, at a
-control point located at `r1` relative to the start of the bound vortex and `r2`
-relative to the end of the bound vortex
-"""
 function bound_induced_velocity_legacy(r1, r2, finite_core, core_size)
 
     nr1 = norm(r1)
@@ -32,6 +25,13 @@ end
     return δ
 end
 
+"""
+    bound_induced_velocity(r1, r2, finite_core, core_size)
+
+Compute the induced velocity (per unit circulation) for a bound vortex, at a
+control point located at `r1` relative to the start of the bound vortex and `r2`
+relative to the end of the bound vortex
+"""
 function bound_induced_velocity(r1, r2, finite_core, core_size)
     # intermediate values
     nr1 = norm(r1)
