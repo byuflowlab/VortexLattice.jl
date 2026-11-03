@@ -1323,6 +1323,37 @@ end
     CF, CM = body_forces_history(system, surface_history, property_history; frame=Wind())
 end
 
+@testset "Unsteady Vortex Lattice Method - Freestream Speed Independence" begin
+
+    # Coefficients of an incompressible lattice must not depend on the freestream speed when time
+    # is scaled with it (same reduced frequency, same wake panel length).
+
+    function pitching_coefficients(Vinf)
+        AR = 4
+        cref = 1.0
+        bref = AR*cref
+        ref = Reference(bref*cref, cref, bref, [0.25*cref, 0.0, 0.0], Vinf)
+        grid, ratio = wing_to_grid([0.0, 0.0], [-bref/2, bref/2], [0.0, 0.0], [cref, cref],
+            [0.0, 0.0], [0.0, 0.0], 8, 3; mirror=false, spacing_s=Uniform(), spacing_c=Uniform())
+        _, _, surface = grid_to_surface_panels(grid; ratios=ratio)
+        s = range(0.0, 8.0, step=0.25) # distance travelled in chords
+        dt = fill(step(s)*cref/Vinf, length(s)-1)
+        k = 0.2 # reduced frequency omega c / 2V
+        alpha = [3.0*pi/180 + 1.0*pi/180*sin(2*k*si) for si in s[2:end]]
+        fs = [Freestream(Vinf, a, 0.0, zeros(3)) for a in alpha]
+        system, surface_history, property_history, wake_history = unsteady_analysis([surface], ref, fs, dt)
+        return body_forces_history(system, surface_history, property_history; frame=Wind())
+    end
+
+    CF1, CM1 = pitching_coefficients(1.0)
+    CF2, CM2 = pitching_coefficients(10.0)
+
+    for it in eachindex(CF1)
+        @test isapprox(CF1[it], CF2[it], rtol=1e-8, atol=1e-10)
+        @test isapprox(CM1[it], CM2[it], rtol=1e-8, atol=1e-10)
+    end
+end
+
 @testset "Unsteady Vortex Lattice Method - Wing + Tail" begin
 
     # Unsteady Wing and Tail

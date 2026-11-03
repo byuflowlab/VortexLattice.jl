@@ -139,12 +139,12 @@ function near_field_forces!(props, surfaces, wakes, ref, fs, Γ;
             if !isnothing(dΓdt)
                 # unsteady part of Kutta-Joukowski theorem
 
-                #TODO: decide whether to divide by perpindicular velocity like
-                # Drela does in ASWING?
+                # rho (dGamma/dt) c ds, in the direction of V x ds: divide by the velocity
+                # normal to the bound vortex so the term does not scale with |V|
 
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += RHO*dΓdti*c*tmp*norm(Δs)/norm(tmp)
 
             end
 
@@ -365,12 +365,12 @@ function near_field_forces_multithreaded!(props, surfaces, wakes, ref, fs, Γ;
                 if !isnothing(dΓdt)
                     # unsteady part of Kutta-Joukowski theorem
 
-                    #TODO: decide whether to divide by perpindicular velocity like
-                    # Drela does in ASWING?
+                    # rho (dGamma/dt) c ds, in the direction of V x ds: divide by the velocity
+                    # normal to the bound vortex so the term does not scale with |V|
 
                     dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                     c = receiving[I].chord
-                    Fbi += RHO*dΓdti*c*tmp
+                    Fbi += RHO*dΓdti*c*tmp*norm(Δs)/norm(tmp)
 
                 end
 
@@ -640,12 +640,12 @@ function near_field_forces_derivatives!(props, dprops, surfaces, wakes,
             if !isnothing(dΓdt)
                 # unsteady part of Kutta-Joukowski theorem
 
-                #TODO: decide whether to divide by perpindicular velocity like
-                # Drela does in ASWING?
+                # rho (dGamma/dt) c ds, in the direction of V x ds: divide by the velocity
+                # normal to the bound vortex so the term does not scale with |V|
 
                 dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                 c = receiving[I].chord
-                Fbi += RHO*dΓdti*c*tmp
+                Fbi += RHO*dΓdti*c*tmp*norm(Δs)/norm(tmp)
 
             end
 
@@ -967,12 +967,12 @@ function near_field_forces_derivatives_multithreaded!(props, dprops, surfaces, w
                 if !isnothing(dΓdt)
                     # unsteady part of Kutta-Joukowski theorem
 
-                    #TODO: decide whether to divide by perpindicular velocity like
-                    # Drela does in ASWING?
+                    # rho (dGamma/dt) c ds, in the direction of V x ds: divide by the velocity
+                    # normal to the bound vortex so the term does not scale with |V|
 
                     dΓdti = I[1] == 1 ? dΓdt[iΓ+i] : (dΓdt[iΓ+i] + dΓdt[iΓ+i-1])/2
                     c = receiving[I].chord
-                    Fbi += RHO*dΓdti*c*tmp
+                    Fbi += RHO*dΓdti*c*tmp*norm(Δs)/norm(tmp)
 
                 end
 
