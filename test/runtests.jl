@@ -1801,3 +1801,31 @@ end
         end
     end
 end
+
+@testset "Unsteady Vortex Lattice Method - Grid Input" begin
+
+    # rectangular wing, uniform spacing (the default control-point ratios apply)
+    ref = Reference(4.0, 1.0, 4.0, [0.25, 0.0, 0.0], 1.0)
+    grid, ratio = wing_to_grid([0.0, 0.0], [-2.0, 2.0], [0.0, 0.0], [1.0, 1.0], [0.0, 0.0],
+        [0.0, 0.0], 8, 2; spacing_s = Uniform(), spacing_c = Uniform())
+    _, _, surface = grid_to_surface_panels(grid; ratios = ratio)
+    fs = Freestream(1.0, 3.0*pi/180, 0.0, zeros(3))
+    dt = fill(0.25, 12)
+
+    coefficients(r) = body_forces_history(r[1], r[2], r[3]; frame = Wind())
+
+    # stationary surface: grids and panels give the same history
+    CFp, CMp = coefficients(unsteady_analysis([surface], ref, fs, dt))
+    CFg, CMg = coefficients(unsteady_analysis([grid], ref, fs, dt))
+    @test all(isapprox.(CFg, CFp; rtol = 1e-12))
+    @test all(isapprox.(CMg, CMp; rtol = 1e-12))
+
+    # moving surface (plunge): grids and panels give the same history
+    t = cumsum([0.0; dt])
+    grids = [[grid .+ reshape([0.0, 0.0, 0.05*sin(0.4*ti)], 3, 1, 1)] for ti in t]
+    panels = [[grid_to_surface_panels(g[1]; ratios = ratio)[3]] for g in grids]
+    CFp, CMp = coefficients(unsteady_analysis(panels, ref, fs, dt))
+    CFg, CMg = coefficients(unsteady_analysis(grids, ref, fs, dt))
+    @test all(isapprox.(CFg, CFp; rtol = 1e-12))
+    @test all(isapprox.(CMg, CMp; rtol = 1e-12))
+end
