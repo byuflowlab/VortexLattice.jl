@@ -492,7 +492,7 @@ trefftz_panels
 
 function trefftz_panels(surface::AbstractMatrix, fs, Γ)
 
-    TF = eltype(eltype(panels))
+    TF = eltype(eltype(surface))
 
     panels = Vector{TrefftzPanel{TF}}(undef, size(surface, 2))
 

@@ -1801,3 +1801,12 @@ end
         end
     end
 end
+
+@testset "Trefftz Panels - Single Surface" begin
+    grid, ratio = wing_to_grid([0.0, 0.2], [0.0, 2.0], [0.0, 0.0], [1.0, 0.6], [0.0, 0.0],
+        [0.0, 0.0], 6, 2)
+    _, _, surface = grid_to_surface_panels(grid; ratios = ratio)
+    fs = Freestream(1.0, 2.0*pi/180, 0.0, zeros(3))
+    Γ = collect(range(0.1, 0.2, length = length(surface)))
+    @test VortexLattice.trefftz_panels(surface, fs, Γ) == VortexLattice.trefftz_panels([surface], fs, Γ)[1]
+end
