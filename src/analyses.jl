@@ -338,9 +338,6 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
         end
     end
 
-    # find intersecting surfaces
-    repeated_points = repeated_trailing_edge_points(initial_surfaces)
-
     # --- Set Initial Simulation Variables --- #
 
     # store initial surface panels in `system`
@@ -355,6 +352,9 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
             system.surfaces[isurf] .= initial_surfaces[isurf]
         end
     end
+
+    # find intersecting surfaces (from the panels: works for grid and panel inputs)
+    repeated_points = repeated_trailing_edge_points(system.surfaces)
 
     # store initial wake panels in `system`
     for isurf = 1:nsurf
@@ -390,6 +390,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
             propagate_system!(system, surfaces[1+it], fs[it], dt[it];
                 additional_velocity,
                 repeated_points,
+                fcore,
                 nwake = iwake,
                 eta = 0.25,
                 calculate_influence_matrix = first_step && calculate_influence_matrix,
@@ -399,6 +400,7 @@ function unsteady_analysis!(system, surfaces, ref, fs, dt;
             propagate_system!(system, fs[it], dt[it];
                 additional_velocity,
                 repeated_points,
+                fcore,
                 nwake = iwake,
                 eta = 0.25,
                 calculate_influence_matrix = first_step && calculate_influence_matrix,
@@ -447,6 +449,9 @@ unsteady vortex lattice method system of equations.
     (jsurf2, j2)...]` which defines repeated trailing edge points.  Trailing edge
     point `i` on surface `isurf` is repeated on surface `jsurf1` at point `j1`,
     `jsurf2` at point `j2`, and so forth. See [`repeated_trailing_edge_points`](@ref)
+ - `fcore`: function which sets the finite core size for each surface based on
+    the chord length and/or the panel width, used when `surfaces` are grids.
+    Defaults to `(c, Δs) -> 1e-3`.
  - `nwake`: Number of wake panels in the chordwise direction for each surface.
  - `eta`: Time step fraction used to define separation between trailing
     edge and wake shedding location.  Typical values range from 0.2-0.3.
@@ -468,6 +473,7 @@ propagate_system!(system, fs, dt; kwargs...) = propagate_system!(system,
 function propagate_system!(system, surfaces, fs, dt;
     additional_velocity,
     repeated_points,
+    fcore = (c, Δs) -> 1e-3,
     nwake,
     eta,
     calculate_influence_matrix,
