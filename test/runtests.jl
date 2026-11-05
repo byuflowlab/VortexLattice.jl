@@ -1597,6 +1597,66 @@ end
         atol = 1e-12)
 end
 
+@testset "Re-use of the AIC Factorization" begin
+    xle = [0.0, 0.4]
+    yle = [0.0, 7.5]
+    zle = [0.0, 0.0]
+    chord = [2.2, 1.8]
+    theta = [2.0*pi/180, 2.0*pi/180]
+    phi = [0.0, 0.0]
+    ns = 12
+    nc = 6
+    spacing_s = Uniform()
+    spacing_c = Uniform()
+
+    Sref = 30.0
+    cref = 2.0
+    bref = 15.0
+    rref = [0.50, 0.0, 0.0]
+    Vinf = 1.0
+    ref = Reference(Sref, cref, bref, rref, Vinf)
+
+    fs1 = Freestream(Vinf, 1.0*pi/180, 0.0, [0.0, 0.0, 0.0])
+    fs2 = Freestream(Vinf, 4.0*pi/180, 2.0*pi/180, [0.01, 0.02, -0.01])
+
+    symmetric = true
+
+    grid, ratio = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        spacing_s=spacing_s, spacing_c=spacing_c)
+
+    grids = [grid]
+    ratios = [ratio]
+
+    # factorize the AIC matrix once, then re-use it at a second freestream
+    system = System(grids; ratios)
+    steady_analysis!(system, ref, fs1; symmetric)
+    @test system.fAIC_current[]
+
+    # the results match a fresh analysis exactly, with and without derivatives
+    for derivatives in (true, false)
+        steady_analysis!(system, ref, fs2; symmetric, derivatives,
+            calculate_influence_matrix = false)
+
+        fresh = System(grids; ratios)
+        steady_analysis!(fresh, ref, fs2; symmetric, derivatives)
+
+        @test system.Γ == fresh.Γ
+        @test body_forces(system; frame=Stability()) == body_forces(fresh; frame=Stability())
+        if derivatives
+            @test system.dΓ == fresh.dΓ
+        end
+    end
+
+    # a direct change to the AIC matrix is used once it is flagged
+    fresh = System(grids; ratios)
+    steady_analysis!(fresh, ref, fs2; symmetric, derivatives=false)
+    system.AIC .*= 2
+    system.fAIC_current[] = false
+    steady_analysis!(system, ref, fs2; symmetric, derivatives=false,
+        calculate_influence_matrix = false)
+    @test isapprox(system.Γ, fresh.Γ ./ 2, rtol=1e-12)
+end
+
 @testset "Stability Derivatives - Finite Difference Check" begin
 
     # Verifies the analytic stability derivatives against a central difference

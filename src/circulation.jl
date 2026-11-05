@@ -220,6 +220,26 @@ circulation(AIC, w) = AIC\w
 Pre-allocated version of `circulation`
 """
 circulation!(Γ, AIC, w) = ldiv!(Γ, lu(AIC), w)
+circulation!(Γ, fAIC::Factorization, w) = ldiv!(Γ, fAIC, w)
+
+"""
+    aic_factorization!(system)
+
+Return the LU factorization of `system.AIC`, stored in `system`.  The matrix is
+only factorized again when it has changed since its last factorization (as
+indicated by `system.fAIC_current`).
+"""
+function aic_factorization!(system)
+
+    if !system.fAIC_current[]
+        copyto!(system.fAIC, system.AIC)
+        F = lu!(system.fAIC)
+        system.fAIC_ipiv .= F.ipiv
+        system.fAIC_current[] = true
+    end
+
+    return LU(system.fAIC, system.fAIC_ipiv, 0)
+end
 
 """
     circulation_derivatives(AIC, w, dw)
@@ -262,7 +282,7 @@ function circulation_derivatives!(Γ, dΓ, AIC, w, dw)
     (w_a, w_b, w_p, w_q, w_r) = dw
 
     # factorize AIC matrix (since we'll be reusing it)
-    fAIC = lu(AIC)
+    fAIC = AIC isa Factorization ? AIC : lu(AIC)
 
     # solve for circulation and its derivatives
     ldiv!(Γ, fAIC, w)

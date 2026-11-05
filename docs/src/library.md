@@ -181,6 +181,7 @@ VortexLattice.circulation
 VortexLattice.circulation!
 VortexLattice.circulation_derivatives
 VortexLattice.circulation_derivatives!
+VortexLattice.aic_factorization!
 ```
 
 ### Time-Domain Analysis

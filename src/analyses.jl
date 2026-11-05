@@ -41,9 +41,10 @@ Perform a steady vortex lattice method analysis.  Return an object of type
     Only used for grid inputs.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
-    will reduce calculation times when the underlying geometry has not changed.
-    Defaults to `true`.  Note that this argument is only valid for the pre-allocated
-    version of this function.
+    (and its factorization) will reduce calculation times when the underlying
+    geometry has not changed. Defaults to `true`.  Note that this argument is only
+    valid for the pre-allocated version of this function.  If `system.AIC` is
+    modified directly, set `system.fAIC_current[] = false` before re-using it.
  - `near_field_analysis`: Flag indicating whether a near field analysis should be
     performed to obtain panel velocities, circulation, and forces. Defaults to `true`.
  - `derivatives`: Flag indicating whether the derivatives with respect
@@ -122,6 +123,7 @@ function steady_analysis!(system, ref, fs;
             surface_id = surface_id,
             trailing_vortices = trailing_vortices .& .!wake_panels,
             xhat = xhat)
+        system.fAIC_current[] = false
     end
 
     # calculate RHS
@@ -147,11 +149,14 @@ function steady_analysis!(system, ref, fs;
             xhat = xhat)
     end
 
+    # factorize the AIC matrix (if it has changed)
+    fAIC = aic_factorization!(system)
+
     # solve for the circulation distribution
     if derivatives
-        circulation_derivatives!(Γ, dΓ, AIC, w, dw)
+        circulation_derivatives!(Γ, dΓ, fAIC, w, dw)
     else
-        circulation!(Γ, AIC, w)
+        circulation!(Γ, fAIC, w)
     end
 
     if near_field_analysis
@@ -572,6 +577,7 @@ function propagate_system!(system, surfaces, fs, dt;
         symmetric = symmetric,
         wake_shedding_locations = wake_shedding_locations,
         trailing_vortices = trailing_vortices)
+    system.fAIC_current[] = false
 
     # calculate RHS
     if derivatives
