@@ -81,6 +81,9 @@ Contains pre-allocated storage for internal system variables.
  - `Vv`: Velocity due to surface motion at the vertical bound vortex centers
  - `Vte`: Velocity due to surface motion at the trailing edge vertices
  - `dΓdt`: Derivative of the circulation strength with respect to non-dimensional time
+ - `fAIC`: LU factors of the aerodynamic influence coefficient matrix (see [`aic_factorization!`](@ref))
+ - `fAIC_ipiv`: Pivot indices of the LU factorization stored in `fAIC`
+ - `fAIC_current`: Flag indicating whether `fAIC` holds the factorization of the current `AIC`
 """
 struct System{TF}
     AIC::Matrix{TF}
@@ -115,6 +118,9 @@ struct System{TF}
     Vv::Vector{Matrix{SVector{3, TF}}}
     Vte::Vector{Vector{SVector{3, TF}}}
     dΓdt::Vector{TF}
+    fAIC::Matrix{TF}
+    fAIC_ipiv::Vector{LinearAlgebra.BlasInt}
+    fAIC_current::Array{Bool, 0}
 end
 
 Base.eltype(::Type{System{TF}}) where TF = TF
@@ -264,12 +270,15 @@ function System(TF::Type, nc, ns; nw = zero(nc), grids = nothing, ratios = nothi
     Vv = [fill((@SVector zeros(TF, 3)), nc[i], ns[i]+1) for i = 1:nsurf]
     Vte = [fill((@SVector zeros(TF, 3)), ns[i]+1) for i = 1:nsurf]
     dΓdt = zeros(TF, N)
+    fAIC = zeros(TF, N, N)
+    fAIC_ipiv = zeros(LinearAlgebra.BlasInt, N)
+    fAIC_current = fill(false)
 
     return System{TF}(AIC, w, Γ, V, grids, ratios, surfaces, invert_normals, sections, 
         properties, wakes, trefftz, reference, freestream, symmetric, nwake, surface_id, 
         wake_finite_core, trailing_vortices, xhat, near_field_analysis, derivatives,
         dw, dΓ, dproperties, wake_shedding_locations, previous_surfaces, Vcp, Vh,
-        Vv, Vte, dΓdt)
+        Vv, Vte, dΓdt, fAIC, fAIC_ipiv, fAIC_current)
 end
 
 """
