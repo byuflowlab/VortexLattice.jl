@@ -123,7 +123,7 @@ function chordwise_spacing(n, ::Cosine)
 end
 
 """
-    interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
+    interpolate_grid(xyz, eta, interp; xdir=0, ydir=1, t=nothing)
 
 Interpolates the grid `xyz` along direction `dir`
 
@@ -133,8 +133,10 @@ Interpolates the grid `xyz` along direction `dir`
  - `interp`: Interpolation method of form `ypt = f(x,y,xpt)`
  - `xdir`: Independent variable direction, defaults to arc length
  - `ydir`: Dependent variable direction `xyz` (`i=1`, `j=2`)
+ - `t`: Normalized independent variable shared by every slice (length `ni`),
+    defaults to each slice's own (`xdir`) parameter
 """
-function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
+function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1, t=nothing)
 
     ydim = ydir + 1
 
@@ -161,20 +163,11 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
             xyz_i = xyz[:,:,i]
         end
 
-        if xdir == 0
-            ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
-        else
-            ds = [xyz_i[xdir,k] - xyz_i[xdir,max(1,k-1)] for k = 1:ni]
-        end
-        # create interpolation vector
-        t = cumsum(ds)
+        ti = isnothing(t) ? slice_parameter(xyz_i, xdir) : t
 
-        # normalize interpolation vector
-        t /= t[end]
-
-        x = interp(t, xyz_i[1,:], eta)
-        y = interp(t, xyz_i[2,:], eta)
-        z = interp(t, xyz_i[3,:], eta)
+        x = interp(ti, xyz_i[1,:], eta)
+        y = interp(ti, xyz_i[2,:], eta)
+        z = interp(ti, xyz_i[3,:], eta)
 
         if ydir == 2
             xyz_new[:,i,:] = vcat(x',y',z')
@@ -372,6 +365,18 @@ function grid_to_surface_panels(xyz;
     return xyz_panels, ratios, panels
 end
 
+# normalized interpolation parameter of one slice (3, n): arc length (`xdir = 0`) or coordinate `xdir`
+function slice_parameter(xyz_i, xdir=0)
+    ni = size(xyz_i, 2)
+    if xdir == 0
+        ds = [norm(xyz_i[:,k] - xyz_i[:,max(1,k-1)]) for k = 1:ni]
+    else
+        ds = [xyz_i[xdir,k] - xyz_i[xdir,max(1,k-1)] for k = 1:ni]
+    end
+    t = cumsum(ds)
+    return t / t[end]
+end
+
 """
     grid_to_surface_panels(xyz, ns, nc;
         mirror = false,
@@ -428,16 +433,19 @@ function grid_to_surface_panels(xyz, ns, nc;
     # add leading and trailing edge to grid
     eta_qtr = vcat(0.0, eta_qtr, 1.0)
 
-    # interpolate grid first along `i` then along `j`
+    # interpolate grid first along `i` then along `j`; every chordwise row is
+    # interpolated spanwise on the leading edge's arc length, so the panel edges,
+    # bound vortices and control points of one spanwise station stay together
     xyz_edge = interpolate_grid(xyz, etac, interp_c, ydir=1)
-    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s, ydir=2)
+    t = slice_parameter(xyz_edge[:,1,:])
+    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s, ydir=2, t=t)
 
     xyz_bound = interpolate_grid(xyz, eta_qtr, interp_c, ydir=1)
-    xyz_corner = interpolate_grid(xyz_bound, etas, interp_s, ydir=2)
-    xyz_center = interpolate_grid(xyz_bound, etabar, interp_s, ydir=2)
+    xyz_corner = interpolate_grid(xyz_bound, etas, interp_s, ydir=2, t=t)
+    xyz_center = interpolate_grid(xyz_bound, etabar, interp_s, ydir=2, t=t)
 
     xyz_cp = interpolate_grid(xyz, eta_thrqtr, interp_c, ydir=1)
-    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s, ydir=2)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s, ydir=2, t=t)
 
     # check which side we're working with
     right_side = sum(xyz[2,:,:]) > 0
@@ -686,11 +694,15 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
         end
     end
 
-    # interpolate the grids to match the specified spanwise spacing
-    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s; ydir=2)
-    xyz_corner = interpolate_grid(xyz_bound, etas, interp_s; ydir=2)
-    xyz_center = interpolate_grid(xyz_bound, etabar, interp_s; ydir=2)
-    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; ydir=2)
+    # interpolate the grids to match the specified spanwise spacing, every
+    # chordwise row on the leading edge's arc length (one parameter for all rows,
+    # so the panel edges, bound vortices and control points of one spanwise
+    # station stay at that station)
+    t = slice_parameter(xyz_edge[:,1,:])
+    xyz_panels = interpolate_grid(xyz_edge, etas, interp_s; ydir=2, t=t)
+    xyz_corner = interpolate_grid(xyz_bound, etas, interp_s; ydir=2, t=t)
+    xyz_center = interpolate_grid(xyz_bound, etabar, interp_s; ydir=2, t=t)
+    xyz_cp = interpolate_grid(xyz_cp, etabar, interp_s; ydir=2, t=t)
 
     # initialize output
     panels = Matrix{SurfacePanel{TF}}(undef,  nc, (1+mirror)*ns)

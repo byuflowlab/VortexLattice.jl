@@ -1597,6 +1597,52 @@ end
         atol = 1e-12)
 end
 
+@testset "Grid Interpolation - Curved Planform" begin
+
+    # A planform whose leading edge is not straight (here swept back outboard of
+    # the second section): each chordwise row of the defining sections has its
+    # own arc length, so interpolating every row on its own arc length puts the
+    # rows of one spanwise station at different y (the trailing edge shifts
+    # spanwise, #31) and measures the control-point ratios on a different
+    # parameterization than the panel edges. Every row must be interpolated on
+    # one parameter, the leading edge's arc length. Flat and untwisted, so every
+    # point of a spanwise station has that station's y.
+
+    xle = [0.0, 0.0, 0.6]
+    yle = [0.0, 2.0, 4.0]
+    zle = zeros(3)
+    chord = [1.0, 0.9, 0.3]
+    theta = zeros(3)
+    phi = zeros(3)
+    ns = 8
+    nc = 4
+
+    grid, ratios = wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
+        spacing_s = Sine(), spacing_c = Uniform())
+
+    # every chordwise row at the leading edge's spanwise stations
+    @test maximum(abs.(grid[2,:,:] .- grid[2:2,1,:])) < 1e-12
+
+    # control points inside their vortex rings, spanwise (flat and untwisted:
+    # the fraction in y between the ring's left and right trailing legs)
+    span_fractions(panels) = [(p.rcp[2] - p.rtl[2]) / (p.rtr[2] - p.rtl[2]) for p in panels]
+    _, _, panels = grid_to_surface_panels(grid; ratios)
+    f = span_fractions(panels)
+    @test all(0 .< f .< 1)
+
+    # the same for the grid re-interpolated by grid_to_surface_panels(xyz, ns, nc)
+    # (the defining sections as a grid: the leading and trailing edges)
+    xyz = zeros(3, 2, 3)
+    for j = 1:3
+        xyz[:,1,j] = [xle[j], yle[j], 0.0]
+        xyz[:,2,j] = [xle[j] + chord[j], yle[j], 0.0]
+    end
+    grid2, _, panels2 = grid_to_surface_panels(xyz, ns, nc;
+        spacing_s = Sine(), spacing_c = Uniform())
+    @test maximum(abs.(grid2[2,:,:] .- grid2[2:2,1,:])) < 1e-12
+    @test all(0 .< span_fractions(panels2) .< 1)
+end
+
 @testset "Stability Derivatives - Finite Difference Check" begin
 
     # Verifies the analytic stability derivatives against a central difference
