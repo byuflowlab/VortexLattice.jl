@@ -917,6 +917,38 @@ end
 
 end
 
+@testset "Steady Analysis - Surface Panel Input" begin
+
+    # half wing (mirror image), uniform spacing: the default control-point ratios apply
+    grid, ratio = wing_to_grid([0.0, 0.4], [0.0, 4.0], [0.0, 0.0], [1.0, 0.6], [0.0, 0.0],
+        [0.0, 0.0], 12, 4; spacing_s = Uniform(), spacing_c = Uniform())
+    _, _, surface = grid_to_surface_panels(grid; ratios = ratio)
+    ref = Reference(6.4, 0.8, 8.0, [0.25, 0.0, 0.0], 1.0)
+    fs = Freestream(1.0, 2.0*pi/180, 0.0, zeros(3))
+
+    # the same lattice as grids and as panels
+    CFg, CMg = body_forces(steady_analysis([grid], ref, fs; symmetric = true); frame = Wind())
+    CFp, CMp = body_forces(steady_analysis([surface], ref, fs; symmetric = true); frame = Wind())
+    @test isapprox(CFp, CFg; rtol = 1e-12)
+    @test isapprox(CMp, CMg; rtol = 1e-12)
+
+    # edited normals (trailing-edge row turned 5 degrees, flap down) are used, not rebuilt
+    deflected = copy(surface)
+    s, c = sincos(5.0*pi/180)
+    for j in axes(deflected, 2)
+        n = VortexLattice.normal(deflected[end, j])
+        deflected[end, j] = set_normal(deflected[end, j], typeof(n)(c*n[1] + s*n[3], n[2], c*n[3] - s*n[1]))
+    end
+    CFd, _ = body_forces(steady_analysis([deflected], ref, fs; symmetric = true); frame = Wind())
+    @test CFd[3] > CFg[3] + 1e-3
+
+    # pre-allocated version: panels edited in a system built from grids
+    system = System([grid]; ratios = [ratio])
+    system.surfaces[1] .= deflected
+    steady_analysis!(system, ref, fs; symmetric = true, update_surfaces = false)
+    @test isapprox(body_forces(system; frame = Wind())[1], CFd; rtol = 1e-12)
+end
+
 @testset "Lifting Line Coefficients" begin
     # Simple Wing with Uniform Spacing
 
