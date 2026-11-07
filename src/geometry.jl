@@ -187,6 +187,18 @@ function interpolate_grid(xyz, eta, interp; xdir=0, ydir=1)
 end
 
 """
+    mirror_ratios(ratios)
+
+Control-point ratios of the mirror image of a half: the spanwise order reversed and the spanwise
+ratio measured from the other edge (1 - ratio); the chordwise ratio is unchanged.
+"""
+function mirror_ratios(ratios)
+    mirrored = reverse(ratios, dims=3)
+    mirrored[1,:,:] .= 1 .- mirrored[1,:,:]
+    return mirrored
+end
+
+"""
     grid_to_surface_panels(xyz;
         ratios = zeros(2, size(xyz, 2)-1, size(xyz, 3)-1) .+ [0.5;0.75],
         mirror = false,
@@ -349,12 +361,12 @@ function grid_to_surface_panels(xyz;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
-            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
+            ratios = cat(mirror_ratios(ratios), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
-            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
+            ratios = cat(ratios, mirror_ratios(ratios), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
@@ -496,12 +508,12 @@ function grid_to_surface_panels(xyz, ns, nc;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
-            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
+            ratios = cat(mirror_ratios(ratios), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
-            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
+            ratios = cat(ratios, mirror_ratios(ratios), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
@@ -747,12 +759,12 @@ function wing_to_grid(xle, yle, zle, chord, theta, phi, ns, nc;
             xyz_l = reverse(xyz_panels, dims=3)
             xyz_l[2,:,:] .= -xyz_l[2,:,:]
             xyz_r = xyz_panels
-            ratios = cat(reverse(ratios,dims=2), ratios, dims=3)
+            ratios = cat(mirror_ratios(ratios), ratios, dims=3)
         else
             xyz_l = xyz_panels
             xyz_r = reverse(xyz_panels, dims=3)
             xyz_r[2,:,:] .= -xyz_r[2,:,:]
-            ratios = cat(ratios, reverse(ratios,dims=2), dims=3)
+            ratios = cat(ratios, mirror_ratios(ratios), dims=3)
         end
         xyz_panels = cat(xyz_l, xyz_r[:,:,2:end], dims=3)
 
