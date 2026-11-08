@@ -39,6 +39,12 @@ Perform a steady vortex lattice method analysis.  Return an object of type
  - `fcore`: function which sets the finite core size for each surface based on
     the chord length and/or the panel width. Defaults to `(c, Δs) -> 1e-3`.
     Only used for grid inputs.
+ - `update_surfaces`: Flag indicating whether the surface panels are rebuilt from
+    `system.grids` (with `system.ratios` and `fcore`) before the analysis. Set it to
+    `false` for a system built from surface panels, or after editing `system.surfaces`
+    (e.g. with [`set_normal`](@ref)). Defaults to `true`; `steady_analysis` with surface
+    panel input sets it to `false`.  Note that this argument is only valid for the
+    pre-allocated version of this function.
  - `calculate_influence_matrix`: Flag indicating whether the aerodynamic influence
     coefficient matrix has already been calculated.  Re-using the same AIC matrix
     will reduce calculation times when the underlying geometry has not changed.
@@ -58,6 +64,17 @@ function steady_analysis(grids, reference, freestream; kwargs...)
         calculate_influence_matrix = true)
 end
 
+# surface panel inputs: analyse the panels as given (no grids to rebuild them from)
+function steady_analysis(surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePanel}},
+    reference, freestream; kwargs...)
+
+    # pre-allocate system storage, keeping the panels
+    system = System(surfaces)
+
+    return steady_analysis!(system, reference, freestream; kwargs...,
+        update_surfaces = false, calculate_influence_matrix = true)
+end
+
 """
     steady_analysis!(system, surfaces, reference, freestream; kwargs...)
 
@@ -73,6 +90,7 @@ function steady_analysis!(system, ref, fs;
     xhat = SVector(1, 0, 0),
     additional_velocity = nothing,
     fcore = (c, Δs) -> 1e-3,
+    update_surfaces = true,
     calculate_influence_matrix = true,
     near_field_analysis = true,
     derivatives = true)
@@ -87,8 +105,10 @@ function steady_analysis!(system, ref, fs;
     wake_finite_core = isa(wake_finite_core, Number) ? fill(wake_finite_core, nsurf) : wake_finite_core
     trailing_vortices = isa(trailing_vortices, Number) ? fill(trailing_vortices, nsurf) : trailing_vortices
 
-    for isurf = 1:nsurf
-        update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore)
+    if update_surfaces
+        for isurf = 1:nsurf
+            update_surface_panels!(system.surfaces[isurf], system.grids[isurf]; ratios = system.ratios[isurf], fcore)
+        end
     end
 
     # update other parameters stored in `system`

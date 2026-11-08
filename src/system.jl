@@ -177,7 +177,14 @@ function System(TF::Type, surfaces::AbstractVector{<:AbstractMatrix{<:SurfacePan
     nc = size.(surfaces, 1)
     ns = size.(surfaces, 2)
 
-    return System(TF, nc, ns; kwargs...)
+    system = System(TF, nc, ns; kwargs...)
+
+    # keep the panels: a system built from surface panels has no grids to rebuild them from
+    for isurf in eachindex(surfaces)
+        system.surfaces[isurf] .= surfaces[isurf]
+    end
+
+    return system
 end
 
 """
