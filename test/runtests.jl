@@ -1070,6 +1070,22 @@ end
     end
 end
 
+@testset "wing_to_grid: mirrored control-point ratios" begin
+    # tapered wing with sine spacing: the spanwise control-point ratios differ from 0.5
+    args = ([0.0, 0.2], [0.0, 4.0], [0.0, 0.0], [1.0, 0.6], [0.0, 0.0], [0.0, 0.0], 12, 4)
+    grid, ratios = wing_to_grid(args...; spacing_s=Sine(), mirror=true)
+    half, hratios = wing_to_grid(args...; spacing_s=Sine(), mirror=false)
+    _, gratios, reflected = grid_to_surface_panels(half; ratios=hratios, mirror=true)
+    ns = size(ratios, 3) ÷ 2
+    # the mirrored half's ratios are the mirror image of the other half's
+    @test ratios[1,:,1:ns] ≈ 1 .- reverse(ratios[1,:,ns+1:end], dims=2)
+    @test ratios[2,:,1:ns] ≈ reverse(ratios[2,:,ns+1:end], dims=2)
+    @test gratios ≈ ratios
+    # panels rebuilt from the grid and ratios have the control points of the reflected panels
+    _, _, rebuilt = grid_to_surface_panels(grid; ratios)
+    @test all(isapprox(a.rcp, b.rcp; atol=ztol) for (a, b) in zip(rebuilt, reflected))
+end
+
 @testset "Update Trailing Edge Coefficients" begin
 
     # This test checks whether the function which updates the trailing edge
