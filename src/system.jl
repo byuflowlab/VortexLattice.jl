@@ -30,11 +30,14 @@ end
 # constructor
 function PanelProperties(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 
-    TF = promote_type(typeof(gamma), typeof(velocity), eltype(cfb), eltype(cfl),
+    TF = promote_type(typeof(gamma), eltype(velocity), eltype(cfb), eltype(cfl),
         eltype(cfr), eltype(velocity_from_streamwise))
 
     return PanelProperties{TF}(gamma, velocity, cfb, cfl, cfr, velocity_from_streamwise)
 end
+
+Base.convert(::Type{PanelProperties{TF}}, p::PanelProperties) where TF =
+    PanelProperties{TF}(p.gamma, p.velocity, p.cfb, p.cfl, p.cfr, p.velocity_from_streamwise)
 
 Base.eltype(::Type{PanelProperties{TF}}) where TF = TF
 Base.eltype(::PanelProperties{TF}) where TF = TF

@@ -1766,6 +1766,24 @@ end
     end
 end
 
+@testset "Float32 steady analysis (PanelProperties element type)" begin
+    # PanelProperties with mixed argument types (Float32 circulation, Float64 forces from RHO)
+    v = VortexLattice.SVector(1.0, 0.0, 0.0)
+    @test VortexLattice.PanelProperties(1f0, v, v, v, v, v) isa VortexLattice.PanelProperties{Float64}
+    # a Float32 lattice runs and agrees with Float64
+    function wing_cl(TF)
+        grid, ratios = wing_to_grid(TF[0, 0], TF[0, 4], TF[0, 0], TF[1, 1], TF[0, 0], TF[0, 0], 8, 4;
+            spacing_s = Uniform(), spacing_c = Uniform())
+        system = System([grid]; ratios = [ratios])
+        ref = Reference(TF(8), TF(1), TF(8), TF[0.25, 0, 0], TF(1))
+        fs = Freestream(TF(1), TF(deg2rad(4)), TF(0), TF[0, 0, 0])
+        steady_analysis!(system, ref, fs; symmetric = true)
+        CF, CM = body_forces(system; frame = Wind())
+        return CF[3]
+    end
+    @test isapprox(wing_cl(Float32), wing_cl(Float64); rtol = 1e-5)
+end
+
 @testset "write_vtk - surfaces and wakes" begin
     # rectangular wing, symmetric and mirrored geometry
     xle = [0.0, 0.0]; yle = [0.0, 2.0]; zle = [0.0, 0.0]
